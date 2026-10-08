@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kingdom Conquest - Medieval Strategy Game</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Login/Register Screen -->
+        <div id="auth-screen" class="screen active">
+            <div class="auth-container">
+                <h1>🏰 Kingdom Conquest</h1>
+                <p class="subtitle">Medieval Era - Claim Your Kingdom</p>
+                
+                <div id="login-form" class="auth-form">
+                    <h2>Login</h2>
+                    <input type="text" id="login-username" placeholder="Username" required>
+                    <input type="password" id="login-password" placeholder="Password" required>
+                    <button onclick="login()">Login</button>
+                    <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+                </div>
+
+                <div id="register-form" class="auth-form hidden">
+                    <h2>Register</h2>
+                    <input type="text" id="register-username" placeholder="Username" required>
+                    <input type="email" id="register-email" placeholder="Email" required>
+                    <input type="password" id="register-password" placeholder="Password" required>
+                    <button onclick="register()">Register</button>
+                    <p class="switch-form">Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+                </div>
+
+                <div id="auth-error" class="error-message"></div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <header class="game-header">
+                <div class="player-info">
+                    <span id="player-name">Player</span>
+                    <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
+                </div>
+                <div class="game-info">
+                    <span id="tick-display">Tick: 0</span>
+                    <span id="connection-status" class="status-indicator">●</span>
+                </div>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </header>
+
+            <main class="game-main">
+                <div class="map-container">
+                    <canvas id="world-map"></canvas>
+                    <div id="map-overlay" class="map-overlay">
+                        <div id="kingdom-info" class="kingdom-info hidden">
+                            <h3 id="kingdom-name"></h3>
+                            <p>Population: <span id="kingdom-population"></span></p>
+                            <p>Resources: <span id="kingdom-resources"></span></p>
+                            <p id="kingdom-owner"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="game-sidebar">
+                    <div id="country-selection" class="panel">
+                        <h3>Claim Your Kingdom</h3>
+                        <p class="panel-desc">Select an unclaimed kingdom on the map</p>
+                        <div id="available-kingdoms" class="kingdom-list"></div>
+                        <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Kingdom</button>
+                    </div>
+
+                    <div id="my-kingdom" class="panel hidden">
+                        <h3>My Kingdom</h3>
+                        <div id="kingdom-stats">
+                            <p>Name: <span id="my-kingdom-name"></span></p>
+                            <p>Population: <span id="my-kingdom-pop"></span></p>
+                            <p>Resources: <span id="my-kingdom-res"></span></p>
+                            <p>Last Active: <span id="my-kingdom-active"></span></p>
+                        </div>
+                        <div class="action-buttons">
+                            <button onclick="showAction('diplomacy')">🤝 Diplomacy</button>
+                            <button onclick="showAction('economy')">💰 Economy</button>
+                            <button onclick="showAction('military')">⚔️ Military</button>
+                        </div>
+                    </div>
+
+                    <div id="activity-log" class="panel">
+                        <h3>Activity Log</h3>
+                        <div id="log-entries" class="log-container"></div>
+                    </div>
+                </aside>
+            </main>
+
+            <!-- Action Modal -->
+            <div id="action-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h3 id="action-title"></h3>
+                    <div id="action-options"></div>
+                    <button onclick="closeModal()" class="close-btn">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/game.js"></script>
+</body>
+</html>

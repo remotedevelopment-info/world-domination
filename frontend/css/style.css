@@ -1,0 +1,203 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #eee;
+    min-height: 100vh;
+    overflow: hidden;
+}
+.screen { display: none; height: 100vh; }
+.screen.active { display: flex; flex-direction: column; }
+#auth-screen { justify-content: center; align-items: center; }
+.auth-container {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    min-width: 350px;
+}
+.auth-container h1 { font-size: 2.5em; margin-bottom: 10px; color: #ffd700; }
+.subtitle { color: #aaa; margin-bottom: 30px; }
+.auth-form { display: flex; flex-direction: column; gap: 15px; }
+.auth-form input {
+    padding: 12px 15px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1em;
+}
+.auth-form input:focus { outline: none; border-color: #ffd700; }
+.auth-form button {
+    padding: 12px;
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+    border: none;
+    border-radius: 8px;
+    color: #1a1a2e;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.auth-form button:hover { transform: scale(1.02); }
+.switch-form { margin-top: 15px; color: #aaa; }
+.switch-form a { color: #ffd700; text-decoration: none; }
+.error-message { color: #ff6b6b; margin-top: 15px; min-height: 20px; }
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 25px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 2px solid #ffd700;
+}
+.player-info { display: flex; align-items: center; gap: 15px; }
+#player-name { font-weight: bold; font-size: 1.2em; }
+.kingdom-badge {
+    background: #ffd700;
+    color: #1a1a2e;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+.game-info { display: flex; align-items: center; gap: 15px; }
+#tick-display { font-family: monospace; font-size: 1.1em; }
+.status-indicator { color: #4ecdc4; font-size: 1.2em; }
+.status-indicator.disconnected { color: #ff6b6b; }
+.logout-btn {
+    padding: 8px 20px;
+    background: rgba(255, 107, 107, 0.8);
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+}
+.game-main { display: flex; flex: 1; overflow: hidden; }
+.map-container { flex: 1; position: relative; background: #1a4d6e; overflow: hidden; }
+#world-map { display: block; width: 100%; height: 100%; }
+.map-overlay { position: absolute; top: 20px; right: 20px; z-index: 10; }
+.kingdom-info {
+    background: rgba(0, 0, 0, 0.8);
+    padding: 15px;
+    border-radius: 10px;
+    border: 2px solid #ffd700;
+    min-width: 200px;
+}
+.kingdom-info h3 { color: #ffd700; margin-bottom: 10px; }
+.kingdom-info p { margin: 5px 0; font-size: 0.9em; }
+.game-sidebar {
+    width: 320px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    overflow-y: auto;
+    border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+.panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+.panel h3 {
+    color: #ffd700;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 8px;
+}
+.panel-desc { color: #aaa; font-size: 0.9em; margin-bottom: 15px; }
+.kingdom-list { max-height: 200px; overflow-y: auto; margin-bottom: 15px; }
+.kingdom-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    margin: 5px 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.kingdom-item:hover { background: rgba(255, 255, 255, 0.2); }
+.kingdom-item.selected { border: 2px solid #ffd700; }
+.kingdom-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+#claim-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+}
+#claim-btn:disabled { background: #555; cursor: not-allowed; }
+#kingdom-stats p { margin: 8px 0; font-size: 0.95em; }
+.action-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+.action-buttons button {
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.action-buttons button:hover { background: rgba(255, 255, 255, 0.2); }
+.log-container { max-height: 200px; overflow-y: auto; font-size: 0.85em; font-family: monospace; }
+.log-entry {
+    padding: 5px;
+    margin: 3px 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+    border-left: 3px solid #4ecdc4;
+}
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: #1a1a2e;
+    padding: 30px;
+    border-radius: 15px;
+    border: 2px solid #ffd700;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.modal-content h3 { color: #ffd700; margin-bottom: 20px; }
+.close-btn {
+    margin-top: 20px;
+    padding: 10px 25px;
+    background: #ff6b6b;
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+}
+#action-options { display: flex; flex-direction: column; gap: 10px; }
+.action-option {
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.action-option:hover { background: rgba(255, 255, 255, 0.2); }
