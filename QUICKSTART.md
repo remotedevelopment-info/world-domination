@@ -8,8 +8,13 @@ git clone <repository-url>
 cd kingdom-conquest
 docker-compose up -d
 
+# Note: on this machine the host ports are remapped because
+# 8080 and 5432 are already used by other projects:
+#   backend  -> http://localhost:8081
+#   postgres -> localhost:5433
+
 # Open browser
-open http://localhost:8080
+open http://localhost:8081
 
 # View logs
 docker-compose logs -f backend
@@ -65,20 +70,20 @@ Navigate to http://localhost:8080 in your browser
 
 ```bash
 # Register
-curl -X POST http://localhost:8080/api/register \
+curl -X POST http://localhost:8081/api/register \
   -H "Content-Type: application/json" \
   -d '{"username":"player1","email":"p1@test.com","password":"secret"}'
 
 # Login
-curl -X POST http://localhost:8080/api/login \
+curl -X POST http://localhost:8081/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"player1","password":"secret"}'
 
 # Get Countries
-curl http://localhost:8080/api/countries?era=medieval
+curl http://localhost:8081/api/countries?era=medieval
 
 # Claim Kingdom (replace TOKEN and COUNTRY_ID)
-curl -X POST "http://localhost:8080/api/assign-country?country_id=1" \
+curl -X POST "http://localhost:8081/api/assign-country?country_id=1" \
   -H "Authorization: Bearer TOKEN"
 ```
 

@@ -56,6 +56,13 @@ func InitDB() error {
 	return nil
 }
 
+// CloseDB closes the database connection
+func CloseDB() {
+	if DB != nil {
+		DB.Close()
+	}
+}
+
 // InitSchema creates the database tables
 func InitSchema() error {
 	schema := `

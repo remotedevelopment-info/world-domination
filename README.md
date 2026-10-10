@@ -76,7 +76,7 @@ docker-compose logs -f
 docker-compose down
 ```
 
-The game will be available at http://localhost:8080
+The game will be available at http://localhost:8081 (host port remapped: 8080 and 5432 are already in use by other projects on this machine)
 
 ### Manual Setup
 

@@ -6,19 +6,20 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Copy go mod files
-COPY go.mod go.sum* ./
+COPY go.mod go.sum ./
 
 # Download dependencies
-RUN go mod download || true
+RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN go build -o server ./cmd/server
+# Build the application (outside /app so the ./backend bind mount
+# in docker-compose.yml cannot shadow the binary at runtime)
+RUN go build -o /usr/local/bin/server ./cmd/server
 
 # Expose port
 EXPOSE 8080
 
 # Run the server
-CMD ["./server", "-port", "8080"]
+CMD ["/usr/local/bin/server", "-port", "8080"]
