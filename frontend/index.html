@@ -97,11 +97,14 @@
                 <div class="modal-content">
                     <h3 id="action-title"></h3>
                     <div id="action-options"></div>
+                    <div id="action-feedback" class="action-feedback hidden" role="alert" aria-live="assertive"></div>
                     <button onclick="closeModal()" class="close-btn">Close</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <div id="toast-container" aria-live="polite"></div>
 
     <script src="js/game.js"></script>
 </body>

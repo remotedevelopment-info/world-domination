@@ -12,6 +12,8 @@ let currentTick = 0;
 let loggedOut = false;
 let heartbeatTimer = null;
 let authBusy = false;
+let actionBusy = false;
+let lastLoggedActionKey = null;
 
 // Canvas setup
 const canvas = document.getElementById('world-map');
@@ -360,12 +362,15 @@ async function claimKingdom() {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await readErrorMessage(res, 'Could not claim kingdom'));
         logMessage('Kingdom claimed successfully!');
+        showToast('Kingdom claimed!', 'success');
         checkMyKingdom();
         loadKingdoms();
     } catch (err) {
-        logMessage('Error claiming kingdom: ' + err.message);
+        const msg = err.message || 'Could not claim kingdom';
+        logMessage('Error claiming kingdom: ' + msg);
+        showToast(msg, 'error');
     }
 }
 
@@ -402,8 +407,14 @@ function connectWebSocket() {
         renderKingdomList();
         refreshMyKingdomStats();
         if (Array.isArray(state.actions) && state.actions.length) {
+            // Only surface an action when it is genuinely new; every 90s tick
+            // and every other player's action re-broadcasts the same list.
             const latest = state.actions[0];
-            logMessage(`${latest.action_type}: ${latest.description}`);
+            const actionKey = JSON.stringify(latest);
+            if (actionKey !== lastLoggedActionKey) {
+                lastLoggedActionKey = actionKey;
+                logMessage(`${latest.action_type}: ${latest.description}`);
+            }
         }
     };
 }
@@ -455,12 +466,33 @@ const ACTION_SETS = {
     military: { title: 'Military Actions', options: ['Recruit Troops', 'Move Army', 'Fortify Borders', 'Scout Enemy'] }
 };
 
+// showToast displays a transient notification above all overlays so action
+// results are always visible regardless of modal state or sidebar scroll.
+function showToast(message, type) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + (type === 'error' ? 'error' : 'success');
+    toast.textContent = message;
+    container.appendChild(toast);
+    while (container.children.length > 3) container.firstChild.remove();
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 400);
+    }, 3600);
+}
+
 function showAction(type) {
     const modal = document.getElementById('action-modal');
     const title = document.getElementById('action-title');
     const options = document.getElementById('action-options');
+    const feedback = document.getElementById('action-feedback');
     const action = ACTION_SETS[type];
     title.textContent = action.title;
+    if (feedback) {
+        feedback.textContent = '';
+        feedback.classList.add('hidden');
+    }
     options.innerHTML = action.options.map(opt =>
         `<button class="action-option" style="display:block;width:100%;text-align:left;margin:4px 0" ` +
         `onclick='performAction(${JSON.stringify(type)}, ${JSON.stringify(opt)})'>${opt}</button>`
@@ -470,18 +502,35 @@ function showAction(type) {
 
 // performAction sends a real-time action to the server; the engine then
 // broadcasts the new world state to every connected client (including us).
+// Failures keep the modal open and surface the server message inside it;
+// successes close the modal and confirm with a toast.
 async function performAction(type, description) {
+    const options = document.getElementById('action-options');
+    const feedback = document.getElementById('action-feedback');
+    if (actionBusy) return;
+    actionBusy = true;
+    const buttons = options.querySelectorAll('button');
+    buttons.forEach(b => { b.disabled = true; });
     try {
         const res = await fetch(`${API_URL}/action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ action_type: type, description })
         });
-        if (!res.ok) throw new Error((await res.text()).trim());
+        if (!res.ok) throw new Error(await readErrorMessage(res, 'Action failed'));
         logMessage(`Action sent: ${description}`);
         closeModal();
+        showToast(`Action sent: ${description}`, 'success');
     } catch (err) {
-        logMessage(`Action failed: ${err.message}`);
+        const msg = err.message || 'Action failed';
+        logMessage(`Action failed: ${msg}`);
+        if (feedback) {
+            feedback.textContent = msg;
+            feedback.classList.remove('hidden');
+        }
+    } finally {
+        actionBusy = false;
+        buttons.forEach(b => { b.disabled = false; });
     }
 }
 

@@ -210,3 +210,45 @@ body {
 .auth-message { margin-top: 15px; min-height: 20px; font-size: 0.95em; }
 .auth-message.error { color: #ff6b6b; }
 .auth-message.success { color: #4ecdc4; }
+
+/* Action modal: in-flight state and in-context result feedback. */
+.action-option:disabled { opacity: 0.5; cursor: wait; }
+.action-feedback {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(255, 107, 107, 0.15);
+    border: 1px solid #ff6b6b;
+    color: #ff6b6b;
+    font-size: 0.95em;
+}
+
+/* Toast notifications float above the modal so action results are
+   always visible regardless of overlays or sidebar scroll position. */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    pointer-events: none;
+}
+.toast {
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-weight: bold;
+    color: #1a1a2e;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    animation: toast-in 0.25s ease-out;
+}
+.toast.success { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }
+.toast.error { background: #ff6b6b; color: #fff; }
+.toast.fade-out { opacity: 0; transition: opacity 0.4s; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
