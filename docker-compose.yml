@@ -29,9 +29,9 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: kingdom_conquest
-      PORT: 8080
+      PORT: 8060
     ports:
-      - "8081:8080"
+      - "8060:8060"
     depends_on:
       postgres:
         condition: service_healthy

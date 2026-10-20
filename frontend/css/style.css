@@ -201,3 +201,12 @@ body {
     transition: background 0.2s;
 }
 .action-option:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Utility class used throughout the markup: opt elements out of layout.
+   !important is required so it beats display rules like .modal { display: flex; }. */
+.hidden { display: none !important; }
+
+/* Auth screen status area: shows validation errors and success feedback. */
+.auth-message { margin-top: 15px; min-height: 20px; font-size: 0.95em; }
+.auth-message.error { color: #ff6b6b; }
+.auth-message.success { color: #4ecdc4; }

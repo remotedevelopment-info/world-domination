@@ -19,14 +19,14 @@ type User struct {
 type Country struct {
 	ID            int64     `json:"id"`
 	Name          string    `json:"name"`
-	Code          string    `json:"code"` // Short code like "USA", "FRA", etc.
-	Color         string    `json:"color"` // Hex color for display
-	OwnerID       *int64    `json:"owner_id"` // Null if unowned
+	Code          string    `json:"code"`      // Short code like "USA", "FRA", etc.
+	Color         string    `json:"color"`     // Hex color for display
+	OwnerID       *int64    `json:"owner_id"`  // Null if unowned
 	ParentID      *int64    `json:"parent_id"` // For states within countries (e.g., California within USA)
 	Population    int64     `json:"population"`
 	Resources     int64     `json:"resources"`
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
-	Era           string    `json:"era"` // medieval, modern, ancient, etc.
+	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
@@ -41,12 +41,13 @@ type GameState struct {
 
 // PlayerCountry links players to their countries
 type PlayerCountry struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	CountryID   int64     `json:"country_id"`
-	AssignedAt  time.Time `json:"assigned_at"`
-	IsActive    bool      `json:"is_active"`
-	LastActive  time.Time `json:"last_active"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	CountryID  int64     `json:"country_id"`
+	Name       string    `json:"name"`
+	AssignedAt time.Time `json:"assigned_at"`
+	IsActive   bool      `json:"is_active"`
+	LastActive time.Time `json:"last_active"`
 }
 
 // GameAction represents an action taken by a player
@@ -62,11 +63,11 @@ type GameAction struct {
 
 // Era represents a game board/era configuration
 type Era struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"` // medieval, ancient, modern, etc.
-	Description string    `json:"description"`
-	StartDate   time.Time `json:"start_date"`
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"` // medieval, ancient, modern, etc.
+	Description string     `json:"description"`
+	StartDate   time.Time  `json:"start_date"`
 	EndDate     *time.Time `json:"end_date"`
-	IsActive    bool      `json:"is_active"`
-	TickCount   int64     `json:"tick_count"`
+	IsActive    bool       `json:"is_active"`
+	TickCount   int64      `json:"tick_count"`
 }

@@ -19,7 +19,7 @@ COPY . .
 RUN go build -o /usr/local/bin/server ./cmd/server
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8060
 
 # Run the server
-CMD ["/usr/local/bin/server", "-port", "8080"]
+CMD ["/usr/local/bin/server", "-port", "8060"]

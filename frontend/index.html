@@ -19,7 +19,7 @@
                     <input type="text" id="login-username" placeholder="Username" required>
                     <input type="password" id="login-password" placeholder="Password" required>
                     <button onclick="login()">Login</button>
-                    <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+                    <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister(event)">Register</a></p>
                 </div>
 
                 <div id="register-form" class="auth-form hidden">
@@ -28,10 +28,10 @@
                     <input type="email" id="register-email" placeholder="Email" required>
                     <input type="password" id="register-password" placeholder="Password" required>
                     <button onclick="register()">Register</button>
-                    <p class="switch-form">Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+                    <p class="switch-form">Already have an account? <a href="#" onclick="showLogin(event)">Login</a></p>
                 </div>
 
-                <div id="auth-error" class="error-message"></div>
+                <div id="auth-message" class="auth-message" role="alert" aria-live="polite"></div>
             </div>
         </div>
 
@@ -43,7 +43,7 @@
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
                 </div>
                 <div class="game-info">
-                    <span id="tick-display">Tick: 0</span>
+                    <span id="tick-display">Turn 0</span>
                     <span id="connection-status" class="status-indicator">●</span>
                 </div>
                 <button onclick="logout()" class="logout-btn">Logout</button>

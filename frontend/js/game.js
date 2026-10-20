@@ -1,6 +1,6 @@
 // Kingdom Conquest - Game Client
 const API_URL = window.location.origin + '/api';
-const WS_URL = `ws://${window.location.host}/ws`;
+const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
 
 let token = localStorage.getItem('token');
 let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
@@ -9,6 +9,9 @@ let myKingdom = null;
 let selectedKingdomId = null;
 let ws = null;
 let currentTick = 0;
+let loggedOut = false;
+let heartbeatTimer = null;
+let authBusy = false;
 
 // Canvas setup
 const canvas = document.getElementById('world-map');
@@ -123,88 +126,174 @@ function pointInPolygon(px, py, poly) {
 }
 
 // Auth functions
-function showRegister() {
+function setAuthMessage(text, type) {
+    const el = document.getElementById('auth-message');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.remove('error', 'success');
+    if (text) el.classList.add(type === 'success' ? 'success' : 'error');
+}
+
+function clearAuthMessage() {
+    setAuthMessage('');
+}
+
+// readErrorMessage prefers the backend's JSON error payload and falls back
+// to plain-text bodies produced by http.Error.
+async function readErrorMessage(res, fallback) {
+    let body = '';
+    try {
+        body = (await res.text()).trim();
+    } catch (_) {
+        // body unreadable; fall through to the fallback message
+    }
+    if (body) {
+        try {
+            const data = JSON.parse(body);
+            if (data && (data.error || data.message)) return data.error || data.message;
+        } catch (_) {
+            return body; // not JSON: plain-text error message
+        }
+    }
+    return fallback;
+}
+
+function showRegister(e) {
+    if (e) e.preventDefault();
+    clearAuthMessage();
     document.getElementById('login-form').classList.add('hidden');
     document.getElementById('register-form').classList.remove('hidden');
 }
 
-function showLogin() {
+function showLogin(e) {
+    if (e) e.preventDefault();
+    clearAuthMessage();
     document.getElementById('register-form').classList.add('hidden');
     document.getElementById('login-form').classList.remove('hidden');
 }
 
 async function register() {
+    if (authBusy) return;
+    clearAuthMessage();
+
     const username = document.getElementById('register-username').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
-    
+
+    if (!username || !email || !password) {
+        setAuthMessage('Username, email, and password are required.');
+        return;
+    }
+
+    const btn = document.querySelector('#register-form button');
+    authBusy = true;
+    if (btn) btn.disabled = true;
     try {
         const res = await fetch(`${API_URL}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
         });
-        
+
         if (!res.ok) {
-            throw new Error(await res.text());
+            throw new Error(await readErrorMessage(res, 'Registration failed. Please try again.'));
         }
-        
+
+        // Success: reset the register form, switch to login with the username
+        // prefilled, and show a visible confirmation on the auth screen.
+        document.getElementById('register-username').value = '';
+        document.getElementById('register-email').value = '';
+        document.getElementById('register-password').value = '';
         showLogin();
-        logMessage('Registration successful! Please login.');
+        document.getElementById('login-username').value = username;
+        document.getElementById('login-password').value = '';
+        setAuthMessage('Registration successful! You can now log in.', 'success');
+        document.getElementById('login-password').focus();
     } catch (err) {
-        document.getElementById('auth-error').textContent = err.message;
+        setAuthMessage(err.message || 'Registration failed. Please try again.');
+    } finally {
+        authBusy = false;
+        if (btn) btn.disabled = false;
     }
 }
 
 async function login() {
+    if (authBusy) return;
+    clearAuthMessage();
+
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
-    
+
+    if (!username || !password) {
+        setAuthMessage('Username and password are required.');
+        return;
+    }
+
+    const btn = document.querySelector('#login-form button');
+    authBusy = true;
+    if (btn) btn.disabled = true;
     try {
         const res = await fetch(`${API_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-        
+
         if (!res.ok) {
-            throw new Error('Invalid username or password');
+            throw new Error(await readErrorMessage(res, 'Invalid username or password'));
         }
-        
+
         const data = await res.json();
         token = data.token;
         currentUser = { id: data.user_id, username: data.username };
-        
+
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(currentUser));
-        
+
+        // Clear any stale message so it is gone when the auth screen is
+        // shown again after logout, then drop the password from the DOM.
+        clearAuthMessage();
+        document.getElementById('login-password').value = '';
         showGameScreen();
     } catch (err) {
-        document.getElementById('auth-error').textContent = err.message;
+        setAuthMessage(err.message || 'Invalid username or password');
+        document.getElementById('login-password').select();
+    } finally {
+        authBusy = false;
+        if (btn) btn.disabled = false;
     }
 }
 
 function logout() {
+    loggedOut = true;
+    if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+    }
     fetch(`${API_URL}/logout`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
     }).catch(() => {});
-    
+
     token = null;
     currentUser = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+    clearAuthMessage();
+
     if (ws) {
+        ws.onclose = null; // suppress auto-reconnect
         ws.close();
         ws = null;
     }
     
     document.getElementById('auth-screen').classList.add('active');
     document.getElementById('game-screen').classList.remove('active');
+    closeModal();
 }
 
 function showGameScreen() {
+    closeModal();
     document.getElementById('auth-screen').classList.remove('active');
     document.getElementById('game-screen').classList.add('active');
     document.getElementById('player-name').textContent = currentUser.username;
@@ -252,15 +341,15 @@ function renderKingdomList() {
         const div = document.createElement('div');
         div.className = 'kingdom-item';
         div.innerHTML = `<div class="kingdom-color" style="background: ${kingdom.color}"></div><span>${kingdom.name}</span>`;
-        div.onclick = () => selectKingdom(kingdom.id);
+        div.onclick = () => selectKingdom(kingdom.id, div);
         list.appendChild(div);
     });
 }
 
-function selectKingdom(id) {
+function selectKingdom(id, listItem) {
     selectedKingdomId = id;
     document.querySelectorAll('.kingdom-item').forEach(el => el.classList.remove('selected'));
-    event.currentTarget.classList.add('selected');
+    if (listItem) listItem.classList.add('selected');
     document.getElementById('claim-btn').disabled = false;
 }
 
@@ -281,30 +370,53 @@ async function claimKingdom() {
 }
 
 function connectWebSocket() {
+    loggedOut = false;
     ws = new WebSocket(WS_URL);
     ws.onopen = () => {
         document.getElementById('connection-status').classList.remove('disconnected');
         logMessage('Connected to game server');
         sendHeartbeat();
+        if (!heartbeatTimer) heartbeatTimer = setInterval(sendHeartbeat, 30000);
     };
     ws.onclose = () => {
         document.getElementById('connection-status').classList.add('disconnected');
+        if (loggedOut) return; // do not reconnect after logout
         logMessage('Disconnected from server');
         setTimeout(connectWebSocket, 5000);
     };
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.tick) {
-            currentTick = data.tick;
-            document.getElementById('tick-display').textContent = `Tick: ${currentTick}`;
+        let msg;
+        try {
+            msg = JSON.parse(event.data);
+        } catch {
+            return; // ignore malformed frames
         }
-        if (data.countries) {
-            kingdoms = data.countries;
-            renderMap();
-            renderKingdomList();
+        // init envelope: {type: 'init', state: GameState}; broadcasts are raw GameState
+        const state = msg && msg.type === 'init' ? msg.state : msg;
+        if (!state || !Array.isArray(state.countries)) return;
+        currentTick = state.tick || 0;
+        const rulers = Array.isArray(state.players) ? state.players.length : 0;
+        document.getElementById('tick-display').textContent = `Turn ${currentTick} · ${rulers} ruler${rulers === 1 ? '' : 's'}`;
+        kingdoms = state.countries;
+        renderMap();
+        renderKingdomList();
+        refreshMyKingdomStats();
+        if (Array.isArray(state.actions) && state.actions.length) {
+            const latest = state.actions[0];
+            logMessage(`${latest.action_type}: ${latest.description}`);
         }
     };
-    setInterval(sendHeartbeat, 30000);
+}
+
+// refreshMyKingdomStats syncs the sidebar numbers from the broadcast state.
+function refreshMyKingdomStats() {
+    if (!myKingdom || !myKingdom.country_id) return;
+    const country = kingdoms.find(k => k.id === myKingdom.country_id);
+    if (!country) return;
+    const popEl = document.getElementById('my-kingdom-pop');
+    const resEl = document.getElementById('my-kingdom-res');
+    if (popEl) popEl.textContent = country.population.toLocaleString();
+    if (resEl) resEl.textContent = country.resources.toLocaleString();
 }
 
 function sendHeartbeat() {
@@ -337,19 +449,40 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
+const ACTION_SETS = {
+    diplomacy: { title: 'Diplomacy Actions', options: ['Send Envoy', 'Propose Alliance', 'Declare War', 'Request Trade'] },
+    economy: { title: 'Economic Actions', options: ['Collect Taxes', 'Build Market', 'Trade Resources', 'Invest in Infrastructure'] },
+    military: { title: 'Military Actions', options: ['Recruit Troops', 'Move Army', 'Fortify Borders', 'Scout Enemy'] }
+};
+
 function showAction(type) {
     const modal = document.getElementById('action-modal');
     const title = document.getElementById('action-title');
     const options = document.getElementById('action-options');
-    const actions = {
-        diplomacy: { title: 'Diplomacy Actions', options: ['Send Envoy', 'Propose Alliance', 'Declare War', 'Request Trade'] },
-        economy: { title: 'Economic Actions', options: ['Collect Taxes', 'Build Market', 'Trade Resources', 'Invest in Infrastructure'] },
-        military: { title: 'Military Actions', options: ['Recruit Troops', 'Move Army', 'Fortify Borders', 'Scout Enemy'] }
-    };
-    const action = actions[type];
+    const action = ACTION_SETS[type];
     title.textContent = action.title;
-    options.innerHTML = action.options.map(opt => `<div class="action-option">${opt} <span style="color:#aaa">(Coming Soon)</span></div>`).join('');
+    options.innerHTML = action.options.map(opt =>
+        `<button class="action-option" style="display:block;width:100%;text-align:left;margin:4px 0" ` +
+        `onclick='performAction(${JSON.stringify(type)}, ${JSON.stringify(opt)})'>${opt}</button>`
+    ).join('');
     modal.classList.remove('hidden');
+}
+
+// performAction sends a real-time action to the server; the engine then
+// broadcasts the new world state to every connected client (including us).
+async function performAction(type, description) {
+    try {
+        const res = await fetch(`${API_URL}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ action_type: type, description })
+        });
+        if (!res.ok) throw new Error((await res.text()).trim());
+        logMessage(`Action sent: ${description}`);
+        closeModal();
+    } catch (err) {
+        logMessage(`Action failed: ${err.message}`);
+    }
 }
 
 function closeModal() {

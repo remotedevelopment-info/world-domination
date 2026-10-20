@@ -2,15 +2,22 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
+
+	"kingdom-conquest/backend/internal/models"
 )
 
 var DB *sql.DB
+
+// ErrUserExists is returned by CreateUser when the username or email is
+// already taken (Postgres unique-constraint violation 23505).
+var ErrUserExists = errors.New("username or email already exists")
 
 // InitDB initializes the database connection
 func InitDB() error {
@@ -216,14 +223,14 @@ func SaveGameState(tick int64, data string) error {
 }
 
 func GetUserByUsername(username string) (*struct {
-	ID, Population int64
+	ID, Population            int64
 	Username, Password, Email string
-	IsActive bool
+	IsActive                  bool
 }, error) {
 	user := &struct {
-		ID, Population int64
+		ID, Population            int64
 		Username, Password, Email string
-		IsActive bool
+		IsActive                  bool
 	}{}
 	err := DB.QueryRow("SELECT id, username, password, email, is_active FROM users WHERE username = $1", username).
 		Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.IsActive)
@@ -240,60 +247,84 @@ func CreateUser(username, password, email string) (int64, error) {
 	var id int64
 	err := DB.QueryRow("INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id",
 		username, password, email).Scan(&id)
-	return id, err
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return 0, ErrUserExists
+		}
+		return 0, err
+	}
+	return id, nil
 }
 
-func GetCountries(era string) ([]map[string]interface{}, error) {
+func GetCountries(era string) ([]models.Country, error) {
 	rows, err := DB.Query(`SELECT id, name, code, color, owner_id, population, resources, territory_type FROM countries WHERE era = $1`, era)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var countries []map[string]interface{}
+	var countries []models.Country
 	for rows.Next() {
-		var id int64
-		var name, code, color, territoryType string
-		var population, resources int64
+		var c models.Country
 		var ownerID sql.NullInt64
-		if err := rows.Scan(&id, &name, &code, &color, &ownerID, &population, &resources, &territoryType); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &c.Population, &c.Resources, &c.TerritoryType); err != nil {
 			return nil, err
 		}
-		country := map[string]interface{}{
-			"id": id, "name": name, "code": code, "color": color,
-			"population": population, "resources": resources, "territory_type": territoryType,
-		}
 		if ownerID.Valid {
-			country["owner_id"] = ownerID.Int64
-		} else {
-			country["owner_id"] = nil
+			c.OwnerID = &ownerID.Int64
 		}
-		countries = append(countries, country)
+		countries = append(countries, c)
 	}
 	return countries, rows.Err()
 }
 
-func AssignCountryToPlayer(userID, countryID int64) error {
-	_, err := DB.Exec(`INSERT INTO player_countries (user_id, country_id, last_active) VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, country_id) DO UPDATE SET is_active = true, last_active = $3`,
-		userID, countryID, time.Now())
-	return err
+func ClaimCountry(userID, countryID int64) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var taken int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM player_countries WHERE country_id = $1 AND is_active = true`, countryID).Scan(&taken); err != nil {
+		return err
+	}
+	if taken > 0 {
+		return errors.New("country is already claimed")
+	}
+
+	var owned int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM player_countries WHERE user_id = $1 AND is_active = true`, userID).Scan(&owned); err != nil {
+		return err
+	}
+	if owned > 0 {
+		return errors.New("player already owns a kingdom")
+	}
+
+	if _, err := tx.Exec(`INSERT INTO player_countries (user_id, country_id, last_active) VALUES ($1, $2, current_timestamp)
+		ON CONFLICT (user_id, country_id) DO UPDATE SET is_active = true, last_active = current_timestamp`,
+		userID, countryID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE countries SET owner_id = $1 WHERE id = $2", userID, countryID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func GetPlayerCountry(userID int64) (map[string]interface{}, error) {
-	var countryID int64
-	var countryName string
-	var lastActive time.Time
-	err := DB.QueryRow(`SELECT pc.country_id, c.name, pc.last_active FROM player_countries pc
-		JOIN countries c ON pc.country_id = c.id WHERE pc.user_id = $1 AND pc.is_active = true`, userID).
-		Scan(&countryID, &countryName, &lastActive)
+func GetPlayerCountry(userID int64) (*models.PlayerCountry, error) {
+	var pc models.PlayerCountry
+	err := DB.QueryRow(`SELECT pc.id, pc.user_id, pc.country_id, c.name, pc.assigned_at, pc.is_active, pc.last_active FROM player_countries pc
+		JOIN countries c ON pc.country_id = c.id
+		WHERE pc.user_id = $1 AND pc.is_active = true`, userID).Scan(&pc.ID, &pc.UserID, &pc.CountryID, &pc.Name, &pc.AssignedAt, &pc.IsActive, &pc.LastActive)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"country_id": countryID, "country_name": countryName, "last_active": lastActive}, nil
+	return &pc, nil
 }
 
 func UpdatePlayerActivity(userID int64) error {
@@ -304,4 +335,136 @@ func UpdatePlayerActivity(userID int64) error {
 func UpdateUserLastLogin(userID int64) error {
 	_, err := DB.Exec("UPDATE users SET last_login = $1 WHERE id = $2", time.Now(), userID)
 	return err
+}
+
+// stalePlayerRow holds a player whose territory should be forfeited.
+type stalePlayerRow struct {
+	UserID      int64
+	Username    string
+	CountryID   int64
+	CountryCode string
+}
+
+// GetStalePlayers returns players whose last activity (heartbeat or login)
+// predates cutoff, i.e. they have not connected in over 7 days.
+func GetStalePlayers(cutoff time.Time) ([]stalePlayerRow, error) {
+	rows, err := DB.Query(
+		`SELECT pc.user_id, u.username, pc.country_id, c.code
+		 FROM player_countries pc
+		 JOIN users u ON u.id = pc.user_id
+		 JOIN countries c ON c.id = pc.country_id
+		 WHERE pc.is_active = true
+		   AND (pc.last_active < $1 OR u.last_login < $1)`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []stalePlayerRow
+	for rows.Next() {
+		var r stalePlayerRow
+		if err := rows.Scan(&r.UserID, &r.Username, &r.CountryID, &r.CountryCode); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// SetCountryOwnerToNull removes ownership of a kingdom (used when
+// confiscating a lapsed player's territory).
+func SetCountryOwnerToNull(countryID int64) error {
+	_, err := DB.Exec("UPDATE countries SET owner_id = NULL WHERE id = $1", countryID)
+	return err
+}
+
+// MarkPlayerCountryInactive records that a player's kingdom is forfeit.
+func MarkPlayerCountryInactive(userID, countryID int64) error {
+	_, err := DB.Exec(
+		"UPDATE player_countries SET is_active = false WHERE user_id = $1 AND country_id = $2",
+		userID, countryID)
+	return err
+}
+
+// LogAction records an action in the audit table.
+func LogAction(userID, countryID int64, actionType, description string) error {
+	return DB.QueryRow(
+		`INSERT INTO game_actions (user_id, country_id, action_type, description, tick)
+		 VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(tick), 0) + 1 FROM game_states))`,
+		userID, countryID, actionType, description).Err()
+}
+
+// UpdateCountryResources sets the resource total for a kingdom.
+func UpdateCountryResources(countryID int64, resources int64) error {
+	_, err := DB.Exec("UPDATE countries SET resources = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", resources, countryID)
+	return err
+}
+
+// UpdateCountryPopulation sets the population for a kingdom.
+func UpdateCountryPopulation(countryID int64, population int64) error {
+	_, err := DB.Exec("UPDATE countries SET population = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", population, countryID)
+	return err
+}
+
+// ActivePlayerRow describes a player currently holding a kingdom.
+type ActivePlayerRow struct {
+	UserID     int64
+	Username   string
+	CountryID  int64
+	LastActive time.Time
+}
+
+// GetActivePlayers returns every player with an active kingdom.
+func GetActivePlayers() ([]ActivePlayerRow, error) {
+	rows, err := DB.Query(
+		`SELECT pc.user_id, u.username, pc.country_id, pc.last_active
+		 FROM player_countries pc
+		 JOIN users u ON u.id = pc.user_id
+		 WHERE pc.is_active = true
+		 ORDER BY pc.last_active DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ActivePlayerRow
+	for rows.Next() {
+		var r ActivePlayerRow
+		if err := rows.Scan(&r.UserID, &r.Username, &r.CountryID, &r.LastActive); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// ActionRow describes one logged game action.
+type ActionRow struct {
+	UserID      int64
+	CountryID   int64
+	ActionType  string
+	Description string
+}
+
+// GetRecentActions returns the most recent actions, newest first.
+func GetRecentActions(limit int) ([]ActionRow, error) {
+	rows, err := DB.Query(
+		`SELECT user_id, country_id, action_type, description
+		 FROM game_actions
+		 ORDER BY id DESC
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ActionRow
+	for rows.Next() {
+		var r ActionRow
+		if err := rows.Scan(&r.UserID, &r.CountryID, &r.ActionType, &r.Description); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
 }
