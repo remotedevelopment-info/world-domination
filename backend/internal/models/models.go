@@ -19,10 +19,11 @@ type User struct {
 type Country struct {
 	ID            int64     `json:"id"`
 	Name          string    `json:"name"`
-	Code          string    `json:"code"`      // Short code like "USA", "FRA", etc.
-	Color         string    `json:"color"`     // Hex color for display
-	OwnerID       *int64    `json:"owner_id"`  // Null if unowned
-	ParentID      *int64    `json:"parent_id"` // For states within countries (e.g., California within USA)
+	Code          string    `json:"code"`       // Short code like "USA", "FRA", etc.
+	Color         string    `json:"color"`      // Hex color for display
+	OwnerID       *int64    `json:"owner_id"`   // Null if unowned
+	OwnerName     *string   `json:"owner_name"` // Username of the player who owns it, if any
+	ParentID      *int64    `json:"parent_id"`  // For states within countries (e.g., California within USA)
 	Population    int64     `json:"population"`
 	Resources     int64     `json:"resources"`
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.

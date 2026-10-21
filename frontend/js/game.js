@@ -7,6 +7,7 @@ let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
 let kingdoms = [];
 let myKingdom = null;
 let selectedKingdomId = null;
+let shownKingdomId = null; // kingdom id currently shown in the info popup
 let ws = null;
 let currentTick = 0;
 let loggedOut = false;
@@ -329,6 +330,13 @@ async function checkMyKingdom() {
             document.getElementById('my-kingdom').classList.remove('hidden');
             document.getElementById('my-kingdom-name').textContent = data.country_name;
             document.getElementById('my-kingdom-active').textContent = new Date(data.last_active).toLocaleString();
+        } else {
+            // No kingdom (or one we no longer hold): collapse back to the
+            // claim panel so the UI never offers actions the server rejects.
+            myKingdom = null;
+            document.getElementById('player-kingdom').textContent = 'No Kingdom';
+            document.getElementById('country-selection').classList.remove('hidden');
+            document.getElementById('my-kingdom').classList.add('hidden');
         }
     } catch (err) {
         console.error('Error checking kingdom:', err);
@@ -342,10 +350,17 @@ function renderKingdomList() {
     available.forEach(kingdom => {
         const div = document.createElement('div');
         div.className = 'kingdom-item';
+        div.dataset.kingdomId = kingdom.id;
         div.innerHTML = `<div class="kingdom-color" style="background: ${kingdom.color}"></div><span>${kingdom.name}</span>`;
         div.onclick = () => selectKingdom(kingdom.id, div);
         list.appendChild(div);
     });
+    // Re-apply the selection highlight if a broadcast-triggered re-render
+    // wiped it while the player's choice is still pending.
+    if (selectedKingdomId) {
+        const selected = list.querySelector(`.kingdom-item[data-kingdom-id="${selectedKingdomId}"]`);
+        if (selected) selected.classList.add('selected');
+    }
 }
 
 function selectKingdom(id, listItem) {
@@ -356,7 +371,10 @@ function selectKingdom(id, listItem) {
 }
 
 async function claimKingdom() {
-    if (!selectedKingdomId) return;
+    if (!selectedKingdomId) {
+        showToast('Select a kingdom first', 'error');
+        return;
+    }
     try {
         const res = await fetch(`${API_URL}/assign-country?country_id=${selectedKingdomId}`, {
             method: 'POST',
@@ -455,8 +473,18 @@ canvas.addEventListener('click', (e) => {
         document.getElementById('kingdom-name').textContent = kingdom.name;
         document.getElementById('kingdom-population').textContent = kingdom.population.toLocaleString();
         document.getElementById('kingdom-resources').textContent = kingdom.resources.toLocaleString();
-        document.getElementById('kingdom-owner').textContent = kingdom.owner_id ? 'Owned' : 'Unclaimed';
+        const ownerLabel = kingdom.owner_name
+            ? 'Owner: ' + kingdom.owner_name
+            : (kingdom.owner_id ? 'Owned' : 'Unclaimed');
+        document.getElementById('kingdom-owner').textContent = ownerLabel;
         info.classList.remove('hidden');
+        shownKingdomId = kingdom.id;
+        // Selecting an unclaimed kingdom on the map arms the Claim button,
+        // matching what clicking it in the sidebar list does.
+        if (!kingdom.owner_id) {
+            const listItem = document.querySelector(`.kingdom-item[data-kingdom-id="${kingdom.id}"]`);
+            selectKingdom(kingdom.id, listItem);
+        }
     }
 });
 
@@ -483,6 +511,12 @@ function showToast(message, type) {
 }
 
 function showAction(type) {
+    // Actions require a server-confirmed kingdom; never open the modal for
+    // an unconfirmed client state.
+    if (!myKingdom) {
+        showToast('Claim a kingdom first', 'error');
+        return;
+    }
     const modal = document.getElementById('action-modal');
     const title = document.getElementById('action-title');
     const options = document.getElementById('action-options');
@@ -518,12 +552,19 @@ async function performAction(type, description) {
             body: JSON.stringify({ action_type: type, description })
         });
         if (!res.ok) throw new Error(await readErrorMessage(res, 'Action failed'));
+        const data = await res.json();
         logMessage(`Action sent: ${description}`);
+        applyActionResult(data);
         closeModal();
-        showToast(`Action sent: ${description}`, 'success');
+        showToast(`Action complete: ${description}`, 'success');
     } catch (err) {
         const msg = err.message || 'Action failed';
         logMessage(`Action failed: ${msg}`);
+        if (msg.indexOf('no country assigned') !== -1) {
+            // The server disagrees with our client state: resync so the UI
+            // collapses back to the claim panel instead of staying wrong.
+            checkMyKingdom();
+        }
         if (feedback) {
             feedback.textContent = msg;
             feedback.classList.remove('hidden');
@@ -531,6 +572,47 @@ async function performAction(type, description) {
     } finally {
         actionBusy = false;
         buttons.forEach(b => { b.disabled = false; });
+    }
+}
+
+// applyActionResult merges the server's post-action kingdom snapshot into the
+// live UI so resources/population/tick update immediately (AJAX-style)
+// without a page refresh or waiting for the WebSocket broadcast.
+function applyActionResult(data) {
+    if (!data) return;
+    if (typeof data.tick === 'number' && data.tick > 0) {
+        currentTick = data.tick;
+        const tickEl = document.getElementById('tick-display');
+        const match = tickEl ? tickEl.textContent.match(/\d+ ruler/) : null;
+        const rulerCount = match ? match[0].replace(/\D/g, '') : 0;
+        if (tickEl) tickEl.textContent = `Turn ${data.tick} · ${rulerCount} ruler${rulerCount === 1 ? '' : 's'}`;
+    }
+    if (!data.country_id) return;
+    const kingdom = kingdoms.find(k => k.id === data.country_id);
+    if (kingdom) {
+        if (typeof data.population === 'number') kingdom.population = data.population;
+        if (typeof data.resources === 'number') kingdom.resources = data.resources;
+        if (typeof data.country_name === 'string') kingdom.name = data.country_name;
+    } else {
+        kingdoms.push({
+            id: data.country_id,
+            name: data.country_name || 'Kingdom',
+            population: typeof data.population === 'number' ? data.population : 0,
+            resources: typeof data.resources === 'number' ? data.resources : 0
+        });
+    }
+    if (myKingdom && myKingdom.country_id === data.country_id) {
+        if (typeof data.population === 'number') myKingdom.population = data.population;
+        if (typeof data.resources === 'number') myKingdom.resources = data.resources;
+    }
+    renderMap();
+    renderKingdomList();
+    refreshMyKingdomStats();
+    // Keep the info popup honest if it is showing this kingdom.
+    const info = document.getElementById('kingdom-info');
+    if (info && !info.classList.contains('hidden') && shownKingdomId === data.country_id) {
+        document.getElementById('kingdom-population').textContent = (typeof data.population === 'number' ? data.population : 0).toLocaleString();
+        document.getElementById('kingdom-resources').textContent = (typeof data.resources === 'number' ? data.resources : 0).toLocaleString();
     }
 }
 

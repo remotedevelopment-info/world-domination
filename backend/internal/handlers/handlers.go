@@ -194,12 +194,14 @@ func AssignCountryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := database.ClaimCountry(user.UserID, countryID); err != nil {
+		log.Printf("claim: user %d country %d failed: %v", user.UserID, countryID, err)
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 
 	database.UpdatePlayerActivity(user.UserID)
 
+	log.Printf("claim: user %d country %d ok", user.UserID, countryID)
 	// A claim changes the world: rebuild state and broadcast immediately.
 	game.GetEngine().Advance()
 
@@ -293,11 +295,38 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 	if err := database.UpdatePlayerActivity(user.UserID); err != nil {
 		log.Printf("error updating activity: %v", err)
 	}
-	engine.Advance()
+	state := engine.Advance()
+
+	// Resolve the acting player's current kingdom from the freshly built
+	// state so the client can update its own panel in a single round-trip
+	// (AJAX-style) instead of waiting for the WebSocket broadcast or a page
+	// refresh.
+	var myCountryID, myPopulation, myResources int64
+	var myCountryName string
+	for _, p := range state.Players {
+		if p.UserID == user.UserID {
+			myCountryID = p.CountryID
+			break
+		}
+	}
+	for _, c := range state.Countries {
+		if c.ID == myCountryID {
+			myCountryName = c.Name
+			myPopulation = c.Population
+			myResources = c.Resources
+			break
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Action recorded",
-		"type":    actionType,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":      "Action recorded",
+		"type":         actionType,
+		"tick":         state.Tick,
+		"country_id":   myCountryID,
+		"country_name": myCountryName,
+		"population":   myPopulation,
+		"resources":    myResources,
 	})
 }
 

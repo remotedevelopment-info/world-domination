@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -258,7 +259,20 @@ func CreateUser(username, password, email string) (int64, error) {
 }
 
 func GetCountries(era string) ([]models.Country, error) {
-	rows, err := DB.Query(`SELECT id, name, code, color, owner_id, population, resources, territory_type FROM countries WHERE era = $1`, era)
+	// LEFT JOIN through player_countries -> users so each country carries the
+	// owning player's username (NULL when unclaimed). The scalar subquery with
+	// LIMIT 1 guards against a hypothetical duplicate active claim producing
+	// duplicate country rows.
+	rows, err := DB.Query(`SELECT
+		c.id, c.name, c.code, c.color, c.owner_id,
+		(SELECT u.username
+		   FROM player_countries pc
+		   JOIN users u ON u.id = pc.user_id
+		  WHERE pc.country_id = c.id AND pc.is_active = true
+		  LIMIT 1) AS owner_name,
+		c.population, c.resources, c.territory_type
+		FROM countries c
+		WHERE c.era = $1`, era)
 	if err != nil {
 		return nil, err
 	}
@@ -267,12 +281,18 @@ func GetCountries(era string) ([]models.Country, error) {
 	var countries []models.Country
 	for rows.Next() {
 		var c models.Country
-		var ownerID sql.NullInt64
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &c.Population, &c.Resources, &c.TerritoryType); err != nil {
+		var ownerID, ownerName sql.NullString
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.TerritoryType); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
-			c.OwnerID = &ownerID.Int64
+			oid, perr := strconv.ParseInt(ownerID.String, 10, 64)
+			if perr == nil {
+				c.OwnerID = &oid
+			}
+		}
+		if ownerName.Valid {
+			c.OwnerName = &ownerName.String
 		}
 		countries = append(countries, c)
 	}

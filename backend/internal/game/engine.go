@@ -21,14 +21,15 @@ type GameState struct {
 }
 
 type CountryState struct {
-	ID            int64  `json:"id"`
-	Name          string `json:"name"`
-	Code          string `json:"code"`
-	Color         string `json:"color"`
-	OwnerID       *int64 `json:"owner_id"`
-	Population    int64  `json:"population"`
-	Resources     int64  `json:"resources"`
-	TerritoryType string `json:"territory_type"`
+	ID            int64   `json:"id"`
+	Name          string  `json:"name"`
+	Code          string  `json:"code"`
+	Color         string  `json:"color"`
+	OwnerID       *int64  `json:"owner_id"`
+	OwnerName     *string `json:"owner_name"` // Username of the player who owns it, if any
+	Population    int64   `json:"population"`
+	Resources     int64   `json:"resources"`
+	TerritoryType string  `json:"territory_type"`
 }
 
 type PlayerState struct {
@@ -132,6 +133,9 @@ func (g *GameEngine) BuildState() GameState {
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID
+		}
+		if c.OwnerName != nil {
+			cs.OwnerName = c.OwnerName
 		}
 		countryStates = append(countryStates, cs)
 	}
