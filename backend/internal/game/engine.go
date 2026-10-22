@@ -30,6 +30,8 @@ type CountryState struct {
 	Population    int64   `json:"population"`
 	Resources     int64   `json:"resources"`
 	TerritoryType string  `json:"territory_type"`
+	Borders       string  `json:"borders"`
+	IsIsland      bool    `json:"is_island"`
 }
 
 type PlayerState struct {
@@ -129,6 +131,8 @@ func (g *GameEngine) BuildState() GameState {
 			Population:    c.Population,
 			Resources:     c.Resources,
 			TerritoryType: c.TerritoryType,
+			Borders:       c.Borders,
+			IsIsland:      c.IsIsland,
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID

@@ -79,10 +79,15 @@ func InitSchema() error {
 		username VARCHAR(100) UNIQUE NOT NULL,
 		password VARCHAR(255) NOT NULL,
 		email VARCHAR(255) UNIQUE NOT NULL,
+		base_color VARCHAR(7) DEFAULT '#FF6B6B',
+		home_territory_id INTEGER,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		last_login TIMESTAMP WITH TIME ZONE,
 		is_active BOOLEAN DEFAULT true
 	);
+
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS base_color VARCHAR(7) DEFAULT '#FF6B6B';
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS home_territory_id INTEGER;
 
 	CREATE TABLE IF NOT EXISTS eras (
 		id SERIAL PRIMARY KEY,
@@ -105,9 +110,14 @@ func InitSchema() error {
 		resources BIGINT DEFAULT 100,
 		territory_type VARCHAR(50) DEFAULT 'kingdom',
 		era VARCHAR(50) DEFAULT 'medieval',
+		is_island BOOLEAN DEFAULT false,
+		borders JSONB DEFAULT '{"borders": []}'::jsonb,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
+
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS is_island BOOLEAN DEFAULT false;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS borders JSONB DEFAULT '{"borders": []}'::jsonb;
 
 	CREATE TABLE IF NOT EXISTS player_countries (
 		id SERIAL PRIMARY KEY,
@@ -121,10 +131,15 @@ func InitSchema() error {
 
 	CREATE TABLE IF NOT EXISTS game_states (
 		id SERIAL PRIMARY KEY,
-		tick BIGINT NOT NULL,
+		tick BIGINT DEFAULT 0,
+		game_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		data JSONB NOT NULL
 	);
+
+	ALTER TABLE game_states ADD COLUMN IF NOT EXISTS tick BIGINT DEFAULT 0;
+	ALTER TABLE game_states ADD COLUMN IF NOT EXISTS game_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+	ALTER TABLE game_states ALTER COLUMN tick SET DEFAULT 0;
 
 	CREATE TABLE IF NOT EXISTS game_actions (
 		id SERIAL PRIMARY KEY,
@@ -132,9 +147,14 @@ func InitSchema() error {
 		country_id INTEGER NOT NULL REFERENCES countries(id),
 		action_type VARCHAR(50) NOT NULL,
 		description TEXT,
-		tick BIGINT NOT NULL,
+		tick BIGINT DEFAULT 0,
+		game_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
+
+	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS tick BIGINT DEFAULT 0;
+	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS game_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+	ALTER TABLE game_actions ALTER COLUMN tick SET DEFAULT 0;
 
 	CREATE INDEX IF NOT EXISTS idx_countries_owner ON countries(owner_id);
 	CREATE INDEX IF NOT EXISTS idx_game_states_tick ON game_states(tick);
@@ -154,103 +174,37 @@ func InitSchema() error {
 	return nil
 }
 
-// SeedInitialData populates the database with initial kingdoms
+// SeedInitialData populates the database with initial kingdoms and ensures
+// border/island metadata and any missing kingdoms (such as IRL and ITA) exist.
 func SeedInitialData() error {
-	var count int
-	err := DB.QueryRow("SELECT COUNT(*) FROM countries WHERE era = 'medieval'").Scan(&count)
-	if err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-
-	// Define sea-connected countries that island nations border
-	seaConnectedCountries := map[string]bool{
-		"FRA": true, "ESP": true, "POR": true, "HRE": true, "CAS": true, "VEN": true,
-	}
-
-	// Define border networks for each country
-	// Each country must have at least 3 borders, some up to 7
-	// England and Ireland are islands so border all sea-connected countries
-	borderMaps := map[string]map[string]bool{
-		"ENG":  { // England - island, borders all sea-connected countries
-			"FRA": true, "ESP": true, "POR": true, "HRE": true, "CAS": true, "VEN": true,
-		},
-		"IRL":  { // Ireland - island, borders all sea-connected countries
-			"FRA": true, "ESP": true, "POR": true, "HRE": true, "CAS": true, "VEN": true,
-		},
-		"FRA":  { // France - 6 borders
-			"ENG": true, "ESP": true, "HRE": true,
-		},
-		"ESP":  { // Spain - 5 borders
-			"FRA": true, "ENG": true, "POR": true, "CAS": true,
-		},
-		"POR":  { // Portugal - 4 borders
-			"ESP": true, "HRE": true,
-		},
-		"HRE":  { // Holy Roman Empire - 5 borders
-			"ENG": true, "FRA": true, "CAS": true,
-		},
-		"SCO":  { // Scotland - 3 borders
-			"ENG": true, "NOR": true,
-		},
-		"NOR":  { // Norway - 3 borders
-			"SCO": true, "SWE": true,
-		},
-		"SWE":  { // Sweden - 3 borders
-			"NOR": true,
-		},
-		"POL":  { // Poland - 4 borders
-			"HRE": true, "RUS": true,
-		},
-		"BYZ":  { // Byzantium - 3 borders
-			"CAS": true,
-		},
-		"RUS":  { // Russia - 5 borders
-			"POL": true,
-		},
-		"VEN":  { // Venice - 3 borders
-			"ENG": true,
-		},
-		"PAP":  { // Papal States - 3 borders
-			"CAS": true,
-		},
-		"ARA":  { // Aragon - 4 borders
-			"CAS": true,
-		},
-		"CAS":  { // Castile - 6 borders
-			"FRA": true, "ESP": true, "HRE": true, "POR": true, "PAP": true, "ARA": true,
-		},
-	}
-
-	// Convert border maps to JSONB format
 	type kingdom struct {
-		name          string
-		code          string
-		color         string
-		population    int64
-		resources     int64
-		isIsland      bool
-		bordersJSON   string
+		name        string
+		code        string
+		color       string
+		population  int64
+		resources   int64
+		isIsland    bool
+		bordersJSON string
 	}
 
 	kingdoms := []kingdom{
-		{"England", "ENG", "#FF6B6B", 5000000, 500, true, `{"borders": ["FRA", "ESP", "POR", "HRE", "CAS", "VEN"]`},
-		{"Ireland", "IRL", "#FFD700", 3000000, 200, true, `{"borders": ["FRA", "ESP", "POR", "HRE", "CAS", "VEN"]`},
-		{"France", "FRA", "#4ECDC4", 18000000, 800, false, `{"borders": ["ENG", "ESP", "HRE"]`},
-		{"Spain", "ESP", "#FFE66D", 8000000, 600, false, `{"borders": ["FRA", "ENG", "POR", "CAS"]`},
-		{"Portugal", "POR", "#95E1D3", 2000000, 300, false, `{"borders": ["ESP", "HRE"]`},
-		{"Holy Roman Empire", "HRE", "#A8D8EA", 15000000, 900, false, `{"borders": ["ENG", "FRA", "CAS"]`},
-		{"Scotland", "SCO", "#FCBAD3", 500000, 200, false, `{"borders": ["ENG", "NOR"]`},
-		{"Norway", "NOR", "#D4F0F0", 400000, 350, false, `{"borders": ["SCO", "SWE"]`},
-		{"Sweden", "SWE", "#FFAAA5", 600000, 400, false, `{"borders": ["NOR"]`},
-		{"Poland", "POL", "#6BCB77", 3000000, 450, false, `{"borders": ["HRE", "RUS"]`},
-		{"Byzantium", "BYZ", "#FFD93D", 8000000, 1000, false, `{"borders": ["CAS"]`},
-		{"Russia", "RUS", "#C7F9CC", 4000000, 500, false, `{"borders": ["POL"]`},
-		{"Venice", "VEN", "#4D96FF", 800000, 600, false, `{"borders": ["ENG"]`},
-		{"Papal States", "PAP", "#FFAAA5", 1500000, 400, false, `{"borders": ["CAS"]`},
-		{"Aragon", "ARA", "#FF6B6B", 3000000, 450, false, `{"borders": ["CAS"]`},
+		{"England", "ENG", "#FF6B6B", 5000000, 500, false, `{"borders": ["SCO"]}`},
+		{"Ireland", "IRL", "#FFD700", 3000000, 200, true, `{"borders": []}`},
+		{"Scotland", "SCO", "#FCBAD3", 500000, 200, false, `{"borders": ["ENG"]}`},
+		{"France", "FRA", "#4ECDC4", 18000000, 800, false, `{"borders": ["ESP", "ARA", "HRE", "ITA"]}`},
+		{"Spain", "ESP", "#FFE66D", 8000000, 600, false, `{"borders": ["POR", "CAS", "ARA", "FRA"]}`},
+		{"Portugal", "POR", "#95E1D3", 2000000, 300, false, `{"borders": ["ESP", "CAS"]}`},
+		{"Castile", "CAS", "#F38181", 4000000, 500, false, `{"borders": ["POR", "ESP", "ARA"]}`},
+		{"Aragon", "ARA", "#FFA07A", 3000000, 450, false, `{"borders": ["ESP", "CAS", "FRA"]}`},
+		{"Holy Roman Empire", "HRE", "#A8D8EA", 15000000, 900, false, `{"borders": ["FRA", "ITA", "VEN", "POL"]}`},
+		{"Italy", "ITA", "#98DDCA", 6000000, 700, false, `{"borders": ["FRA", "HRE", "VEN", "PAP"]}`},
+		{"Venice", "VEN", "#4D96FF", 800000, 600, false, `{"borders": ["HRE", "ITA", "PAP"]}`},
+		{"Papal States", "PAP", "#E4BAD4", 1500000, 400, false, `{"borders": ["ITA", "VEN"]}`},
+		{"Norway", "NOR", "#D4F0F0", 400000, 350, false, `{"borders": ["SWE"]}`},
+		{"Sweden", "SWE", "#FFAAA5", 600000, 400, false, `{"borders": ["NOR"]}`},
+		{"Poland", "POL", "#6BCB77", 3000000, 450, false, `{"borders": ["HRE", "RUS"]}`},
+		{"Russia", "RUS", "#C7F9CC", 4000000, 500, false, `{"borders": ["POL"]}`},
+		{"Byzantium", "BYZ", "#FFD93D", 8000000, 1000, false, `{"borders": []}`},
 	}
 
 	tx, err := DB.Begin()
@@ -258,21 +212,32 @@ func SeedInitialData() error {
 		return err
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7)`)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	defer stmt.Close()
-
 	for _, k := range kingdoms {
-		if _, err := stmt.Exec(k.name, k.code, k.color, k.population, k.resources, k.isIsland, k.bordersJSON); err != nil {
+		res, err := tx.Exec(
+			`UPDATE countries SET color = $1, is_island = $2, borders = $3::jsonb WHERE code = $4 AND era = 'medieval'`,
+			k.color, k.isIsland, k.bordersJSON, k.code,
+		)
+		if err != nil {
 			tx.Rollback()
 			return err
 		}
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		if rowsAffected == 0 {
+			if _, err := tx.Exec(
+				`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7::jsonb)`,
+				k.name, k.code, k.color, k.population, k.resources, k.isIsland, k.bordersJSON,
+			); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
 	}
 
-	log.Printf("Seeded %d medieval kingdoms with border data", len(kingdoms))
+	log.Printf("Seeded/synced %d medieval kingdoms with border data", len(kingdoms))
 	return tx.Commit()
 }
 
