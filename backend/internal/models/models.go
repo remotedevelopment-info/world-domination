@@ -6,13 +6,15 @@ import (
 
 // User represents a player in the game
 type User struct {
-	ID        int64     `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"` // Never send password in JSON
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	LastLogin time.Time `json:"last_login"`
-	IsActive  bool      `json:"is_active"`
+	ID               int64     `json:"id"`
+	Username         string    `json:"username"`
+	Password         string    `json:"-"` // Never send password in JSON
+	Email            string    `json:"email"`
+	BaseColor        string    `json:"base_color"`          // Player's base colour for owned territories
+	HomeTerritoryID  *int64    `json:"home_territory_id"`   // FK to countries.id - the player's home kingdom
+	CreatedAt        time.Time `json:"created_at"`
+	LastLogin        time.Time `json:"last_login"`
+	IsActive         bool      `json:"is_active"`
 }
 
 // Country represents a kingdom/territory on the map
@@ -29,13 +31,15 @@ type Country struct {
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
+	Borders       string    `json:"borders"`
+	IsIsland      bool      `json:"is_island"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // GameState represents the state of the game at a specific tick
 type GameState struct {
 	ID        int64     `json:"id"`
-	Tick      int64     `json:"tick"`
+	GameDate  time.Time `json:"game_date"`
 	Timestamp time.Time `json:"timestamp"`
 	Data      string    `json:"data"` // JSON encoded game state snapshot
 }
@@ -58,7 +62,7 @@ type GameAction struct {
 	CountryID   int64     `json:"country_id"`
 	ActionType  string    `json:"action_type"` // diplomacy, economic, military, political
 	Description string    `json:"description"`
-	Tick        int64     `json:"tick"`
+	GameDate    time.Time `json:"game_date"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

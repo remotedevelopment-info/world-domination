@@ -132,12 +132,8 @@ func main() {
 		log.Fatalf("Failed to seed initial data: %v", err)
 	}
 
-	// Start game engine, resuming the action-sequence counter from the last
-	// persisted snapshot so ticks remain monotonic across restarts.
+	// Start game engine (date-based, real-time gameplay)
 	engine := game.GetEngine()
-	if next, err := database.GetNextTick(); err == nil {
-		engine.Resume(next - 1)
-	}
 	engine.Start()
 
 	// Setup HTTP server

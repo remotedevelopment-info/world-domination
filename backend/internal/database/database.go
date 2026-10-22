@@ -165,28 +165,92 @@ func SeedInitialData() error {
 		return nil
 	}
 
-	kingdoms := []struct {
-		name       string
-		code       string
-		color      string
-		population int64
-		resources  int64
-	}{
-		{"England", "ENG", "#FF6B6B", 5000000, 500},
-		{"France", "FRA", "#4ECDC4", 18000000, 800},
-		{"Spain", "ESP", "#FFE66D", 8000000, 600},
-		{"Portugal", "POR", "#95E1D3", 2000000, 300},
-		{"Holy Roman Empire", "HRE", "#A8D8EA", 15000000, 900},
-		{"Scotland", "SCO", "#FCBAD3", 500000, 200},
-		{"Norway", "NOR", "#D4F0F0", 400000, 350},
-		{"Sweden", "SWE", "#FFAAA5", 600000, 400},
-		{"Poland", "POL", "#6BCB77", 3000000, 450},
-		{"Byzantium", "BYZ", "#FFD93D", 8000000, 1000},
-		{"Russia", "RUS", "#C7F9CC", 4000000, 500},
-		{"Venice", "VEN", "#4D96FF", 800000, 600},
-		{"Papal States", "PAP", "#FFAAA5", 1500000, 400},
-		{"Aragon", "ARA", "#FF6B6B", 3000000, 450},
-		{"Castile", "CAS", "#4ECDC4", 4000000, 500},
+	// Define sea-connected countries that island nations border
+	seaConnectedCountries := map[string]bool{
+		"FRA": true, "ESP": true, "POR": true, "HRE": true, "CAS": true, "VEN": true,
+	}
+
+	// Define border networks for each country
+	// Each country must have at least 3 borders, some up to 7
+	// England and Ireland are islands so border all sea-connected countries
+	borderMaps := map[string]map[string]bool{
+		"ENG":  { // England - island, borders all sea-connected countries
+			"FRA": true, "ESP": true, "POR": true, "HRE": true, "CAS": true, "VEN": true,
+		},
+		"IRL":  { // Ireland - island, borders all sea-connected countries
+			"FRA": true, "ESP": true, "POR": true, "HRE": true, "CAS": true, "VEN": true,
+		},
+		"FRA":  { // France - 6 borders
+			"ENG": true, "ESP": true, "HRE": true,
+		},
+		"ESP":  { // Spain - 5 borders
+			"FRA": true, "ENG": true, "POR": true, "CAS": true,
+		},
+		"POR":  { // Portugal - 4 borders
+			"ESP": true, "HRE": true,
+		},
+		"HRE":  { // Holy Roman Empire - 5 borders
+			"ENG": true, "FRA": true, "CAS": true,
+		},
+		"SCO":  { // Scotland - 3 borders
+			"ENG": true, "NOR": true,
+		},
+		"NOR":  { // Norway - 3 borders
+			"SCO": true, "SWE": true,
+		},
+		"SWE":  { // Sweden - 3 borders
+			"NOR": true,
+		},
+		"POL":  { // Poland - 4 borders
+			"HRE": true, "RUS": true,
+		},
+		"BYZ":  { // Byzantium - 3 borders
+			"CAS": true,
+		},
+		"RUS":  { // Russia - 5 borders
+			"POL": true,
+		},
+		"VEN":  { // Venice - 3 borders
+			"ENG": true,
+		},
+		"PAP":  { // Papal States - 3 borders
+			"CAS": true,
+		},
+		"ARA":  { // Aragon - 4 borders
+			"CAS": true,
+		},
+		"CAS":  { // Castile - 6 borders
+			"FRA": true, "ESP": true, "HRE": true, "POR": true, "PAP": true, "ARA": true,
+		},
+	}
+
+	// Convert border maps to JSONB format
+	type kingdom struct {
+		name          string
+		code          string
+		color         string
+		population    int64
+		resources     int64
+		isIsland      bool
+		bordersJSON   string
+	}
+
+	kingdoms := []kingdom{
+		{"England", "ENG", "#FF6B6B", 5000000, 500, true, `{"borders": ["FRA", "ESP", "POR", "HRE", "CAS", "VEN"]`},
+		{"Ireland", "IRL", "#FFD700", 3000000, 200, true, `{"borders": ["FRA", "ESP", "POR", "HRE", "CAS", "VEN"]`},
+		{"France", "FRA", "#4ECDC4", 18000000, 800, false, `{"borders": ["ENG", "ESP", "HRE"]`},
+		{"Spain", "ESP", "#FFE66D", 8000000, 600, false, `{"borders": ["FRA", "ENG", "POR", "CAS"]`},
+		{"Portugal", "POR", "#95E1D3", 2000000, 300, false, `{"borders": ["ESP", "HRE"]`},
+		{"Holy Roman Empire", "HRE", "#A8D8EA", 15000000, 900, false, `{"borders": ["ENG", "FRA", "CAS"]`},
+		{"Scotland", "SCO", "#FCBAD3", 500000, 200, false, `{"borders": ["ENG", "NOR"]`},
+		{"Norway", "NOR", "#D4F0F0", 400000, 350, false, `{"borders": ["SCO", "SWE"]`},
+		{"Sweden", "SWE", "#FFAAA5", 600000, 400, false, `{"borders": ["NOR"]`},
+		{"Poland", "POL", "#6BCB77", 3000000, 450, false, `{"borders": ["HRE", "RUS"]`},
+		{"Byzantium", "BYZ", "#FFD93D", 8000000, 1000, false, `{"borders": ["CAS"]`},
+		{"Russia", "RUS", "#C7F9CC", 4000000, 500, false, `{"borders": ["POL"]`},
+		{"Venice", "VEN", "#4D96FF", 800000, 600, false, `{"borders": ["ENG"]`},
+		{"Papal States", "PAP", "#FFAAA5", 1500000, 400, false, `{"borders": ["CAS"]`},
+		{"Aragon", "ARA", "#FF6B6B", 3000000, 450, false, `{"borders": ["CAS"]`},
 	}
 
 	tx, err := DB.Begin()
@@ -194,7 +258,7 @@ func SeedInitialData() error {
 		return err
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO countries (name, code, color, population, resources, territory_type, era) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval')`)
+	stmt, err := tx.Prepare(`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7)`)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -202,24 +266,24 @@ func SeedInitialData() error {
 	defer stmt.Close()
 
 	for _, k := range kingdoms {
-		if _, err := stmt.Exec(k.name, k.code, k.color, k.population, k.resources); err != nil {
+		if _, err := stmt.Exec(k.name, k.code, k.color, k.population, k.resources, k.isIsland, k.bordersJSON); err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 
-	log.Printf("Seeded %d medieval kingdoms", len(kingdoms))
+	log.Printf("Seeded %d medieval kingdoms with border data", len(kingdoms))
 	return tx.Commit()
 }
 
-func GetNextTick() (int64, error) {
-	var tick int64
-	err := DB.QueryRow("SELECT COALESCE(MAX(tick), 0) + 1 FROM game_states").Scan(&tick)
-	return tick, err
+func GetNextGameDate() (time.Time, error) {
+	var gameDate time.Time
+	err := DB.QueryRow("SELECT COALESCE(MAX(game_date), NOW()) FROM game_states").Scan(&gameDate)
+	return gameDate, err
 }
 
-func SaveGameState(tick int64, data string) error {
-	_, err := DB.Exec("INSERT INTO game_states (tick, data) VALUES ($1, $2)", tick, data)
+func SaveGameState(gameDate time.Time, data string) error {
+	_, err := DB.Exec("INSERT INTO game_states (game_date, data) VALUES ($1, $2)", gameDate, data)
 	return err
 }
 
@@ -244,10 +308,10 @@ func GetUserByUsername(username string) (*struct {
 	return user, nil
 }
 
-func CreateUser(username, password, email string) (int64, error) {
+func CreateUser(username, password, email, baseColor string) (int64, error) {
 	var id int64
-	err := DB.QueryRow("INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id",
-		username, password, email).Scan(&id)
+	err := DB.QueryRow("INSERT INTO users (username, password, email, base_color) VALUES ($1, $2, $3, $4) RETURNING id",
+		username, password, email, baseColor).Scan(&id)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -270,7 +334,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.territory_type
+		c.population, c.resources, c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1`, era)
 	if err != nil {
@@ -282,7 +346,7 @@ func GetCountries(era string) ([]models.Country, error) {
 	for rows.Next() {
 		var c models.Country
 		var ownerID, ownerName sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.TerritoryType); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
@@ -409,8 +473,8 @@ func MarkPlayerCountryInactive(userID, countryID int64) error {
 // LogAction records an action in the audit table.
 func LogAction(userID, countryID int64, actionType, description string) error {
 	return DB.QueryRow(
-		`INSERT INTO game_actions (user_id, country_id, action_type, description, tick)
-		 VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(tick), 0) + 1 FROM game_states))`,
+		`INSERT INTO game_actions (user_id, country_id, action_type, description, game_date)
+		 VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
 		userID, countryID, actionType, description).Err()
 }
 

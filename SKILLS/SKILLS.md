@@ -97,20 +97,20 @@ External SKILLS files (from other projects, templates, or teammates) are brought
 
 | Path | Concern | Affects | Status | Released | Intended |
 |------|---------|---------|--------|----------|----------|
-| `socket-communications` | Real-time server↔client transport | Both | draft | — | 0.1.0 |
-| `socket-communications/protocol` | WebSocket message contract | Both | draft | — | 0.1.0 |
+| `socket-communications` | Real-time server↔client transport | Both | draft | — | 0.2.0 |
+| `socket-communications/protocol` | WebSocket message contract | Both | draft | — | 0.2.0 |
 | `socket-communications/reconnection-heartbeat` | Link recovery & liveness | Both | draft | — | 0.1.0 |
-| `server-architecture` | Go service structure | Backend | draft | — | 0.1.0 |
-| `server-architecture/game-engine` | 90-second tick engine | Backend | draft | — | 0.1.0 |
-| `server-architecture/database` | Schema & persistence | Backend | draft | — | 0.1.0 |
-| `server-architecture/http-api` | REST endpoints & auth middleware | Backend | draft | — | 0.1.0 |
-| `javascript-frontend-structure` | Vanilla JS client organization | Frontend | draft | — | 0.1.0 |
-| `world-map` | Map representation & rendering | Both | draft | — | 0.1.0 |
-| `world-map/projection` | Coordinate math (normalized → canvas) | Both | draft | — | 0.1.0 |
-| `world-map/kingdom-data` | Geometry vs. attribute sources of truth | Both | draft | — | 0.1.0 |
-| `borders` | Ownership boundaries: visuals & rules | Both | draft | — | 0.1.0 |
-| `borders/rendering` | Border strokes & click hit-testing | Both | draft | — | 0.1.0 |
-| `borders/expansion` | Territory gain/loss mechanics | Both | draft | — | 0.1.0 |
+| `server-architecture` | Go service structure | Backend | draft | — | 0.2.0 |
+| `server-architecture/game-engine` | 90-second tick engine | Backend | draft | — | 0.2.0 |
+| `server-architecture/database` | Schema & persistence | Backend | draft | — | 0.2.0 |
+| `server-architecture/http-api` | REST endpoints & auth middleware | Backend | draft | — | 0.2.0 |
+| `javascript-frontend-structure` | Vanilla JS client organization | Frontend | draft | — | 0.2.0 |
+| `world-map` | Map representation & rendering | Both | draft | — | 0.2.0 |
+| `world-map/projection` | Coordinate math (normalized → canvas) | Both | draft | — | 0.2.0 |
+| `world-map/kingdom-data` | Geometry vs. attribute sources of truth | Both | draft | — | 0.2.0 |
+| `borders` | Ownership boundaries: visuals & rules | Both | draft | — | 0.2.0 |
+| `borders/rendering` | Border strokes & click hit-testing | Both | draft | — | 0.2.0 |
+| `borders/expansion` | Territory gain/loss mechanics | Both | draft | — | 0.2.0 |
 
 *(No imported skills yet.)*
 

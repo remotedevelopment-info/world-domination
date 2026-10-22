@@ -14,9 +14,10 @@ import (
 )
 
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Email     string `json:"email"`
+	BaseColor string `json:"base_color"` // Player's base colour for owned territories
 }
 
 type LoginRequest struct {
@@ -85,7 +86,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := database.CreateUser(req.Username, hashedPassword, req.Email)
+	userID, err := database.CreateUser(req.Username, hashedPassword, req.Email, req.BaseColor)
 	if err != nil {
 		if errors.Is(err, database.ErrUserExists) {
 			writeJSONError(w, http.StatusConflict, "Username or email already exists")
@@ -322,7 +323,7 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":      "Action recorded",
 		"type":         actionType,
-		"tick":         state.Tick,
+		"game_date":    state.GameDate.Format("2006-01-02T15:04:05Z07:00"),
 		"country_id":   myCountryID,
 		"country_name": myCountryName,
 		"population":   myPopulation,

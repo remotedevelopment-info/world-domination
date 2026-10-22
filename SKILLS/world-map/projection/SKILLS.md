@@ -4,7 +4,7 @@
 
 ## Purpose
 
-The coordinate math between the map's normalized `[0,1]` space and device pixels: scaling, resizing, and the inverse mapping used for click hit-testing.
+The coordinate math between the map's normalized `[0,1]` space and device pixels: scaling, resizing, and the inverse mapping used for click hit-testing. Also defines how border segments and cardinal directions (N/S/E/W) are computed from normalized polygon geometry for troop deployment and border-push logic.
 
 ## Affects
 
@@ -13,9 +13,9 @@ Both
 ## Released/Intended SEMVER
 
 - **Released:** —
-- **Intended:** 0.1.0
+- **Intended:** 0.2.0
 
-Introducing a fitted/letterboxed transform or a pan-zoom matrix is a **minor** (rendering + hit-test change on both sides — coordinate contract).
+Introducing a fitted/letterboxed transform or a pan-zoom matrix is a **minor** (rendering + hit-test change on both sides — coordinate contract). Adding cardinal-direction computation from polygon geometry is **minor**.
 
 ## Ideas
 
@@ -29,6 +29,8 @@ Introducing a fitted/letterboxed transform or a pan-zoom matrix is a **minor** (
 
 - Any transform change silently affects clicks: rendering and hit-testing must always share one math path.
 - Canvas size is driven by `.map-container` layout (`frontend/js/game.js` L38-45) — the map has zero size until the game screen opens.
+- Cardinal direction (N/S/E/W) from a border segment: computed from the centroid vector between two adjacent territories' normalized centroids — approximation only; exact side detection requires edge-normal analysis.
+- Border segments stored in normalized `[0,1]` space; projected to canvas at render time via `project(x,y)`.
 
 ## Issues
 
@@ -40,3 +42,5 @@ Introducing a fitted/letterboxed transform or a pan-zoom matrix is a **minor** (
 ## Result
 
 Working today: `resizeCanvas()` sizes the backing store from the container and repaints (`game.js` L38-45); `project(x,y)` = `[x*canvasWidth, y*canvasHeight]` used by all drawing (`L47-49`); `getCentroid` places code labels (L92-96); inverse mapping in `getKingdomAtPosition` (L98-111); window `resize` listener re-renders (L359).
+
+Planned (not yet implemented): border segment storage in normalized space; cardinal-direction (N/S/E/W) computation for troop deployment adjacency; shared-edge detection between polygons for expansion validity.

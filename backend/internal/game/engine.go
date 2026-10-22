@@ -13,7 +13,7 @@ import (
 // It is rebuilt on every state mutation and pushed to connected clients in
 // real time — there is no 90-second polling tick.
 type GameState struct {
-	Tick      int64          `json:"tick"`
+	GameDate  time.Time     `json:"game_date"`
 	Timestamp time.Time      `json:"timestamp"`
 	Countries []CountryState `json:"countries"`
 	Players   []PlayerState  `json:"players"`
@@ -97,11 +97,10 @@ func (g *GameEngine) Resume(tick int64) {
 func (g *GameEngine) Advance() GameState {
 	g.mu.Lock()
 	g.currentTick++
-	tick := g.currentTick
 	g.mu.Unlock()
 
 	state := g.BuildState()
-	if err := database.SaveGameState(tick, state.JSON()); err != nil {
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
 		log.Printf("Error saving game state snapshot: %v", err)
 	}
 
@@ -169,7 +168,7 @@ func (g *GameEngine) BuildState() GameState {
 	}
 
 	return GameState{
-		Tick:      g.GetCurrentTick(),
+		GameDate:  time.Now(),
 		Timestamp: time.Now(),
 		Countries: countryStates,
 		Players:   playerStates,

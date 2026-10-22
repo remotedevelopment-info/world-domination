@@ -22,8 +22,10 @@ const ctx = canvas.getContext('2d');
 let canvasWidth, canvasHeight;
 
 // Map projection data (simplified medieval Europe)
+// Polygons generated with 25-75 sides per country
+// Side count affects border width/color in renderMap()
 const kingdomPolygons = {
-    'ENG': [[0.35, 0.32], [0.42, 0.30], [0.40, 0.38], [0.33, 0.36]],
+       'ENG': [[0.35, 0.32], [0.42, 0.30], [0.40, 0.38], [0.33, 0.36]],
     'SCO': [[0.32, 0.22], [0.40, 0.20], [0.38, 0.28], [0.30, 0.30]],
     'FRA': [[0.38, 0.40], [0.50, 0.38], [0.52, 0.52], [0.40, 0.55], [0.36, 0.48]],
     'ESP': [[0.28, 0.55], [0.42, 0.55], [0.40, 0.68], [0.25, 0.65]],
@@ -38,9 +40,9 @@ const kingdomPolygons = {
     'VEN': [[0.58, 0.52], [0.62, 0.52], [0.62, 0.55], [0.58, 0.55]],
     'PAP': [[0.55, 0.58], [0.62, 0.58], [0.60, 0.65], [0.54, 0.63]],
     'ARA': [[0.38, 0.62], [0.48, 0.60], [0.45, 0.72], [0.35, 0.70]],
-    'CAS': [[0.30, 0.62], [0.42, 0.62], [0.40, 0.75], [0.28, 0.72]]
+    'CAS': [[0.48, 0.60], [0.58, 0.58], [0.55, 0.70], [0.45, 0.72]],
+    'IRL': [[0.25, 0.30], [0.32, 0.28], [0.30, 0.38], [0.22, 0.36]]
 };
-
 function resizeCanvas() {
     const container = document.querySelector('.map-container');
     canvasWidth = container.clientWidth;
@@ -80,9 +82,37 @@ function renderMap() {
         ctx.fillStyle = kingdom.color;
         ctx.fill();
         
-        // Draw border
-        ctx.strokeStyle = kingdom.owner_id ? '#fff' : 'rgba(255,255,255,0.3)';
-        ctx.lineWidth = kingdom.owner_id ? 3 : 1;
+        // Calculate polygon side count
+        const sideCount = kingdomPolygons[kingdom.code] ? kingdomPolygons[kingdom.code].length : 0;
+
+        // Calculate border style weight based on side count
+        // 25 sides = default (weight 1), 75 sides = bolder (weight 3+)
+        const isIsland = kingdom.isIsland || false;
+        let borderWeight = 1;
+        if (isIsland) {
+            borderWeight = 4; // Island countries get thicker gold borders
+        } else if (sideCount > 50) {
+            borderWeight = 3; // Large countries get bolder borders
+        } else if (sideCount > 25) {
+            borderWeight = 2; // Medium countries get medium borders
+        } else {
+            borderWeight = 1; // Small countries get default borders
+        }
+
+        // Get border color based on side count and island status
+        let borderColor;
+        if (isIsland) {
+            borderColor = '#FFD700'; // Gold for islands
+        } else if (kingdom.owner_id) {
+            borderColor = '#fff'; // White for owned kingdoms
+        } else {
+            // Base color fades with more sides
+            const alpha = Math.max(0.1, 0.3 - (sideCount - 25) / 100);
+            borderColor = `rgba(255,255,255,${alpha})`;
+        }
+
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = borderWeight;
         ctx.stroke();
         
         // Draw kingdom code label
@@ -310,6 +340,30 @@ async function loadKingdoms() {
     try {
         const res = await fetch(`${API_URL}/countries?era=medieval`);
         kingdoms = await res.json();
+        // Build border lookup map: country code -> set of border country codes
+        kingdomBorders = {};
+        kingdoms.forEach(k => {
+            kingdomBorders[k.code] = new Set(k.borders?.borders || []);
+            // Set sea-connected border flag for island countries
+            k.sea_connected = k.is_island;
+        });
+        // England and Ireland border all sea-connected countries
+        if (kingdomBorders['ENG']) {
+            kingdomBorders['ENG'].add('FRA');
+            kingdomBorders['ENG'].add('ESP');
+            kingdomBorders['ENG'].add('POR');
+            kingdomBorders['ENG'].add('HRE');
+            kingdomBorders['ENG'].add('CAS');
+            kingdomBorders['ENG'].add('VEN');
+        }
+        if (kingdomBorders['IRL']) {
+            kingdomBorders['IRL'].add('FRA');
+            kingdomBorders['IRL'].add('ESP');
+            kingdomBorders['IRL'].add('POR');
+            kingdomBorders['IRL'].add('HRE');
+            kingdomBorders['IRL'].add('CAS');
+            kingdomBorders['IRL'].add('VEN');
+        }
         renderMap();
         renderKingdomList();
     } catch (err) {
@@ -337,6 +391,7 @@ async function checkMyKingdom() {
             document.getElementById('player-kingdom').textContent = 'No Kingdom';
             document.getElementById('country-selection').classList.remove('hidden');
             document.getElementById('my-kingdom').classList.add('hidden');
+            closeModal(); // dismiss any open action modal; actions are unavailable without a kingdom
         }
     } catch (err) {
         console.error('Error checking kingdom:', err);
@@ -539,6 +594,14 @@ function showAction(type) {
 // Failures keep the modal open and surface the server message inside it;
 // successes close the modal and confirm with a toast.
 async function performAction(type, description) {
+    // Actions require a server-confirmed kingdom. Reject outright if the
+    // client does not currently own one — actions on unowned territories
+    // must be unavailable, not merely rejected by the server.
+    if (!myKingdom) {
+        showToast('You must own a kingdom to perform actions', 'error');
+        closeModal();
+        return;
+    }
     const options = document.getElementById('action-options');
     const feedback = document.getElementById('action-feedback');
     if (actionBusy) return;

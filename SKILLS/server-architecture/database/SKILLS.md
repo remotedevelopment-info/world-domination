@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Schema, connection lifecycle, seeding, and query layer for PostgreSQL: the single persistent store for users, kingdoms, player holdings, ticks, and actions.
+Schema, connection lifecycle, seeding, and query layer for PostgreSQL: the single persistent store for users, kingdoms, player holdings, ticks, actions, troop deployments, and dynamic border geometry.
 
 ## Affects
 
@@ -13,9 +13,9 @@ Backend
 ## Released/Intended SEMVER
 
 - **Released:** —
-- **Intended:** 0.1.0
+- **Intended:** 0.2.0
 
-Column removal/rename or constraint changes on existing tables = **major**; new tables/columns = **minor**.
+New tables/columns = **minor**; column removal/rename or constraint changes on existing tables = **major**. Adding `base_color`/`home_territory_id` to `users`, plus `troop_deployments`, `border_lines`, and `military_actions` tables is **minor** (additive). Changing `countries.owner_id` from nullable to enforced unique is **major**.
 
 ## Ideas
 
@@ -23,8 +23,8 @@ Column removal/rename or constraint changes on existing tables = **major**; new 
 - Idempotent per-kingdom seed (`INSERT … ON CONFLICT (code) DO NOTHING`) instead of a count-based guard
 - Archive/prune `game_states` (one row per tick ≈ 960/day forever)
 - Connection pool tuning + `Ping` on startup with retries (compose currently relies on postgres healthcheck only)
-- A `countries.owner_id` write path (see `borders` Issues — currently read-only)
 - Store map geometry server-side (see `kingdom-data`)
+- `border_lines` table stores normalized `[0,1]` segment endpoints for pushed borders; recomputed each tick after military resolution
 
 ## Concerns
 
@@ -32,6 +32,7 @@ Column removal/rename or constraint changes on existing tables = **major**; new 
 - Seed guard is count-based (`era='medieval'` count > 0 → skip): a partially seeded or hand-edited table is never repaired, and deleting all rows re-seeds from scratch.
 - `sslmode=disable` hardcoded (`backend/internal/database/database.go` L43).
 - No migration history = environments can diverge unnoticed.
+- Tessellation invariant: after a border push, adjacent polygons must still tile with no gaps/overlaps — this must be enforced in SQL or application logic, not assumed.
 
 ## Issues
 
@@ -44,3 +45,5 @@ Column removal/rename or constraint changes on existing tables = **major**; new 
 ## Result
 
 Working: `InitDB` from env vars with ping (`database.go` L16-57), `InitSchema` creating 6 tables + 3 indexes + the `medieval` era row (L60-147), `SeedInitialData` inserting **15** kingdoms idempotently (L149-205 — verified: includes CAS, lacks ITA), and the query helpers consumed by handlers and the engine (`GetCountries`, `CreateUser`, `GetPlayerCountry`, `AssignCountryToPlayer`, `UpdatePlayerActivity`, `SaveGameState`, …). Table set: `users`, `eras`, `countries`, `player_countries`, `game_states`, `game_actions`.
+
+Sub-skill dependencies: new `troop_deployments`, `border_lines`, `military_actions` tables and `users.base_color`/`users.home_territory_id` columns are planned but not yet implemented.

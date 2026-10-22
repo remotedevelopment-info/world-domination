@@ -4,7 +4,7 @@
 
 ## Purpose
 
-How the browser client is organized: screen layout, session handling, application state, and the division of responsibilities inside the vanilla-JavaScript codebase. It is the map for where frontend changes should go as `game.js` grows.
+How the browser client is organized: screen layout, session handling, application state, and the division of responsibilities inside the vanilla-JavaScript codebase. It is the map for where frontend changes should go as `game.js` grows — now including military panels, base colour selection, and border visualization.
 
 ## Affects
 
@@ -13,7 +13,7 @@ Frontend
 ## Released/Intended SEMVER
 
 - **Released:** —
-- **Intended:** 0.1.0
+- **Intended:** 0.2.0
 
 ## Ideas
 
@@ -23,6 +23,9 @@ Frontend
 - Unit tests for pure logic (`pointInPolygon`, `getCentroid`, reducers)
 - Replace inline `onclick` attributes with `addEventListener` wiring
 - Populate the full My-Kingdom stat panel and add hover tooltips
+- Military panel: army size label ("levy"/"company"/"battalion"/"legion"/"horde") + strength number; N/S/E/W troop deployment buttons
+- Base colour picker for home territory; colour-override preview on taken territories
+- Border visualization layer on canvas (separate from country fill) showing pushed border segments
 
 ## Concerns
 
@@ -30,6 +33,7 @@ Frontend
 - `localStorage` is the session source of truth: any XSS can exfiltrate the token; there is no refresh/expiry handling client-side.
 - Zero-dependency, zero-build approach is simple to audit but will strain as features grow — decide now whether a build step is ever allowed.
 - `innerHTML` is used with server data (`renderKingdomList`, `game.js` L254) — safe today because kingdom names are seeded, but a risky pattern once user-controlled strings appear.
+- Military UI must gate actions: hide/disable invade/expand buttons when no troops are deployed on the border side facing the target — this is client-side UX, not a security boundary (server validates).
 
 ## Issues
 
@@ -44,4 +48,6 @@ Frontend
 
 Working three-file client: `frontend/index.html` (107 lines; `auth-screen` ↔ `game-screen` switching, sidebar panels, action modal, plain `<script src="js/game.js">` at L106 — no build tooling), `frontend/css/style.css` (202 lines), `frontend/js/game.js` (359 lines; functions grouped by concern — auth/REST, canvas map, WebSocket, activity log, modal). Session persisted in `localStorage` (`token`, `user`); auto-login on reload (`game.js` L360); window-resize canvas re-render; tick and connection status in the header.
 
-Candidate future sub-skills: `state-management/`, `auth-session/`, `rendering/`.
+Candidate future sub-skills: `state-management/`, `auth-session/`, `rendering/`, `military-ui/`.
+
+Sub-skill dependencies: `base_color`/`home_territory_id` column data from `GET /api/countries` (database); border segment geometry from `GET /api/borders` or WS `border_changed` frames (socket-communications/protocol).
