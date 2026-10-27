@@ -141,6 +141,14 @@ body {
 }
 #claim-btn:disabled { background: #555; cursor: not-allowed; }
 #kingdom-stats p { margin: 8px 0; font-size: 0.95em; }
+
+/* ---- Economy dashboard panel ---- */
+#economy-stats p { margin: 8px 0; font-size: 0.95em; }
+#economy-stats span[id^="econ-"] { color: #ffd700; font-weight: bold; }
+.econ-unit { color: #666 !important; font-size: 0.85em; font-weight: normal !important; margin-left: 3px; }
+.econ-positive { color: #4ecdc4 !important; }
+.econ-negative { color: #ff6b6b !important; }
+.econ-trend { margin-left: 5px; font-size: 0.8em; }
 .action-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
 .action-buttons button {
     padding: 10px;
@@ -201,3 +209,529 @@ body {
     transition: background 0.2s;
 }
 .action-option:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Utility class used throughout the markup: opt elements out of layout.
+   !important is required so it beats display rules like .modal { display: flex; }. */
+.hidden { display: none !important; }
+
+/* Action modal auxiliary fields: shown conditionally based on selected action. */
+.action-field {
+    margin: 12px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.action-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+    color: #e0e0e0;
+}
+.action-field select,
+.action-field input[type="radio"] {
+    margin-top: 4px;
+}
+.action-field select {
+    width: 100%;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.95em;
+}
+.action-field select:focus {
+    outline: none;
+    border-color: #ffd700;
+}
+
+/* Country Detail Modal: close-up view of an owned kingdom. */
+.country-detail-panel {
+    max-width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.detail-section {
+    margin: 20px 0;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.detail-section h4 {
+    color: #ffd700;
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.detail-section p {
+    margin: 6px 0;
+    font-size: 0.95em;
+    color: #e0e0e0;
+}
+.detail-section p strong {
+    color: #fff;
+}
+
+/* Kingdom Command Center: game-like control panel with dials and meters. */
+.command-center-panel {
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #ffd700;
+    padding-bottom: 10px;
+}
+.command-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.5em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.command-meters {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+}
+.command-meter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px 8px;
+}
+.meter-label {
+    font-size: 0.75em;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+.meter-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: conic-gradient(
+        #ffd700 0deg,
+        rgba(255, 215, 0, 0.15) 0deg
+    );
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+}
+.meter-circle::after {
+    content: "";
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    background: #1a1a2e;
+    border-radius: 50%;
+}
+.meter-value {
+    font-weight: bold;
+    color: #fff;
+    font-size: 1.1em;
+}
+.command-minimap-wrap {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+.command-diplomacy {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+.diplomacy-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.diplomacy-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.diplomacy-row .rel-country {
+    font-weight: bold;
+    color: #fff;
+    font-size: 0.9em;
+}
+.diplomacy-row .rel-action {
+    font-size: 0.8em;
+    color: #aaa;
+    margin-left: 8px;
+}
+.diplomacy-row .rel-badge {
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.rel-badge.envoy { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; border: 1px solid #4ecdc4; }
+.rel-badge.alliance { background: rgba(255, 215, 0, 0.2); color: #ffd700; border: 1px solid #ffd700; }
+.rel-badge.war { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; border: 1px solid #ff6b6b; }
+.rel-badge.trade { background: rgba(136, 136, 255, 0.2); color: #8888ff; border: 1px solid #8888ff; }
+.command-actions {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+.command-actions .action-buttons {
+    display: flex;
+    gap: 10px;
+}
+.command-actions .cc-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.1s;
+}
+.command-actions .cc-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+}
+.command-actions .cc-btn-diplo { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); color: #1a1a2e; }
+.command-actions .cc-btn-econ { background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%); color: #1a1a2e; }
+.command-actions .cc-btn-mil { background: linear-gradient(135deg, #ff6b6b 0%, #c44d4d 100%); color: #fff; }
+
+/* Auth screen status area: shows validation errors and success feedback. */
+.auth-message { margin-top: 15px; min-height: 20px; font-size: 0.95em; }
+.auth-message.error { color: #ff6b6b; }
+.auth-message.success { color: #4ecdc4; }
+
+/* Action modal: in-flight state and in-context result feedback. */
+.action-option:disabled { opacity: 0.5; cursor: wait; }
+.action-feedback {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(255, 107, 107, 0.15);
+    border: 1px solid #ff6b6b;
+    color: #ff6b6b;
+    font-size: 0.95em;
+}
+
+/* Toast notifications float above the modal so action results are
+   always visible regardless of overlays or sidebar scroll position. */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    pointer-events: none;
+}
+.toast {
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-weight: bold;
+    color: #1a1a2e;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    animation: toast-in 0.25s ease-out;
+}
+.toast.success { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); }
+.toast.error { background: #ff6b6b; color: #fff; }
+.toast.fade-out { opacity: 0; transition: opacity 0.4s; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+/* ============================================================
+   Archaic-styled controls  (Kingdom Command Center + header)  */
+=============================================================== */
+
+/* ---- Archaic type + palette ---- */
+.command-meter .meter-label,
+.clock-digits,
+.cc-btn.archaic,
+.urgency-line {
+    font-family: Georgia, 'Times New Roman', serif;
+}
+.cc-btn.archaic,
+.dial-readout .dial-label {
+    font-family: Georgia, 'Times New Roman', serif;
+    letter-spacing: 1px;
+}
+
+/* ---- Economy rotary dial ---- */
+#cc-economy-dial {
+    width: 240px;
+    height: 240px;
+    cursor: pointer;
+    touch-action: none;
+    border-radius: 50%;
+    box-shadow:
+        0 0 0 2px #b8860b,
+        0 0 0 4px rgba(255,255,255,0.12),
+        inset 0 2px 0 2px #ffd700,
+        inset 0 -2px 0 2px #b8860b,
+        0 4px 14px rgba(0,0,0,0.4);
+    display: block;
+    margin: 0 auto;
+}
+
+.dial-face {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 38% 30%, #2a2a38, #14141f 80%);
+    box-shadow: inset 0 0 24px rgba(0,0,0,0.55);
+    overflow: hidden;
+}
+
+/* outer bronze ring */
+.dial-face::before {
+    content: "";
+    position: absolute; inset: 8px;
+    border: 4px solid #b8860b;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* arc sweep */
+.dial-arc {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+        conic-gradient(#ffd700 0deg, #ffd700 var(--dial-arc-deg, 0deg),
+                       rgba(255,215,0,0.08) var(--dial-arc-deg, 0deg),
+                       rgba(255,215,0,0.08) 360deg);
+}
+
+.dial-ticks {
+    position: absolute; inset: 0; border-radius: 50%;
+    transform: rotate(120deg);
+}
+.dial-ticks span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px; height: 50%;
+    background: linear-gradient(180deg, #ffd700 0, #ffd700 30%, transparent 30%);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    margin-left: -1px;
+}
+.dial-ticks .tick-major { background: linear-gradient(180deg, #b8860b 0, #b8860b 46%, transparent 46%); }
+
+.dial-labels {
+    position: absolute; inset: 0; border-radius: 50%;
+    transform: rotate(120deg);
+}
+.dial-labels span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 34px;
+    height: 26%;
+    margin-left: -17px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: bold;
+    color: #ffd700;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    transform-origin: 50% 100%;
+}
+.dial-labels .label-0   { transform: rotate(0deg); }
+.dial-labels .label-25  { transform: rotate(60deg); }
+.dial-labels .label-50  { transform: rotate(120deg); }
+.dial-labels .label-75  { transform: rotate(180deg); }
+.dial-labels .label-100 { transform: rotate(240deg); }
+
+/* pointer + center cap */
+.dial-pointer {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 43%;
+    margin-left: -1px;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    pointer-events: none;
+    box-shadow: 0 0 6px rgba(255,215,0,0.5);
+}
+.dial-pointer::after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    width: 15px; height: 15px;
+    background: radial-gradient(circle, #ffd700 0%, #b8860b 60%, #14141f 100%);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px rgba(255,215,0,0.7);
+}
+
+.dial-readout {
+    text-align: center;
+    margin-top: 10px;
+}
+.dial-readout .dial-value {
+    color: #ffd700;
+    font-size: 1.7em;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.dial-readout .dial-unit {
+    color: #666;
+    font-size: 0.85em;
+    font-weight: normal;
+}
+.meter-face {
+    position: absolute; inset: 3px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #2a2a38, #101018 80%);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    pointer-events: none;
+}
+.meter-ticks {
+    position: absolute; inset: 2px;
+    border-radius: 50%;
+    transform: rotate(120deg);
+    pointer-events: none;
+}
+
+.meter-ticks span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px; height: 50%;
+    background: linear-gradient(180deg, #ffd700 0, #ffd700 26%, transparent 26%);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    margin-left: -1px;
+}
+.meter-ticks .tick-major { background: linear-gradient(180deg, #b8860b 0, #b8860b 42%, transparent 42%); }
+.meter-needle {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 46%;
+    margin-left: -1px;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    pointer-events: none;
+    z-index: 2;
+    box-shadow: 0 0 5px rgba(255,215,0,0.45);
+}
+.meter-needle::before {
+    content: "";
+    position: absolute; bottom: -5px;
+    left: 50%; width: 9px; height: 9px;
+    background: radial-gradient(circle, #ffd700, #b8860b 60%, #101018 100%);
+    border-radius: 50%;
+    transform: translateX(-50%);
+}
+.command-actions .cc-btn.archaic {
+    background: linear-gradient(180deg, #fff3b0 0%, #ffd700 40%, #ff8c00 100%);
+    color: #1a1a2e;
+    border: 2px solid #ffd700;
+    box-shadow: 0 1px 0 #ffe44d, inset 0 2px 3px rgba(255,215,0,0.35), inset 0 -2px 3px rgba(0,0,0,0.15);
+    text-shadow: 0 1px 1px rgba(255,215,0,0.4);
+}
+.command-actions .cc-btn.archaic:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 0 2px rgba(255,215,0,0.35), inset 0 2px 3px rgba(255,215,0,0.35), inset 0 -2px 3px rgba(0,0,0,0.15);
+}
+.command-actions .cc-btn.archaic:active {
+    transform: translateY(0);
+    box-shadow: inset 0 2px 3px rgba(255,215,0,0.35), inset 0 -2px 3px rgba(0,0,0,0.15);
+}
+.command-actions .cc-btn.archaic.cc-btn-diplo { background: linear-gradient(180deg, #b0e0d8 0%, #4ecdc4 40%, #44a08d 100%); }
+.command-actions .cc-btn.archaic.cc-btn-mil   { background: linear-gradient(180deg, #f5b7b1 0%, #ff6b6b 40%, #c44d4d 100%); }
+.header-clock {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.clock-digits {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 22px;
+    font-weight: bold;
+    color: #ffd700;
+    letter-spacing: 2px;
+}
+.clock-digits span {
+    position: relative;
+}
+.clock-digits .clock-sep {
+    color: #fff;
+    font-weight: normal;
+}
+.clock-sweep {
+    position: absolute;
+    bottom: 50%;
+    left: 50%;
+    width: 2px;
+    height: 50%;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    box-shadow: 0 0 6px rgba(255,215,0,0.5);
+}
+
+.urgency-line {
+    font-size: 0.85em;
+    letter-spacing: 1px;
+    color: #b8860b;
+    font-family: Georgia, serif;
+    padding: 4px 12px;
+    border: 1px solid rgba(255,215,0,0.4);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.25);
+}
+.urgency-line.urgent {
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+    box-shadow: 0 0 8px rgba(255,107,107,0.35);
+    animation: urgency-pulse 0.6s ease-in-out infinite;
+}
+@keyframes urgency-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,107,107,0.35); }
+    50% { box-shadow: 0 0 16px rgba(255,107,107,0.7); }
+}

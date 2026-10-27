@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kingdom Conquest - Medieval Strategy Game</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <div id="app">
         <!-- Login/Register Screen -->
@@ -13,25 +15,26 @@
             <div class="auth-container">
                 <h1>🏰 Kingdom Conquest</h1>
                 <p class="subtitle">Medieval Era - Claim Your Kingdom</p>
-                
+
                 <div id="login-form" class="auth-form">
                     <h2>Login</h2>
                     <input type="text" id="login-username" placeholder="Username" required>
                     <input type="password" id="login-password" placeholder="Password" required>
                     <button onclick="login()">Login</button>
-                    <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+                    <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister(event)">Register</a>
+                    </p>
                 </div>
 
-                <div id="register-form" class="auth-form hidden">
+                <div id="register-form" class="hidden auth-form">
                     <h2>Register</h2>
                     <input type="text" id="register-username" placeholder="Username" required>
                     <input type="email" id="register-email" placeholder="Email" required>
                     <input type="password" id="register-password" placeholder="Password" required>
                     <button onclick="register()">Register</button>
-                    <p class="switch-form">Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+                    <p class="switch-form">Already have an account? <a href="#" onclick="showLogin(event)">Login</a></p>
                 </div>
 
-                <div id="auth-error" class="error-message"></div>
+                <div id="auth-message" class="auth-message" role="alert" aria-live="polite"></div>
             </div>
         </div>
 
@@ -42,10 +45,19 @@
                     <span id="player-name">Player</span>
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
                 </div>
-                <div class="game-info">
-                    <span id="tick-display">Tick: 0</span>
-                    <span id="connection-status" class="status-indicator">●</span>
+            <div class="header-clock">
+                <div class="clock-digits">
+                    <span id="clock-hours">--</span><span class="clock-sep">:</span>
+                    <span id="clock-mins">--</span><span class="clock-sep">:</span>
+                    <span id="clock-seconds">--</span>
                 </div>
+                <div class="clock-sweep" id="clock-sweep"></div>
+                <div class="urgency-line" id="urgency-tick">Next state update in 89s</div>
+            </div>
+            <div class="game-info">
+                <span id="tick-display">Turn 0</span>
+                <span id="connection-status" class="status-indicator">●</span>
+            </div>
                 <button onclick="logout()" class="logout-btn">Logout</button>
             </header>
 
@@ -53,7 +65,7 @@
                 <div class="map-container">
                     <canvas id="world-map"></canvas>
                     <div id="map-overlay" class="map-overlay">
-                        <div id="kingdom-info" class="kingdom-info hidden">
+                        <div id="kingdom-info" class="hidden kingdom-info">
                             <h3 id="kingdom-name"></h3>
                             <p>Population: <span id="kingdom-population"></span></p>
                             <p>Resources: <span id="kingdom-resources"></span></p>
@@ -70,7 +82,7 @@
                         <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Kingdom</button>
                     </div>
 
-                    <div id="my-kingdom" class="panel hidden">
+                    <div id="my-kingdom" class="hidden panel">
                         <h3>My Kingdom</h3>
                         <div id="kingdom-stats">
                             <p>Name: <span id="my-kingdom-name"></span></p>
@@ -85,6 +97,20 @@
                         </div>
                     </div>
 
+                    <div id="economy-panel" class="hidden panel">
+                        <h3>Treasury &amp; Economy</h3>
+                        <div id="economy-stats">
+                            <p>Currency Value: <span id="econ-currency">—</span><span class="econ-unit">gold</span><span id="econ-currency-trend" class="econ-trend"></span></p>
+                            <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend" class="econ-trend"></span></p>
+                            <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/cycle</span></p>
+                            <p>Military Spending: <span id="econ-military">—</span><span class="econ-unit">/cycle</span></p>
+                            <p>Budget Balance: <span id="econ-balance">—</span><span id="econ-balance-trend" class="econ-trend"></span></p>
+                            <p>Gold Reserve: <span id="econ-reserve">—</span></p>
+                            <p>Tax Rate: <span id="econ-rate">—</span><span class="econ-unit">%</span></p>
+                            <p>Development: <span id="econ-levels">—</span></p>
+                        </div>
+                    </div>
+
                     <div id="activity-log" class="panel">
                         <h3>Activity Log</h3>
                         <div id="log-entries" class="log-container"></div>
@@ -93,16 +119,172 @@
             </main>
 
             <!-- Action Modal -->
-            <div id="action-modal" class="modal hidden">
+            <div id="action-modal" class="hidden modal">
                 <div class="modal-content">
                     <h3 id="action-title"></h3>
                     <div id="action-options"></div>
+
+                    <!-- Target country selector (shown for target-state actions) -->
+                    <div id="action-field-target" class="hidden action-field" data-for="target">
+                        <label for="action-target-country">Target Country:</label>
+                        <select id="action-target-country" name="target_country_id">
+                            <option value="">-- Select a country --</option>
+                        </select>
+                    </div>
+
+                    <!-- Movement type radio group (shown for Move Army) -->
+                    <div id="action-field-movement" class="hidden action-field" data-for="movement">
+                        <label>Movement Type:</label>
+                        <div style="display:flex; gap:12px; margin-top:6px;">
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                <input type="radio" name="action-movement-type" value="interior" checked>
+                                Interior (guard border)
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                <input type="radio" name="action-movement-type" value="target">
+                                Target (attack another country)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Direction selector (shown for interior movement) -->
+                    <div id="action-field-direction" class="hidden action-field" data-for="direction">
+                        <label for="action-direction">Direction:</label>
+                        <select id="action-direction" name="direction">
+                            <option value="N">North</option>
+                            <option value="S">South</option>
+                            <option value="E">East</option>
+                            <option value="W">West</option>
+                        </select>
+                    </div>
+
+                    <!-- Speed selector (shown for interior movement) -->
+                    <div id="action-field-speed" class="hidden action-field" data-for="speed">
+                        <label for="action-speed">Speed:</label>
+                        <select id="action-speed" name="speed">
+                            <option value="Slow">Slow</option>
+                            <option value="Fast">Fast</option>
+                        </select>
+                    </div>
+
+                    <div id="action-feedback" class="hidden action-feedback" role="alert" aria-live="assertive"></div>
                     <button onclick="closeModal()" class="close-btn">Close</button>
                 </div>
             </div>
-        </div>
-    </div>
 
+            <!-- Kingdom Command Center Modal (control panel for owned country) -->
+            <div id="kingdom-command-center" class="hidden modal">
+                <div class="modal-content command-center-panel">
+                    <div class="command-header">
+                        <h3 id="cc-kingdom-name"></h3>
+                        <button onclick="closeKingdomCommandCenter()" class="close-btn">×</button>
+                    </div>
+
+                    <!-- Resource & troop meters -->
+                    <div class="command-meters">
+                        <div class="command-meter">
+                            <div class="meter-label">Population</div>
+                            <div class="meter-circle" id="cc-meter-population"></div>
+                            <div class="meter-value" id="cc-meter-pop-val">0</div>
+                        </div>
+                        <div class="command-meter">
+                            <div class="meter-label">Resources</div>
+                            <div class="meter-circle" id="cc-meter-resources"></div>
+                            <div class="meter-value" id="cc-meter-res-val">0</div>
+                        </div>
+                        <div class="command-meter">
+                            <div class="meter-label">Central Troops</div>
+                            <div class="meter-circle" id="cc-meter-troops"></div>
+                            <div class="meter-value" id="cc-meter-troop-val">0</div>
+                        </div>
+                    </div>
+
+                    <!-- Economy dial -->
+                    <div class="command-meter" style="order: 5;">
+                        <div class="meter-label">Economy Rate</div>
+                        <div id="cc-economy-dial" class="dial-face">
+                            <div class="dial-arc"></div>
+                            <div class="dial-ticks"></div>
+                            <div class="dial-labels">
+                                <span class="label-0">0</span>
+                                <span class="label-25">25</span>
+                                <span class="label-50">50</span>
+                                <span class="label-75">75</span>
+                                <span class="label-100">100</span>
+                            </div>
+                            <div class="dial-pointer"></div>
+                        </div>
+                        <div class="dial-readout">
+                            <span class="dial-label">ECONOMY RATE</span>
+                            <span class="dial-value" id="cc-economy-dial-value">50</span>
+                            <span class="dial-unit">%</span>
+                        </div>
+                    </div>
+
+                    <!-- Territory minimap with troop dots -->
+                    <div class="command-minimap-wrap">
+                        <h4
+                            style="margin:0 0 8px 0;color:#ffd700;font-size:0.9em;text-transform:uppercase;letter-spacing:1px;">
+                            Territory</h4>
+                        <canvas id="cc-minimap" width="260" height="200"
+                            style="width:260px;height:200px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:6px;"></canvas>
+                        <div class="command-border-legs" style="display:flex;gap:10px;margin-top:8px;">
+                            <div style="flex:1;text-align:center;font-size:0.8em;">
+                                <div style="color:#aaa;">N</div>
+                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-n">0</div>
+                            </div>
+                            <div style="flex:1;text-align:center;font-size:0.8em;">
+                                <div style="color:#aaa;">S</div>
+                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-s">0</div>
+                            </div>
+                            <div style="flex:1;text-align:center;font-size:0.8em;">
+                                <div style="color:#aaa;">E</div>
+                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-e">0</div>
+                            </div>
+                            <div style="flex:1;text-align:center;font-size:0.8em;">
+                                <div style="color:#aaa;">W</div>
+                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-w">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Diplomatic relations -->
+                    <div class="command-diplomacy">
+                        <h4
+                            style="margin:0 0 10px 0;color:#ffd700;font-size:0.9em;text-transform:uppercase;letter-spacing:1px;">
+                            Diplomatic Relations</h4>
+                        <div id="cc-diplomacy-list" class="diplomacy-list">
+                            <!-- rows injected by JS -->
+                        </div>
+                        <div id="cc-diplomacy-empty"
+                            style="color:#888;font-size:0.85em;padding:10px;text-align:center;">No diplomatic relations
+                            recorded.</div>
+                    </div>
+
+                    <!-- Quick actions -->
+                    <div class="command-actions">
+                        <h4
+                            style="margin:0 0 10px 0;color:#ffd700;font-size:0.9em;text-transform:uppercase;letter-spacing:1px;">
+                            Quick Actions</h4>
+                        <div class="action-buttons">
+                            <button onclick="showAction('diplomacy'); closeKingdomCommandCenter();"
+                                class="cc-btn cc-btn-diplo">🤝 Diplomacy</button>
+                            <button onclick="showAction('economy'); closeKingdomCommandCenter();"
+                                class="cc-btn cc-btn-econ">💰 Economy</button>
+                            <button onclick="showAction('military'); closeKingdomCommandCenter();"
+                                class="cc-btn cc-btn-mil">⚔️ Military</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:20px;padding:10px;background:#1a1a2e;color:#888;font-size:0.75em;text-align:center;">
+                <div style="color:#ffd700;font-weight:bold;">v0.1.0</div>
+                <div>Kingdom Command Center - Enhanced Edition</div>
+            </div>
+        </div>
+        <div id="toast-container" aria-live="polite"></div>
+    </div>
     <script src="js/game.js"></script>
 </body>
+
 </html>

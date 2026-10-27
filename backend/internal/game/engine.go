@@ -9,32 +9,37 @@ import (
 	"kingdom-conquest/backend/internal/database"
 )
 
-const TickDuration = 90 * time.Second
-
+// GameState is the authoritative world snapshot broadcast to clients.
+// It is rebuilt on every state mutation and pushed to connected clients in
+// real time — there is no 90-second polling tick.
 type GameState struct {
-	Tick       int64              `json:"tick"`
-	Timestamp  time.Time          `json:"timestamp"`
-	Countries  []CountryState     `json:"countries"`
-	Players    []PlayerState      `json:"players"`
-	Actions    []ActionRecord     `json:"actions"`
+	GameDate  time.Time     `json:"game_date"`
+	Timestamp time.Time      `json:"timestamp"`
+	Countries []CountryState `json:"countries"`
+	Players   []PlayerState  `json:"players"`
+	Actions   []ActionRecord `json:"actions"`
 }
 
 type CountryState struct {
-	ID            int64  `json:"id"`
-	Name          string `json:"name"`
-	Code          string `json:"code"`
-	Color         string `json:"color"`
-	OwnerID       *int64 `json:"owner_id"`
-	Population    int64  `json:"population"`
-	Resources     int64  `json:"resources"`
-	TerritoryType string `json:"territory_type"`
+	ID            int64        `json:"id"`
+	Name          string       `json:"name"`
+	Code          string       `json:"code"`
+	Color         string       `json:"color"`
+	OwnerID       *int64       `json:"owner_id"`
+	OwnerName     *string      `json:"owner_name"` // Username of the player who owns it, if any
+	Population    int64        `json:"population"`
+	Resources     int64        `json:"resources"`
+	TerritoryType string       `json:"territory_type"`
+	Borders       string       `json:"borders"`
+	IsIsland      bool         `json:"is_island"`
+	Economy       EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
 type PlayerState struct {
-	UserID      int64     `json:"user_id"`
-	Username    string    `json:"username"`
-	CountryID   int64     `json:"country_id"`
-	LastActive  time.Time `json:"last_active"`
+	UserID     int64     `json:"user_id"`
+	Username   string    `json:"username"`
+	CountryID  int64     `json:"country_id"`
+	LastActive time.Time `json:"last_active"`
 }
 
 type ActionRecord struct {
@@ -45,12 +50,10 @@ type ActionRecord struct {
 }
 
 type GameEngine struct {
-	tickChan     chan struct{}
-	stopChan     chan struct{}
-	currentTick  int64
-	subscribers  map[chan GameState]struct{}
-	mu           sync.RWMutex
-	isRunning    bool
+	mu          sync.RWMutex
+	currentTick int64
+	subscribers map[chan GameState]struct{}
+	isRunning   bool
 }
 
 var engine *GameEngine
@@ -59,8 +62,6 @@ var once sync.Once
 func GetEngine() *GameEngine {
 	once.Do(func() {
 		engine = &GameEngine{
-			tickChan:    make(chan struct{}, 1),
-			stopChan:    make(chan struct{}),
 			subscribers: make(map[chan GameState]struct{}),
 		}
 	})
@@ -68,59 +69,94 @@ func GetEngine() *GameEngine {
 }
 
 func (g *GameEngine) Start() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if g.isRunning {
 		return
 	}
 	g.isRunning = true
-	go g.runTickLoop()
-	log.Println("Game engine started with 90-second ticks")
+	log.Println("Game engine started (real-time, event-driven)")
 }
 
 func (g *GameEngine) Stop() {
-	close(g.stopChan)
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	g.isRunning = false
 	log.Println("Game engine stopped")
 }
 
-func (g *GameEngine) runTickLoop() {
-	ticker := time.NewTicker(TickDuration)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			g.processTick()
-		case <-g.stopChan:
-			return
-		}
-	}
+// Resume sets the action-sequence counter, called at startup so ticks stay
+// monotonic across restarts (next tick = last persisted snapshot + 1).
+func (g *GameEngine) Resume(tick int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.currentTick = tick
 }
 
-func (g *GameEngine) processTick() {
+// Advance performs one world mutation: it advances the action sequence
+// counter, rebuilds the authoritative state from PostgreSQL, persists a
+// snapshot, and immediately pushes it to every connected client. Callers
+// invoke it after any mutation that changes the world.
+func (g *GameEngine) Advance() GameState {
 	g.mu.Lock()
 	g.currentTick++
-	tick := g.currentTick
 	g.mu.Unlock()
 
-	log.Printf("Processing tick %d", tick)
-
-	state := g.buildGameState(tick)
-
-	data, err := json.Marshal(state)
-	if err != nil {
-		log.Printf("Error marshaling game state: %v", err)
-		return
+	state := g.BuildState()
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving game state snapshot: %v", err)
 	}
 
-	if err := database.SaveGameState(tick, string(data)); err != nil {
-		log.Printf("Error saving game state: %v", err)
+	if g.ProcessInactivePlayers() {
+		state = g.BuildState()
 	}
-
-	g.notifySubscribers(state)
-	g.processInactivePlayers()
+	g.Notify(state)
+	return state
 }
 
-func (g *GameEngine) buildGameState(tick int64) GameState {
+// TickEconomy applies one economic cycle to every owned country: the
+// treasury gains (or loses) the budget balance and population drifts with
+// prosperity, then the new state is broadcast to all clients.
+func (g *GameEngine) TickEconomy() {
+	countries, err := database.GetCountries("medieval")
+	if err != nil {
+		log.Printf("Error getting countries for economy tick: %v", err)
+		return
+	}
+	changed := false
+	for _, c := range countries {
+		if c.OwnerID == nil {
+			continue // unclaimed kingdoms stagnate
+		}
+		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure)
+		newResources := c.Resources + econ.BudgetBalance
+		if newResources < -10000 {
+			newResources = -10000 // bounded debt
+		}
+		if newResources != c.Resources {
+			if err := database.UpdateCountryResources(c.ID, newResources); err != nil {
+				log.Printf("Error applying budget for country %d: %v", c.ID, err)
+				continue
+			}
+			changed = true
+		}
+		newPopulation := c.Population + PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure)
+		if newPopulation != c.Population {
+			if err := database.UpdateCountryPopulation(c.ID, newPopulation); err != nil {
+				log.Printf("Error applying growth for country %d: %v", c.ID, err)
+				continue
+			}
+			changed = true
+		}
+	}
+	if changed {
+		g.Advance()
+	}
+}
+
+// BuildState rebuilds the canonical world from PostgreSQL. It is called by
+// Advance after every mutation and can also be called on demand.
+func (g *GameEngine) BuildState() GameState {
 	countries, err := database.GetCountries("medieval")
 	if err != nil {
 		log.Printf("Error getting countries: %v", err)
@@ -129,25 +165,99 @@ func (g *GameEngine) buildGameState(tick int64) GameState {
 	var countryStates []CountryState
 	for _, c := range countries {
 		cs := CountryState{
-			ID:            int64(c["id"].(float64)),
-			Name:          c["name"].(string),
-			Code:          c["code"].(string),
-			Color:         c["color"].(string),
-			Population:    int64(c["population"].(float64)),
-			Resources:     int64(c["resources"].(float64)),
-			TerritoryType: c["territory_type"].(string),
+			ID:            c.ID,
+			Name:          c.Name,
+			Code:          c.Code,
+			Color:         c.Color,
+			Population:    c.Population,
+			Resources:     c.Resources,
+			TerritoryType: c.TerritoryType,
+			Borders:       c.Borders,
+			IsIsland:      c.IsIsland,
+			Economy:       ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure),
 		}
-		if c["owner_id"] != nil {
-			oid := int64(c["owner_id"].(float64))
-			cs.OwnerID = &oid
+		if c.OwnerID != nil {
+			cs.OwnerID = c.OwnerID
+		}
+		if c.OwnerName != nil {
+			cs.OwnerName = c.OwnerName
 		}
 		countryStates = append(countryStates, cs)
 	}
 
+	players, err := database.GetActivePlayers()
+	if err != nil {
+		log.Printf("Error getting active players: %v", err)
+	}
+	var playerStates []PlayerState
+	for _, p := range players {
+		playerStates = append(playerStates, PlayerState{
+			UserID:     p.UserID,
+			Username:   p.Username,
+			CountryID:  p.CountryID,
+			LastActive: p.LastActive,
+		})
+	}
+
+	actions, err := database.GetRecentActions(20)
+	if err != nil {
+		log.Printf("Error getting recent actions: %v", err)
+	}
+	var actionRecords []ActionRecord
+	for _, a := range actions {
+		actionRecords = append(actionRecords, ActionRecord{
+			UserID:      a.UserID,
+			CountryID:   a.CountryID,
+			ActionType:  a.ActionType,
+			Description: a.Description,
+		})
+	}
+
 	return GameState{
-		Tick:      tick,
+		GameDate:  time.Now(),
 		Timestamp: time.Now(),
 		Countries: countryStates,
+		Players:   playerStates,
+		Actions:   actionRecords,
+	}
+}
+
+// ProcessInactivePlayers enforces the daily-activity rule: any player who
+// has not been active (heartbeat/ping) in over 7 days loses their kingdom.
+// It returns true if the world changed, signalling the caller must
+// rebuild and re-broadcast the state.
+func (g *GameEngine) ProcessInactivePlayers() bool {
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	rows, err := database.GetStalePlayers(cutoff)
+	if err != nil {
+		log.Printf("Error checking inactive players: %v", err)
+		return false
+	}
+	changed := false
+	for _, p := range rows {
+		if err := database.SetCountryOwnerToNull(p.CountryID); err != nil {
+			log.Printf("Error nulling owner for country %d: %v", p.CountryID, err)
+			continue
+		}
+		if err := database.MarkPlayerCountryInactive(p.UserID, p.CountryID); err != nil {
+			log.Printf("Error marking inactive for user %d: %v", p.UserID, err)
+			continue
+		}
+		log.Printf("Player %s lost %s after 7 days of inactivity", p.Username, p.CountryCode)
+		changed = true
+	}
+	return changed
+}
+
+// Notify pushes a freshly built state to every connected client.
+func (g *GameEngine) Notify(state GameState) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	for ch := range g.subscribers {
+		select {
+		case ch <- state:
+		default:
+		}
 	}
 }
 
@@ -166,32 +276,16 @@ func (g *GameEngine) Unsubscribe(ch chan GameState) {
 	g.mu.Unlock()
 }
 
-func (g *GameEngine) notifySubscribers(state GameState) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-	for ch := range g.subscribers {
-		select {
-		case ch <- state:
-		default:
-		}
-	}
-}
-
-func (g *GameEngine) processInactivePlayers() {
-	// Players inactive for more than 7 days lose their territory
-	// This is a placeholder for the actual logic
-	log.Println("Processing inactive players...")
-}
-
 func (g *GameEngine) GetCurrentTick() int64 {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.currentTick
 }
 
-func (g *GameEngine) TriggerTick() {
-	select {
-	case g.tickChan <- struct{}{}:
-	default:
+func (s GameState) JSON() string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return "{}"
 	}
+	return string(b)
 }

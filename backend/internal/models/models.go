@@ -6,67 +6,81 @@ import (
 
 // User represents a player in the game
 type User struct {
-	ID        int64     `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"` // Never send password in JSON
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	LastLogin time.Time `json:"last_login"`
-	IsActive  bool      `json:"is_active"`
+	ID               int64     `json:"id"`
+	Username         string    `json:"username"`
+	Password         string    `json:"-"` // Never send password in JSON
+	Email            string    `json:"email"`
+	BaseColor        string    `json:"base_color"`          // Player's base colour for owned territories
+	HomeTerritoryID  *int64    `json:"home_territory_id"`   // FK to countries.id - the player's home kingdom
+	CreatedAt        time.Time `json:"created_at"`
+	LastLogin        time.Time `json:"last_login"`
+	IsActive         bool      `json:"is_active"`
 }
 
 // Country represents a kingdom/territory on the map
 type Country struct {
 	ID            int64     `json:"id"`
 	Name          string    `json:"name"`
-	Code          string    `json:"code"` // Short code like "USA", "FRA", etc.
-	Color         string    `json:"color"` // Hex color for display
-	OwnerID       *int64    `json:"owner_id"` // Null if unowned
-	ParentID      *int64    `json:"parent_id"` // For states within countries (e.g., California within USA)
+	Code          string    `json:"code"`       // Short code like "USA", "FRA", etc.
+	Color         string    `json:"color"`      // Hex color for display
+	OwnerID       *int64    `json:"owner_id"`   // Null if unowned
+	OwnerName     *string   `json:"owner_name"` // Username of the player who owns it, if any
+	ParentID      *int64    `json:"parent_id"`  // For states within countries (e.g., California within USA)
 	Population    int64     `json:"population"`
 	Resources     int64     `json:"resources"`
+	Troops        int64     `json:"troops"`     // Central troop count for this kingdom
+	EconomyRate   int64     `json:"economy_rate"`  // Tax rate 0-100 set by the owning player
+	Markets       int64     `json:"markets"`       // Build level: boosts trade output
+	Infrastructure int64    `json:"infrastructure"` // Build level: boosts productivity & growth
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
-	Era           string    `json:"era"` // medieval, modern, ancient, etc.
+	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
+	Borders       string    `json:"borders"`
+	IsIsland      bool      `json:"is_island"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // GameState represents the state of the game at a specific tick
 type GameState struct {
 	ID        int64     `json:"id"`
-	Tick      int64     `json:"tick"`
+	GameDate  time.Time `json:"game_date"`
 	Timestamp time.Time `json:"timestamp"`
 	Data      string    `json:"data"` // JSON encoded game state snapshot
 }
 
 // PlayerCountry links players to their countries
 type PlayerCountry struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	CountryID   int64     `json:"country_id"`
-	AssignedAt  time.Time `json:"assigned_at"`
-	IsActive    bool      `json:"is_active"`
-	LastActive  time.Time `json:"last_active"`
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	CountryID  int64     `json:"country_id"`
+	Name       string    `json:"name"`
+	AssignedAt time.Time `json:"assigned_at"`
+	IsActive   bool      `json:"is_active"`
+	LastActive time.Time `json:"last_active"`
 }
 
 // GameAction represents an action taken by a player
 type GameAction struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	CountryID   int64     `json:"country_id"`
-	ActionType  string    `json:"action_type"` // diplomacy, economic, military, political
-	Description string    `json:"description"`
-	Tick        int64     `json:"tick"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID              int64     `json:"id"`
+	UserID          int64     `json:"user_id"`
+	CountryID       int64     `json:"country_id"`
+	ActionType      string    `json:"action_type"` // diplomacy, economic, military, political
+	Description     string    `json:"description"`
+	TargetCountryID *int64   `json:"target_country_id,omitempty"`
+	Direction       string    `json:"direction,omitempty"`   // N, S, E, W, or 0-360 degrees
+	Speed           string    `json:"speed,omitempty"`       // Slow, Fast
+	MovementType    string    `json:"movement_type,omitempty"` // interior, target
+	GameDate        time.Time `json:"game_date"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // Era represents a game board/era configuration
 type Era struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"` // medieval, ancient, modern, etc.
-	Description string    `json:"description"`
-	StartDate   time.Time `json:"start_date"`
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"` // medieval, ancient, modern, etc.
+	Description string     `json:"description"`
+	StartDate   time.Time  `json:"start_date"`
 	EndDate     *time.Time `json:"end_date"`
-	IsActive    bool      `json:"is_active"`
-	TickCount   int64     `json:"tick_count"`
+	IsActive    bool       `json:"is_active"`
+	TickCount   int64      `json:"tick_count"`
 }

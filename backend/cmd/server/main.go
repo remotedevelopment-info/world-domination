@@ -39,13 +39,12 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	stateChan := engine.Subscribe()
 	defer engine.Unsubscribe(stateChan)
 
-	// Send initial state
-	initialState := map[string]interface{}{
-		"type":      "init",
-		"tick":      engine.GetCurrentTick(),
-		"timestamp": time.Now().Unix(),
-	}
-	if err := conn.WriteJSON(initialState); err != nil {
+	// Send the full current state so the client renders immediately.
+	state := engine.BuildState()
+	if err := conn.WriteJSON(map[string]interface{}{
+		"type":  "init",
+		"state": state,
+	}); err != nil {
 		return
 	}
 
@@ -73,6 +72,17 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// frontendDir returns the first existing candidate for the frontend folder so
+// the server works whether launched from the repo root or backend/.
+func frontendDir() string {
+	for _, candidate := range []string{"frontend", "../frontend", "../../frontend"} {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate
+		}
+	}
+	return "../frontend"
+}
+
 func setupRouter() *mux.Router {
 	r := mux.NewRouter()
 
@@ -89,12 +99,18 @@ func setupRouter() *mux.Router {
 	api.HandleFunc("/assign-country", handlers.AssignCountryHandler).Methods("POST")
 	api.HandleFunc("/my-country", handlers.GetPlayerCountryHandler).Methods("GET")
 	api.HandleFunc("/heartbeat", handlers.HeartbeatHandler).Methods("POST")
+	api.HandleFunc("/action", handlers.ActionHandler).Methods("POST")
+	api.HandleFunc("/troops", handlers.GetTroopsHandler).Methods("GET")
+	api.HandleFunc("/kingdom-detail", handlers.GetKingdomDetailHandler).Methods("GET")
+	api.HandleFunc("/diplomacy", handlers.GetDiplomacyHandler).Methods("GET")
+api.HandleFunc("/set-economy-rate", handlers.SetEconomyRateHandler).Methods("POST")
 
 	// WebSocket endpoint
 	r.HandleFunc("/ws", wsHandler)
 
-	// Serve static files
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("../../frontend")))
+	// Serve static files from the frontend directory, probing the common
+	// working directories the server may be launched from.
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir(frontendDir())))
 
 	return r
 }
@@ -102,7 +118,7 @@ func setupRouter() *mux.Router {
 func main() {
 	port := flag.String("port", os.Getenv("PORT"), "Server port")
 	if *port == "" {
-		*port = "8080"
+		*port = "8060"
 	}
 	flag.Parse()
 
@@ -120,9 +136,19 @@ func main() {
 		log.Fatalf("Failed to seed initial data: %v", err)
 	}
 
-	// Start game engine
+	// Start game engine (date-based, real-time gameplay)
 	engine := game.GetEngine()
 	engine.Start()
+
+	// Economy simulation: one 15-second cycle per owned kingdom, broadcast to
+	// all clients so the treasury dashboard constantly updates.
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			engine.TickEconomy()
+		}
+	}()
 
 	// Setup HTTP server
 	router := setupRouter()
