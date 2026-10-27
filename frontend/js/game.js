@@ -2042,7 +2042,7 @@ function setMeter(elementId, value, max) {
 }
 
 // ---- Header clock + tick urgency countdown ----
-const TICK_INTERVAL_S = 90; // server broadcasts state every ~90s tick
+const TICK_INTERVAL_S = 15; // server broadcasts state every ~15s tick
 let lastStateAt = Date.now();
 let clockTimer = null;
 
