@@ -110,6 +110,8 @@ func InitSchema() error {
 		resources BIGINT DEFAULT 100,
 		troops BIGINT DEFAULT 0,
 		economy_rate INTEGER DEFAULT 50,
+		markets INTEGER DEFAULT 0,
+		infrastructure INTEGER DEFAULT 0,
 		territory_type VARCHAR(50) DEFAULT 'kingdom',
 		era VARCHAR(50) DEFAULT 'medieval',
 		is_island BOOLEAN DEFAULT false,
@@ -122,6 +124,8 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS borders JSONB DEFAULT '{"borders": []}'::jsonb;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops BIGINT DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS economy_rate INTEGER DEFAULT 50;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS markets INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS infrastructure INTEGER DEFAULT 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
 		id SERIAL PRIMARY KEY,
@@ -345,7 +349,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.troops, c.territory_type, c.borders, c.is_island
+		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1`, era)
 	if err != nil {
@@ -357,7 +361,7 @@ func GetCountries(era string) ([]models.Country, error) {
 	for rows.Next() {
 		var c models.Country
 		var ownerID, ownerName sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
@@ -640,6 +644,16 @@ func GetEconomyRate(countryID int64) (int64, error) {
 // SetEconomyRate updates the economy_rate for a country.
 func SetEconomyRate(countryID int64, rate int64) error {
 	_, err := DB.Exec(`UPDATE countries SET economy_rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, rate, countryID)
+	return err
+}
+
+// IncrementEconomyLevel atomically adjusts a country's markets or
+// infrastructure build level; the column name is whitelisted.
+func IncrementEconomyLevel(countryID int64, column string, delta int64) error {
+	if column != "markets" && column != "infrastructure" {
+		return fmt.Errorf("invalid economy level column %q", column)
+	}
+	_, err := DB.Exec(`UPDATE countries SET `+column+` = GREATEST(0, `+column+` + $1), updated_at = CURRENT_TIMESTAMP WHERE id = $2`, delta, countryID)
 	return err
 }
 

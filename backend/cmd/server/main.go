@@ -140,6 +140,16 @@ func main() {
 	engine := game.GetEngine()
 	engine.Start()
 
+	// Economy simulation: one 90-second cycle per owned kingdom, broadcast to
+	// all clients so the treasury dashboard constantly updates.
+	go func() {
+		ticker := time.NewTicker(90 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			engine.TickEconomy()
+		}
+	}()
+
 	// Setup HTTP server
 	router := setupRouter()
 	server := &http.Server{

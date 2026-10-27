@@ -45,10 +45,19 @@
                     <span id="player-name">Player</span>
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
                 </div>
-                <div class="game-info">
-                    <span id="tick-display">Turn 0</span>
-                    <span id="connection-status" class="status-indicator">●</span>
+            <div class="header-clock">
+                <div class="clock-digits">
+                    <span id="clock-hours">--</span><span class="clock-sep">:</span>
+                    <span id="clock-mins">--</span><span class="clock-sep">:</span>
+                    <span id="clock-seconds">--</span>
                 </div>
+                <div class="clock-sweep" id="clock-sweep"></div>
+                <div class="urgency-line" id="urgency-tick">Next state update in 89s</div>
+            </div>
+            <div class="game-info">
+                <span id="tick-display">Turn 0</span>
+                <span id="connection-status" class="status-indicator">●</span>
+            </div>
                 <button onclick="logout()" class="logout-btn">Logout</button>
             </header>
 
@@ -85,6 +94,20 @@
                             <button onclick="showAction('diplomacy')">🤝 Diplomacy</button>
                             <button onclick="showAction('economy')">💰 Economy</button>
                             <button onclick="showAction('military')">⚔️ Military</button>
+                        </div>
+                    </div>
+
+                    <div id="economy-panel" class="hidden panel">
+                        <h3>Treasury &amp; Economy</h3>
+                        <div id="economy-stats">
+                            <p>Currency Value: <span id="econ-currency">—</span><span class="econ-unit">gold</span><span id="econ-currency-trend" class="econ-trend"></span></p>
+                            <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend" class="econ-trend"></span></p>
+                            <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/cycle</span></p>
+                            <p>Military Spending: <span id="econ-military">—</span><span class="econ-unit">/cycle</span></p>
+                            <p>Budget Balance: <span id="econ-balance">—</span><span id="econ-balance-trend" class="econ-trend"></span></p>
+                            <p>Gold Reserve: <span id="econ-reserve">—</span></p>
+                            <p>Tax Rate: <span id="econ-rate">—</span><span class="econ-unit">%</span></p>
+                            <p>Development: <span id="econ-levels">—</span></p>
                         </div>
                     </div>
 
@@ -179,10 +202,22 @@
                     <!-- Economy dial -->
                     <div class="command-meter" style="order: 5;">
                         <div class="meter-label">Economy Rate</div>
-                        <input type="range" id="cc-economy-dial" min="0" max="100" value="50"
-                            style="width: 100%; accent-color: #ffd700;">
-                        <div class="dial-readout" style="margin-top: 6px; font-size: 0.85em; color:#ffd700;">
-                            <span>50</span>%
+                        <div id="cc-economy-dial" class="dial-face">
+                            <div class="dial-arc"></div>
+                            <div class="dial-ticks"></div>
+                            <div class="dial-labels">
+                                <span class="label-0">0</span>
+                                <span class="label-25">25</span>
+                                <span class="label-50">50</span>
+                                <span class="label-75">75</span>
+                                <span class="label-100">100</span>
+                            </div>
+                            <div class="dial-pointer"></div>
+                        </div>
+                        <div class="dial-readout">
+                            <span class="dial-label">ECONOMY RATE</span>
+                            <span class="dial-value" id="cc-economy-dial-value">50</span>
+                            <span class="dial-unit">%</span>
                         </div>
                     </div>
 
@@ -250,5 +285,6 @@
         <div id="toast-container" aria-live="polite"></div>
     </div>
     <script src="js/game.js"></script>
+</body>
 
 </html>

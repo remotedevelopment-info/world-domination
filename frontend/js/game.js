@@ -1096,6 +1096,7 @@ function showGameScreen() {
   document.getElementById("game-screen").classList.add("active");
   document.getElementById("player-name").textContent = currentUser.username;
   resizeCanvas();
+  startClock();
   connectWebSocket();
   loadKingdoms();
   checkMyKingdom();
@@ -1262,6 +1263,7 @@ function connectWebSocket() {
     // init envelope: {type: 'init', state: GameState}; broadcasts are raw GameState
     const state = msg && msg.type === "init" ? msg.state : msg;
     if (!state || !Array.isArray(state.countries)) return;
+    lastStateAt = Date.now();
     currentTick = state.tick || 0;
     const rulers = Array.isArray(state.players) ? state.players.length : 0;
     document.getElementById("tick-display").textContent =
@@ -1270,6 +1272,9 @@ function connectWebSocket() {
     renderMap();
     renderKingdomList();
     refreshMyKingdomStats();
+    if (myKingdom && myKingdom.country_id) {
+      updateEconomyPanel(kingdoms.find((k) => k.id === myKingdom.country_id));
+    }
     if (Array.isArray(state.actions) && state.actions.length) {
       // Only surface an action when it is genuinely new; every 90s tick
       // and every other player's action re-broadcasts the same list.
@@ -1292,6 +1297,64 @@ function refreshMyKingdomStats() {
   const resEl = document.getElementById("my-kingdom-res");
   if (popEl) popEl.textContent = country.population.toLocaleString();
   if (resEl) resEl.textContent = country.resources.toLocaleString();
+}
+
+// ---- Economy dashboard ----
+// lastEconomy holds the previous broadcast's indicators so trend arrows can
+// show the direction of change between state updates.
+let lastEconomy = null;
+
+// updateEconomyPanel renders the country's derived economy block (carried on
+// every state broadcast) into the sidebar treasury panel.
+function updateEconomyPanel(country) {
+  const panel = document.getElementById("economy-panel");
+  if (!panel) return;
+  if (!country || !country.economy) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  const e = country.economy;
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  };
+  set("econ-currency", Number(e.currency_value).toFixed(2));
+  set("econ-gdp", e.gdp.toLocaleString());
+  set("econ-revenue", e.tax_revenue.toLocaleString());
+  set("econ-military", e.military_expenditure.toLocaleString());
+  const bal = document.getElementById("econ-balance");
+  if (bal) {
+    bal.textContent = (e.budget_balance >= 0 ? "+" : "") + e.budget_balance.toLocaleString();
+    bal.classList.toggle("econ-positive", e.budget_balance >= 0);
+    bal.classList.toggle("econ-negative", e.budget_balance < 0);
+  }
+  set("econ-reserve", e.gold_reserve.toLocaleString());
+  set("econ-rate", e.tax_rate);
+  set("econ-levels", `Markets ${e.markets} · Infrastructure ${e.infrastructure}`);
+
+  if (lastEconomy) {
+    setTrend("econ-currency-trend", e.currency_value, lastEconomy.currency_value);
+    setTrend("econ-gdp-trend", e.gdp, lastEconomy.gdp);
+    setTrend("econ-balance-trend", e.budget_balance, lastEconomy.budget_balance);
+  }
+  lastEconomy = e;
+}
+
+// setTrend paints an up/down arrow when an indicator moved between broadcasts.
+function setTrend(id, now, prev) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (now > prev) {
+    el.textContent = "▲";
+    el.className = "econ-trend econ-positive";
+  } else if (now < prev) {
+    el.textContent = "▼";
+    el.className = "econ-trend econ-negative";
+  } else {
+    el.textContent = "";
+    el.className = "econ-trend";
+  }
 }
 
 function sendHeartbeat() {
@@ -1749,10 +1812,17 @@ async function openKingdomCommandCenter(kingdom) {
   document.getElementById("cc-meter-res-val").textContent = resAmt.toLocaleString();
   document.getElementById("cc-meter-troop-val").textContent = central.toLocaleString();
 
-  // Animate meter circles (conic-gradient percentage).
+  // Animate meter circles (conic-gradient percentage + needle).
+  renderMeters();
   setMeter("cc-meter-population", pop, 5000);
   setMeter("cc-meter-resources", resAmt, 2000);
   setMeter("cc-meter-troops", central, 100);
+
+  // Build the rotary dial and restore the persisted economy rate.
+  initEconomyDial();
+  if (detail && typeof detail.economy_rate === "number") {
+    setEconomyRate(detail.economy_rate, false);
+  }
 
   // --- Border troop counts ---
   const borders = detail?.border_troops || (troops[kingdom.id]?.borders || { N: 0, S: 0, E: 0, W: 0 });
@@ -1803,36 +1873,120 @@ function closeKingdomCommandCenter() {
   document.getElementById("kingdom-command-center").classList.add("hidden");
 }
 
-// Quick action handlers
-function performEconomyAction(direction) {
+// ---- Economy rotary dial (archaic control) ----
+// Geometry: value 0 sits at 120deg (clockwise from top), value 100 at 360deg;
+// the dial sweeps 240deg total (2.4deg per unit). The .dial-ticks/.dial-labels
+// containers carry a base rotate(120deg) in CSS, so child rotations are v*2.4.
+let economyRate = 50;
+let dialDragging = false;
+const DIAL_BASE_DEG = 120;
+const DIAL_DEG_PER_UNIT = 2.4;
+
+// initEconomyDial builds the tick marks, aligns the arc, and wires pointer
+// interaction. Safe to call repeatedly; ticks/listeners are only built once.
+function initEconomyDial() {
   const dial = document.getElementById("cc-economy-dial");
   if (!dial) return;
-  let current = parseInt(dial.value);
-  if (direction === "increase") {
-    current = Math.min(100, current + 5);
-  } else {
-    current = Math.max(0, current - 5);
+
+  const arc = dial.querySelector(".dial-arc");
+  if (arc) arc.style.transform = `rotate(${DIAL_BASE_DEG}deg)`;
+
+  const ticks = dial.querySelector(".dial-ticks");
+  if (ticks && !ticks.children.length) {
+    for (let v = 0; v <= 100; v += 10) {
+      const t = document.createElement("span");
+      if (v % 25 === 0) t.className = "tick-major";
+      t.style.transform = `rotate(${v * DIAL_DEG_PER_UNIT}deg)`;
+      ticks.appendChild(t);
+    }
   }
-  dial.value = current;
-  updateDialReadout(current);
-  
-  // Call backend to set economy rate
-  fetch(`${API_URL}/kingdom-detail`, {
-    method: "POST",  // This won't work for GET endpoint, need to reconsider
-    headers: { 
+
+  if (!dial.dataset.wired) {
+    dial.dataset.wired = "1";
+    dial.addEventListener("mousedown", onDialPress);
+    dial.addEventListener("touchstart", onDialPress, { passive: false });
+    window.addEventListener("mousemove", onDialDrag);
+    window.addEventListener("touchmove", onDialDrag, { passive: false });
+    window.addEventListener("mouseup", onDialRelease);
+    window.addEventListener("touchend", onDialRelease);
+  }
+
+  setEconomyRate(economyRate, false);
+}
+
+// dialValueFromEvent maps a pointer position to a 0-100 dial value.
+function dialValueFromEvent(e) {
+  const dial = document.getElementById("cc-economy-dial");
+  if (!dial) return economyRate;
+  const rect = dial.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const pt = e.touches && e.touches.length ? e.touches[0] : e;
+  const dx = pt.clientX - cx;
+  const dy = pt.clientY - cy;
+  // Degrees clockwise from top (0 = up, 90 = right).
+  let deg = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  if (deg < 0) deg += 360;
+  // Dead zone between value 100 (top) and value 0: snap to the nearest end.
+  if (deg < DIAL_BASE_DEG) return deg <= DIAL_BASE_DEG / 2 ? 100 : 0;
+  return (deg - DIAL_BASE_DEG) / DIAL_DEG_PER_UNIT;
+}
+
+function onDialPress(e) {
+  dialDragging = true;
+  setEconomyRate(dialValueFromEvent(e), false);
+  e.preventDefault();
+}
+
+function onDialDrag(e) {
+  if (!dialDragging) return;
+  setEconomyRate(dialValueFromEvent(e), false);
+  e.preventDefault();
+}
+
+function onDialRelease() {
+  if (!dialDragging) return;
+  dialDragging = false;
+  pushEconomyRate();
+}
+
+// setEconomyRate updates the dial visuals and readout; push=true also
+// persists the rate to the backend.
+function setEconomyRate(value, push = true) {
+  economyRate = Math.round(Math.min(100, Math.max(0, value)));
+  const dial = document.getElementById("cc-economy-dial");
+  if (dial) {
+    const pointer = dial.querySelector(".dial-pointer");
+    if (pointer)
+      pointer.style.transform = `rotate(${DIAL_BASE_DEG + economyRate * DIAL_DEG_PER_UNIT}deg)`;
+    const arc = dial.querySelector(".dial-arc");
+    if (arc)
+      arc.style.setProperty("--dial-arc-deg", `${economyRate * DIAL_DEG_PER_UNIT}deg`);
+  }
+  updateDialReadout(economyRate);
+  if (push) pushEconomyRate();
+}
+
+// pushEconomyRate persists the current rate via the backend endpoint.
+function pushEconomyRate() {
+  fetch(`${API_URL}/set-economy-rate`, {
+    method: "POST",
+    headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ economy_rate: current })
-  }).then(res => {
-    if (!res.ok) throw new Error("Failed to set economy rate");
-    console.log(`Economy set to ${current}`);
-  }).catch(err => {
-    console.error("Error setting economy rate:", err);
-    // Revert UI if API fails
-    dial.value = 50; // reset to default
-    updateDialReadout(50);
-  });
+    body: JSON.stringify({ economy_rate: economyRate }),
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("Failed to set economy rate");
+      logMessage(`Economy rate set to ${economyRate}%`);
+    })
+    .catch((err) => console.error("Error setting economy rate:", err));
+}
+
+// Quick action handlers
+function performEconomyAction(direction) {
+  setEconomyRate(economyRate + (direction === "increase" ? 5 : -5));
 }
 
 function recruitTroops() {
@@ -1849,17 +2003,73 @@ function moveTroops(direction) {
 }
 
 function updateDialReadout(value) {
-  const readout = document.querySelector(".dial-readout span");
-  if (readout) readout.textContent = value;
+  const el = document.getElementById("cc-economy-dial-value");
+  if (el) el.textContent = value;
 }
 
-// setMeter animates a conic-gradient meter circle to show value/max as a %.
+// renderMeters injects tick marks and a needle into each meter circle.
+// Safe to call repeatedly; meters are only built once.
+function renderMeters() {
+  ["cc-meter-population", "cc-meter-resources", "cc-meter-troops"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.querySelector(".meter-needle")) return;
+    const ticks = document.createElement("div");
+    ticks.className = "meter-ticks";
+    for (let v = 0; v <= 100; v += 10) {
+      const t = document.createElement("span");
+      if (v % 25 === 0) t.className = "tick-major";
+      t.style.transform = `rotate(${v * DIAL_DEG_PER_UNIT}deg)`;
+      ticks.appendChild(t);
+    }
+    const needle = document.createElement("div");
+    needle.className = "meter-needle";
+    el.appendChild(ticks);
+    el.appendChild(needle);
+  });
+}
+
+// setMeter animates a conic-gradient meter circle to show value/max as a %
+// and rotates the meter needle to match (same 240deg sweep as the dial).
 function setMeter(elementId, value, max) {
   const el = document.getElementById(elementId);
   if (!el) return;
   const pct = Math.min(Math.max(value / max, 0), 1);
-  const deg = Math.round(pct * 360);
-  el.style.background = `conic-gradient(#ffd700 0deg, #ffd700 ${deg}deg, rgba(255,215,0,0.15) ${deg}deg, rgba(255,215,0,0.15) 360deg)`;
+  const deg = Math.round(pct * 240);
+  el.style.background = `conic-gradient(from 120deg, #ffd700 0deg, #ffd700 ${deg}deg, rgba(255,215,0,0.15) ${deg}deg, rgba(255,215,0,0.15) 360deg)`;
+  const needle = el.querySelector(".meter-needle");
+  if (needle)
+    needle.style.transform = `rotate(${DIAL_BASE_DEG + pct * 240}deg)`;
+}
+
+// ---- Header clock + tick urgency countdown ----
+const TICK_INTERVAL_S = 90; // server broadcasts state every ~90s tick
+let lastStateAt = Date.now();
+let clockTimer = null;
+
+function startClock() {
+  if (clockTimer) return;
+  tickClock();
+  clockTimer = setInterval(tickClock, 1000);
+}
+
+function tickClock() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const h = document.getElementById("clock-hours");
+  const m = document.getElementById("clock-mins");
+  const s = document.getElementById("clock-seconds");
+  if (h) h.textContent = pad(now.getHours());
+  if (m) m.textContent = pad(now.getMinutes());
+  if (s) s.textContent = pad(now.getSeconds());
+  const sweep = document.getElementById("clock-sweep");
+  if (sweep) sweep.style.transform = `rotate(${now.getSeconds() * 6}deg)`;
+  const urg = document.getElementById("urgency-tick");
+  if (urg) {
+    const elapsed = Math.floor((Date.now() - lastStateAt) / 1000);
+    const remain = Math.max(0, TICK_INTERVAL_S - (elapsed % TICK_INTERVAL_S));
+    urg.textContent = `Next state update in ${remain}s`;
+    urg.classList.toggle("urgent", remain <= 10);
+  }
 }
 
 // escapeHtml prevents XSS when rendering diplomacy data.

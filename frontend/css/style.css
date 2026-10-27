@@ -141,6 +141,14 @@ body {
 }
 #claim-btn:disabled { background: #555; cursor: not-allowed; }
 #kingdom-stats p { margin: 8px 0; font-size: 0.95em; }
+
+/* ---- Economy dashboard panel ---- */
+#economy-stats p { margin: 8px 0; font-size: 0.95em; }
+#economy-stats span[id^="econ-"] { color: #ffd700; font-weight: bold; }
+.econ-unit { color: #666 !important; font-size: 0.85em; font-weight: normal !important; margin-left: 3px; }
+.econ-positive { color: #4ecdc4 !important; }
+.econ-negative { color: #ff6b6b !important; }
+.econ-trend { margin-left: 5px; font-size: 0.8em; }
 .action-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
 .action-buttons button {
     padding: 10px;
@@ -461,4 +469,269 @@ body {
 @keyframes toast-in {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
+}
+/* ============================================================
+   Archaic-styled controls  (Kingdom Command Center + header)  */
+=============================================================== */
+
+/* ---- Archaic type + palette ---- */
+.command-meter .meter-label,
+.clock-digits,
+.cc-btn.archaic,
+.urgency-line {
+    font-family: Georgia, 'Times New Roman', serif;
+}
+.cc-btn.archaic,
+.dial-readout .dial-label {
+    font-family: Georgia, 'Times New Roman', serif;
+    letter-spacing: 1px;
+}
+
+/* ---- Economy rotary dial ---- */
+#cc-economy-dial {
+    width: 240px;
+    height: 240px;
+    cursor: pointer;
+    touch-action: none;
+    border-radius: 50%;
+    box-shadow:
+        0 0 0 2px #b8860b,
+        0 0 0 4px rgba(255,255,255,0.12),
+        inset 0 2px 0 2px #ffd700,
+        inset 0 -2px 0 2px #b8860b,
+        0 4px 14px rgba(0,0,0,0.4);
+    display: block;
+    margin: 0 auto;
+}
+
+.dial-face {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 38% 30%, #2a2a38, #14141f 80%);
+    box-shadow: inset 0 0 24px rgba(0,0,0,0.55);
+    overflow: hidden;
+}
+
+/* outer bronze ring */
+.dial-face::before {
+    content: "";
+    position: absolute; inset: 8px;
+    border: 4px solid #b8860b;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* arc sweep */
+.dial-arc {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+        conic-gradient(#ffd700 0deg, #ffd700 var(--dial-arc-deg, 0deg),
+                       rgba(255,215,0,0.08) var(--dial-arc-deg, 0deg),
+                       rgba(255,215,0,0.08) 360deg);
+}
+
+.dial-ticks {
+    position: absolute; inset: 0; border-radius: 50%;
+    transform: rotate(120deg);
+}
+.dial-ticks span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px; height: 50%;
+    background: linear-gradient(180deg, #ffd700 0, #ffd700 30%, transparent 30%);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    margin-left: -1px;
+}
+.dial-ticks .tick-major { background: linear-gradient(180deg, #b8860b 0, #b8860b 46%, transparent 46%); }
+
+.dial-labels {
+    position: absolute; inset: 0; border-radius: 50%;
+    transform: rotate(120deg);
+}
+.dial-labels span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 34px;
+    height: 26%;
+    margin-left: -17px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: bold;
+    color: #ffd700;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    transform-origin: 50% 100%;
+}
+.dial-labels .label-0   { transform: rotate(0deg); }
+.dial-labels .label-25  { transform: rotate(60deg); }
+.dial-labels .label-50  { transform: rotate(120deg); }
+.dial-labels .label-75  { transform: rotate(180deg); }
+.dial-labels .label-100 { transform: rotate(240deg); }
+
+/* pointer + center cap */
+.dial-pointer {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 43%;
+    margin-left: -1px;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    pointer-events: none;
+    box-shadow: 0 0 6px rgba(255,215,0,0.5);
+}
+.dial-pointer::after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    width: 15px; height: 15px;
+    background: radial-gradient(circle, #ffd700 0%, #b8860b 60%, #14141f 100%);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px rgba(255,215,0,0.7);
+}
+
+.dial-readout {
+    text-align: center;
+    margin-top: 10px;
+}
+.dial-readout .dial-value {
+    color: #ffd700;
+    font-size: 1.7em;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.dial-readout .dial-unit {
+    color: #666;
+    font-size: 0.85em;
+    font-weight: normal;
+}
+.meter-face {
+    position: absolute; inset: 3px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #2a2a38, #101018 80%);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    pointer-events: none;
+}
+.meter-ticks {
+    position: absolute; inset: 2px;
+    border-radius: 50%;
+    transform: rotate(120deg);
+    pointer-events: none;
+}
+
+.meter-ticks span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px; height: 50%;
+    background: linear-gradient(180deg, #ffd700 0, #ffd700 26%, transparent 26%);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    margin-left: -1px;
+}
+.meter-ticks .tick-major { background: linear-gradient(180deg, #b8860b 0, #b8860b 42%, transparent 42%); }
+.meter-needle {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 46%;
+    margin-left: -1px;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    pointer-events: none;
+    z-index: 2;
+    box-shadow: 0 0 5px rgba(255,215,0,0.45);
+}
+.meter-needle::before {
+    content: "";
+    position: absolute; bottom: -5px;
+    left: 50%; width: 9px; height: 9px;
+    background: radial-gradient(circle, #ffd700, #b8860b 60%, #101018 100%);
+    border-radius: 50%;
+    transform: translateX(-50%);
+}
+.command-actions .cc-btn.archaic {
+    background: linear-gradient(180deg, #fff3b0 0%, #ffd700 40%, #ff8c00 100%);
+    color: #1a1a2e;
+    border: 2px solid #ffd700;
+    box-shadow: 0 1px 0 #ffe44d, inset 0 2px 3px rgba(255,215,0,0.35), inset 0 -2px 3px rgba(0,0,0,0.15);
+    text-shadow: 0 1px 1px rgba(255,215,0,0.4);
+}
+.command-actions .cc-btn.archaic:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 0 2px rgba(255,215,0,0.35), inset 0 2px 3px rgba(255,215,0,0.35), inset 0 -2px 3px rgba(0,0,0,0.15);
+}
+.command-actions .cc-btn.archaic:active {
+    transform: translateY(0);
+    box-shadow: inset 0 2px 3px rgba(255,215,0,0.35), inset 0 -2px 3px rgba(0,0,0,0.15);
+}
+.command-actions .cc-btn.archaic.cc-btn-diplo { background: linear-gradient(180deg, #b0e0d8 0%, #4ecdc4 40%, #44a08d 100%); }
+.command-actions .cc-btn.archaic.cc-btn-mil   { background: linear-gradient(180deg, #f5b7b1 0%, #ff6b6b 40%, #c44d4d 100%); }
+.header-clock {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.clock-digits {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 22px;
+    font-weight: bold;
+    color: #ffd700;
+    letter-spacing: 2px;
+}
+.clock-digits span {
+    position: relative;
+}
+.clock-digits .clock-sep {
+    color: #fff;
+    font-weight: normal;
+}
+.clock-sweep {
+    position: absolute;
+    bottom: 50%;
+    left: 50%;
+    width: 2px;
+    height: 50%;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    box-shadow: 0 0 6px rgba(255,215,0,0.5);
+}
+
+.urgency-line {
+    font-size: 0.85em;
+    letter-spacing: 1px;
+    color: #b8860b;
+    font-family: Georgia, serif;
+    padding: 4px 12px;
+    border: 1px solid rgba(255,215,0,0.4);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.25);
+}
+.urgency-line.urgent {
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+    box-shadow: 0 0 8px rgba(255,107,107,0.35);
+    animation: urgency-pulse 0.6s ease-in-out infinite;
+}
+@keyframes urgency-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,107,107,0.35); }
+    50% { box-shadow: 0 0 16px rgba(255,107,107,0.7); }
 }

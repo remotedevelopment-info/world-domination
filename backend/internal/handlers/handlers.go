@@ -436,33 +436,86 @@ func handleEconomy(userID int64, description string, req ActionRequest) error {
 	if err != nil || pc == nil {
 		return errors.New("no country assigned")
 	}
-	// Trade Resources requires a target country; other economy actions do not.
-	if description == "Trade Resources" {
+
+	countries, err := database.GetCountries("medieval")
+	if err != nil {
+		return err
+	}
+	selfIdx, targetIdx := -1, -1
+	for i := range countries {
+		if countries[i].ID == pc.CountryID {
+			selfIdx = i
+		}
+		if req.TargetCountryID != nil && countries[i].ID == *req.TargetCountryID {
+			targetIdx = i
+		}
+	}
+	if selfIdx < 0 {
+		return errors.New("country not found")
+	}
+	self := countries[selfIdx]
+
+	// Each economy action has a distinct, rate-aware effect on the treasury
+	// or the kingdom's development levels; all are visible in the broadcast
+	// that follows the action.
+	switch description {
+	case "Collect Taxes":
+		// One cycle of rate-aware tax revenue, straight into the treasury.
+		econ := game.ComputeEconomy(self.Population, self.Resources, self.Troops, self.EconomyRate, self.Markets, self.Infrastructure)
+		gain := econ.TaxRevenue
+		if gain < 1 {
+			gain = 1
+		}
+		if err := database.UpdateCountryResources(self.ID, self.Resources+gain); err != nil {
+			return err
+		}
+	case "Trade Resources":
 		if req.TargetCountryID == nil || *req.TargetCountryID == 0 {
 			return errors.New("target country required for Trade Resources")
 		}
 		if *req.TargetCountryID == pc.CountryID {
 			return errors.New("cannot target own country for Trade Resources")
 		}
-	}
-	countries, err := database.GetCountries("medieval")
-	if err != nil {
-		return err
-	}
-	var population, resources int64
-	for _, c := range countries {
-		if c.ID == pc.CountryID {
-			population, resources = c.Population, c.Resources
-			break
+		if targetIdx < 0 {
+			return errors.New("target country not found")
 		}
+		target := countries[targetIdx]
+		const amount = 50
+		if self.Resources < amount {
+			return fmt.Errorf("insufficient resources: trade requires %d, treasury holds %d", amount, self.Resources)
+		}
+		if err := database.UpdateCountryResources(self.ID, self.Resources-amount); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryResources(target.ID, target.Resources+amount); err != nil {
+			return err
+		}
+	case "Build Market":
+		const cost = 200
+		if self.Resources < cost {
+			return fmt.Errorf("building a market costs %d resources, treasury holds %d", cost, self.Resources)
+		}
+		if err := database.UpdateCountryResources(self.ID, self.Resources-cost); err != nil {
+			return err
+		}
+		if err := database.IncrementEconomyLevel(self.ID, "markets", 1); err != nil {
+			return err
+		}
+	case "Invest in Infrastructure":
+		const cost = 150
+		if self.Resources < cost {
+			return fmt.Errorf("infrastructure investment costs %d resources, treasury holds %d", cost, self.Resources)
+		}
+		if err := database.UpdateCountryResources(self.ID, self.Resources-cost); err != nil {
+			return err
+		}
+		if err := database.IncrementEconomyLevel(self.ID, "infrastructure", 1); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown economy action %q", description)
 	}
-	tax := population / 1000
-	if tax < 1 {
-		tax = 1
-	}
-	if err := database.UpdateCountryResources(pc.CountryID, resources+tax); err != nil {
-		return err
-	}
+
 	if err := database.LogAction(userID, pc.CountryID, "economy", description,
 		req.TargetCountryID, req.Direction, req.Speed, req.MovementType); err != nil {
 		return err
@@ -696,6 +749,10 @@ func SetEconomyRateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error setting economy rate", http.StatusInternalServerError)
 		return
 	}
+
+	// Broadcast immediately so every client's economy dashboard reflects the
+	// new rate (and its knock-on effects) without waiting for the next tick.
+	game.GetEngine().Advance()
 
 	// Return updated kingdom detail
 	detail, err := database.GetKingdomDetail(pc.CountryID)

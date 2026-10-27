@@ -21,17 +21,18 @@ type GameState struct {
 }
 
 type CountryState struct {
-	ID            int64   `json:"id"`
-	Name          string  `json:"name"`
-	Code          string  `json:"code"`
-	Color         string  `json:"color"`
-	OwnerID       *int64  `json:"owner_id"`
-	OwnerName     *string `json:"owner_name"` // Username of the player who owns it, if any
-	Population    int64   `json:"population"`
-	Resources     int64   `json:"resources"`
-	TerritoryType string  `json:"territory_type"`
-	Borders       string  `json:"borders"`
-	IsIsland      bool    `json:"is_island"`
+	ID            int64        `json:"id"`
+	Name          string       `json:"name"`
+	Code          string       `json:"code"`
+	Color         string       `json:"color"`
+	OwnerID       *int64       `json:"owner_id"`
+	OwnerName     *string      `json:"owner_name"` // Username of the player who owns it, if any
+	Population    int64        `json:"population"`
+	Resources     int64        `json:"resources"`
+	TerritoryType string       `json:"territory_type"`
+	Borders       string       `json:"borders"`
+	IsIsland      bool         `json:"is_island"`
+	Economy       EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
 type PlayerState struct {
@@ -113,6 +114,46 @@ func (g *GameEngine) Advance() GameState {
 	return state
 }
 
+// TickEconomy applies one economic cycle to every owned country: the
+// treasury gains (or loses) the budget balance and population drifts with
+// prosperity, then the new state is broadcast to all clients.
+func (g *GameEngine) TickEconomy() {
+	countries, err := database.GetCountries("medieval")
+	if err != nil {
+		log.Printf("Error getting countries for economy tick: %v", err)
+		return
+	}
+	changed := false
+	for _, c := range countries {
+		if c.OwnerID == nil {
+			continue // unclaimed kingdoms stagnate
+		}
+		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure)
+		newResources := c.Resources + econ.BudgetBalance
+		if newResources < -10000 {
+			newResources = -10000 // bounded debt
+		}
+		if newResources != c.Resources {
+			if err := database.UpdateCountryResources(c.ID, newResources); err != nil {
+				log.Printf("Error applying budget for country %d: %v", c.ID, err)
+				continue
+			}
+			changed = true
+		}
+		newPopulation := c.Population + PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure)
+		if newPopulation != c.Population {
+			if err := database.UpdateCountryPopulation(c.ID, newPopulation); err != nil {
+				log.Printf("Error applying growth for country %d: %v", c.ID, err)
+				continue
+			}
+			changed = true
+		}
+	}
+	if changed {
+		g.Advance()
+	}
+}
+
 // BuildState rebuilds the canonical world from PostgreSQL. It is called by
 // Advance after every mutation and can also be called on demand.
 func (g *GameEngine) BuildState() GameState {
@@ -133,6 +174,7 @@ func (g *GameEngine) BuildState() GameState {
 			TerritoryType: c.TerritoryType,
 			Borders:       c.Borders,
 			IsIsland:      c.IsIsland,
+			Economy:       ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure),
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID
