@@ -100,6 +100,10 @@ func setupRouter() *mux.Router {
 	api.HandleFunc("/my-country", handlers.GetPlayerCountryHandler).Methods("GET")
 	api.HandleFunc("/heartbeat", handlers.HeartbeatHandler).Methods("POST")
 	api.HandleFunc("/action", handlers.ActionHandler).Methods("POST")
+	api.HandleFunc("/troops", handlers.GetTroopsHandler).Methods("GET")
+	api.HandleFunc("/kingdom-detail", handlers.GetKingdomDetailHandler).Methods("GET")
+	api.HandleFunc("/diplomacy", handlers.GetDiplomacyHandler).Methods("GET")
+api.HandleFunc("/set-economy-rate", handlers.SetEconomyRateHandler).Methods("POST")
 
 	// WebSocket endpoint
 	r.HandleFunc("/ws", wsHandler)

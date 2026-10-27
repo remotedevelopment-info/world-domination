@@ -28,6 +28,7 @@ type Country struct {
 	ParentID      *int64    `json:"parent_id"`  // For states within countries (e.g., California within USA)
 	Population    int64     `json:"population"`
 	Resources     int64     `json:"resources"`
+	Troops        int64     `json:"troops"`     // Central troop count for this kingdom
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
@@ -57,13 +58,17 @@ type PlayerCountry struct {
 
 // GameAction represents an action taken by a player
 type GameAction struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	CountryID   int64     `json:"country_id"`
-	ActionType  string    `json:"action_type"` // diplomacy, economic, military, political
-	Description string    `json:"description"`
-	GameDate    time.Time `json:"game_date"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID              int64     `json:"id"`
+	UserID          int64     `json:"user_id"`
+	CountryID       int64     `json:"country_id"`
+	ActionType      string    `json:"action_type"` // diplomacy, economic, military, political
+	Description     string    `json:"description"`
+	TargetCountryID *int64   `json:"target_country_id,omitempty"`
+	Direction       string    `json:"direction,omitempty"`   // N, S, E, W, or 0-360 degrees
+	Speed           string    `json:"speed,omitempty"`       // Slow, Fast
+	MovementType    string    `json:"movement_type,omitempty"` // interior, target
+	GameDate        time.Time `json:"game_date"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // Era represents a game board/era configuration

@@ -206,6 +206,216 @@ body {
    !important is required so it beats display rules like .modal { display: flex; }. */
 .hidden { display: none !important; }
 
+/* Action modal auxiliary fields: shown conditionally based on selected action. */
+.action-field {
+    margin: 12px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.action-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+    color: #e0e0e0;
+}
+.action-field select,
+.action-field input[type="radio"] {
+    margin-top: 4px;
+}
+.action-field select {
+    width: 100%;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.95em;
+}
+.action-field select:focus {
+    outline: none;
+    border-color: #ffd700;
+}
+
+/* Country Detail Modal: close-up view of an owned kingdom. */
+.country-detail-panel {
+    max-width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.detail-section {
+    margin: 20px 0;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.detail-section h4 {
+    color: #ffd700;
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.detail-section p {
+    margin: 6px 0;
+    font-size: 0.95em;
+    color: #e0e0e0;
+}
+.detail-section p strong {
+    color: #fff;
+}
+
+/* Kingdom Command Center: game-like control panel with dials and meters. */
+.command-center-panel {
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #ffd700;
+    padding-bottom: 10px;
+}
+.command-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.5em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.command-meters {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+}
+.command-meter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px 8px;
+}
+.meter-label {
+    font-size: 0.75em;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+.meter-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: conic-gradient(
+        #ffd700 0deg,
+        rgba(255, 215, 0, 0.15) 0deg
+    );
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+}
+.meter-circle::after {
+    content: "";
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    background: #1a1a2e;
+    border-radius: 50%;
+}
+.meter-value {
+    font-weight: bold;
+    color: #fff;
+    font-size: 1.1em;
+}
+.command-minimap-wrap {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+.command-diplomacy {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+.diplomacy-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.diplomacy-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.diplomacy-row .rel-country {
+    font-weight: bold;
+    color: #fff;
+    font-size: 0.9em;
+}
+.diplomacy-row .rel-action {
+    font-size: 0.8em;
+    color: #aaa;
+    margin-left: 8px;
+}
+.diplomacy-row .rel-badge {
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.rel-badge.envoy { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; border: 1px solid #4ecdc4; }
+.rel-badge.alliance { background: rgba(255, 215, 0, 0.2); color: #ffd700; border: 1px solid #ffd700; }
+.rel-badge.war { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; border: 1px solid #ff6b6b; }
+.rel-badge.trade { background: rgba(136, 136, 255, 0.2); color: #8888ff; border: 1px solid #8888ff; }
+.command-actions {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+.command-actions .action-buttons {
+    display: flex;
+    gap: 10px;
+}
+.command-actions .cc-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.1s;
+}
+.command-actions .cc-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+}
+.command-actions .cc-btn-diplo { background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); color: #1a1a2e; }
+.command-actions .cc-btn-econ { background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%); color: #1a1a2e; }
+.command-actions .cc-btn-mil { background: linear-gradient(135deg, #ff6b6b 0%, #c44d4d 100%); color: #fff; }
+
 /* Auth screen status area: shows validation errors and success feedback. */
 .auth-message { margin-top: 15px; min-height: 20px; font-size: 0.95em; }
 .auth-message.error { color: #ff6b6b; }

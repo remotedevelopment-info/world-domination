@@ -108,6 +108,8 @@ func InitSchema() error {
 		parent_id INTEGER REFERENCES countries(id),
 		population BIGINT DEFAULT 1000,
 		resources BIGINT DEFAULT 100,
+		troops BIGINT DEFAULT 0,
+		economy_rate INTEGER DEFAULT 50,
 		territory_type VARCHAR(50) DEFAULT 'kingdom',
 		era VARCHAR(50) DEFAULT 'medieval',
 		is_island BOOLEAN DEFAULT false,
@@ -118,6 +120,25 @@ func InitSchema() error {
 
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS is_island BOOLEAN DEFAULT false;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS borders JSONB DEFAULT '{"borders": []}'::jsonb;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS economy_rate INTEGER DEFAULT 50;
+
+	CREATE TABLE IF NOT EXISTS troop_movements (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		country_id INTEGER NOT NULL REFERENCES countries(id),
+		from_side VARCHAR(10) NOT NULL,
+		to_side VARCHAR(10) NOT NULL,
+		troop_count INTEGER DEFAULT 1,
+		speed VARCHAR(10) NOT NULL,
+		start_tick BIGINT DEFAULT 0,
+		end_tick BIGINT DEFAULT 0,
+		status VARCHAR(20) DEFAULT 'transit',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_troop_movements_user ON troop_movements(user_id, country_id);
+	CREATE INDEX IF NOT EXISTS idx_troop_movements_status ON troop_movements(status);
 
 	CREATE TABLE IF NOT EXISTS player_countries (
 		id SERIAL PRIMARY KEY,
@@ -147,14 +168,39 @@ func InitSchema() error {
 		country_id INTEGER NOT NULL REFERENCES countries(id),
 		action_type VARCHAR(50) NOT NULL,
 		description TEXT,
+		target_country_id INTEGER REFERENCES countries(id),
+		direction VARCHAR(10),
+		speed VARCHAR(10),
+		movement_type VARCHAR(20),
 		tick BIGINT DEFAULT 0,
 		game_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
 
+	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS target_country_id INTEGER REFERENCES countries(id);
+	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS direction VARCHAR(10);
+	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS speed VARCHAR(10);
+	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS movement_type VARCHAR(20);
 	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS tick BIGINT DEFAULT 0;
 	ALTER TABLE game_actions ADD COLUMN IF NOT EXISTS game_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 	ALTER TABLE game_actions ALTER COLUMN tick SET DEFAULT 0;
+
+	CREATE INDEX IF NOT EXISTS idx_game_actions_target ON game_actions(target_country_id);
+
+	CREATE TABLE IF NOT EXISTS troop_deployments (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		country_id INTEGER NOT NULL REFERENCES countries(id),
+		border_side VARCHAR(10) NOT NULL,
+		direction VARCHAR(10),
+		speed VARCHAR(10),
+		strength INTEGER DEFAULT 1,
+		deployed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_troop_deployments_user_country ON troop_deployments(user_id, country_id);
+	CREATE INDEX IF NOT EXISTS idx_troop_deployments_border ON troop_deployments(country_id, border_side);
 
 	CREATE INDEX IF NOT EXISTS idx_countries_owner ON countries(owner_id);
 	CREATE INDEX IF NOT EXISTS idx_game_states_tick ON game_states(tick);
@@ -299,7 +345,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.territory_type, c.borders, c.is_island
+		c.population, c.resources, c.troops, c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1`, era)
 	if err != nil {
@@ -311,7 +357,7 @@ func GetCountries(era string) ([]models.Country, error) {
 	for rows.Next() {
 		var c models.Country
 		var ownerID, ownerName sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
@@ -436,11 +482,13 @@ func MarkPlayerCountryInactive(userID, countryID int64) error {
 }
 
 // LogAction records an action in the audit table.
-func LogAction(userID, countryID int64, actionType, description string) error {
+func LogAction(userID, countryID int64, actionType, description string,
+	targetCountryID *int64, direction, speed, movementType string) error {
 	return DB.QueryRow(
-		`INSERT INTO game_actions (user_id, country_id, action_type, description, game_date)
-		 VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
-		userID, countryID, actionType, description).Err()
+		`INSERT INTO game_actions (user_id, country_id, action_type, description,
+		             target_country_id, direction, speed, movement_type, game_date)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
+		userID, countryID, actionType, description, targetCountryID, direction, speed, movementType).Err()
 }
 
 // UpdateCountryResources sets the resource total for a kingdom.
@@ -452,6 +500,220 @@ func UpdateCountryResources(countryID int64, resources int64) error {
 // UpdateCountryPopulation sets the population for a kingdom.
 func UpdateCountryPopulation(countryID int64, population int64) error {
 	_, err := DB.Exec("UPDATE countries SET population = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", population, countryID)
+	return err
+}
+
+// GetTroops returns the central troop count and per-border deployment counts
+// for a country.
+func GetTroops(countryID int64) (central int64, borders map[string]int64, err error) {
+	borders = map[string]int64{"N": 0, "S": 0, "E": 0, "W": 0}
+
+	// Central troops stored on the countries row.
+	err = DB.QueryRow(`SELECT troops FROM countries WHERE id = $1`, countryID).Scan(&central)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	// Per-border deployment strengths from troop_deployments.
+	rows, err := DB.Query(
+		`SELECT border_side, COALESCE(SUM(strength), 0)
+		 FROM troop_deployments
+		 WHERE country_id = $1
+		 GROUP BY border_side`, countryID)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var side string
+		var count int64
+		if err := rows.Scan(&side, &count); err != nil {
+			return 0, nil, err
+		}
+		borders[side] = count
+	}
+	return central, borders, rows.Err()
+}
+
+// KingdomDetailRow consolidates all data needed for the command center view.
+type KingdomDetailRow struct {
+	CountryID     int64
+	Name          string
+	Code          string
+	Population    int64
+	Resources     int64
+	Troops        int64
+	EconomyRate   int64
+	OwnerID       *int64
+	OwnerName     *string
+	CentralTroops int64
+	BorderTroops  map[string]int64
+}
+
+// GetKingdomDetail returns all command-center data for a country: basic info,
+// central troop count, and per-border deployment counts.
+func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
+	var r KingdomDetailRow
+	r.BorderTroops = map[string]int64{"N": 0, "S": 0, "E": 0, "W": 0}
+
+	err := DB.QueryRow(
+		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops, c.economy_rate,
+		       c.owner_id, u.username
+		 FROM countries c
+		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
+		 LEFT JOIN users u ON u.id = pc.user_id
+		 WHERE c.id = $1`,
+		countryID,
+	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops, &r.EconomyRate,
+		&r.OwnerID, &r.OwnerName)
+	if err != nil {
+		return nil, err
+	}
+
+	central, borders, err := GetTroops(countryID)
+	if err != nil {
+		return nil, err
+	}
+	r.CentralTroops = central
+	r.BorderTroops = borders
+	return &r, nil
+}
+
+// DiplomaticRelationRow describes the diplomatic status with one target country.
+type DiplomaticRelationRow struct {
+	TargetCountryID int64  `json:"target_country_id"`
+	TargetName      string `json:"target_name"`
+	ActionType      string `json:"action_type"`   // diplomacy
+	Description     string `json:"description"`   // e.g. "sent envoy"
+	GameDate        string `json:"game_date"`     // ISO timestamp
+}
+
+// GetDiplomaticRelations returns all diplomacy actions involving the given
+// country (either as sender or target), grouped by target country.
+func GetDiplomaticRelations(countryID int64) ([]DiplomaticRelationRow, error) {
+	rows, err := DB.Query(
+		`SELECT DISTINCT ON (target_country_id)
+		       target_country_id,
+		       tc.name AS target_name,
+		       action_type,
+		       description,
+		       game_date::text
+		 FROM game_actions ga
+		 JOIN countries tc ON tc.id = ga.target_country_id
+		 WHERE ga.action_type = 'diplomacy'
+		   AND (ga.country_id = $1 OR ga.target_country_id = $1)
+		   AND ga.target_country_id IS NOT NULL
+		 ORDER BY target_country_id, ga.id DESC`,
+		countryID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []DiplomaticRelationRow
+	for rows.Next() {
+		var r DiplomaticRelationRow
+		if err := rows.Scan(&r.TargetCountryID, &r.TargetName, &r.ActionType,
+			&r.Description, &r.GameDate); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// EconomyRateRow describes the economic rate setting for a country.
+type EconomyRateRow struct {
+	CountryID   int64 `json:"country_id"`
+	EconomyRate int64 `json:"economy_rate"`
+}
+
+// GetEconomyRate returns the current economy_rate for a country.
+func GetEconomyRate(countryID int64) (int64, error) {
+	var rate int64
+	err := DB.QueryRow(`SELECT economy_rate FROM countries WHERE id = $1`, countryID).Scan(&rate)
+	return rate, err
+}
+
+// SetEconomyRate updates the economy_rate for a country.
+func SetEconomyRate(countryID int64, rate int64) error {
+	_, err := DB.Exec(`UPDATE countries SET economy_rate = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, rate, countryID)
+	return err
+}
+
+// TroopMovementRow describes a troop movement in progress or completed.
+type TroopMovementRow struct {
+	ID          int64  `json:"id"`
+	UserID      int64  `json:"user_id"`
+	CountryID   int64  `json:"country_id"`
+	FromSide    string `json:"from_side"`
+	ToSide      string `json:"to_side"`
+	TroopCount  int64  `json:"troop_count"`
+	Speed       string `json:"speed"`
+	StartTick   int64  `json:"start_tick"`
+	EndTick     int64  `json:"end_tick"`
+	Status      string `json:"status"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// CreateTroopMovement records a new troop movement from one side to another.
+func CreateTroopMovement(userID, countryID int64, fromSide, toSide, speed string, troopCount int64, startTick, endTick int64) error {
+	_, err := DB.Exec(
+		`INSERT INTO troop_movements (user_id, country_id, from_side, to_side, troop_count, speed, start_tick, end_tick, status, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'transit', CURRENT_TIMESTAMP)`,
+		userID, countryID, fromSide, toSide, troopCount, speed, startTick, endTick,
+	)
+	return err
+}
+
+// GetTroopMovements returns all troop movements for a country, optionally filtered by status.
+func GetTroopMovements(countryID int64, status string) ([]TroopMovementRow, error) {
+	var rows *sql.Rows
+	var err error
+	if status != "" {
+		rows, err = DB.Query(
+			`SELECT id, user_id, country_id, from_side, to_side, troop_count, speed, start_tick, end_tick, status, created_at::text
+			 FROM troop_movements
+			 WHERE country_id = $1 AND status = $2
+			 ORDER BY created_at DESC`,
+			countryID, status,
+		)
+	} else {
+		rows, err = DB.Query(
+			`SELECT id, user_id, country_id, from_side, to_side, troop_count, speed, start_tick, end_tick, status, created_at::text
+			 FROM troop_movements
+			 WHERE country_id = $1
+			 ORDER BY created_at DESC`,
+			countryID,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []TroopMovementRow
+	for rows.Next() {
+		var r TroopMovementRow
+		if err := rows.Scan(&r.ID, &r.UserID, &r.CountryID, &r.FromSide, &r.ToSide, &r.TroopCount, &r.Speed, &r.StartTick, &r.EndTick, &r.Status, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// UpdateTroopMovementStatus updates the status of a troop movement.
+func UpdateTroopMovementStatus(movementID int64, status string) error {
+	_, err := DB.Exec(`UPDATE troop_movements SET status = $1 WHERE id = $2`, status, movementID)
+	return err
+}
+
+// UpdateCountryTroops sets the troop total for a kingdom.
+func UpdateCountryTroops(countryID int64, troops int64) error {
+	_, err := DB.Exec("UPDATE countries SET troops = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", troops, countryID)
 	return err
 }
 
@@ -489,16 +751,21 @@ func GetActivePlayers() ([]ActivePlayerRow, error) {
 
 // ActionRow describes one logged game action.
 type ActionRow struct {
-	UserID      int64
-	CountryID   int64
-	ActionType  string
-	Description string
+	UserID         int64
+	CountryID      int64
+	ActionType     string
+	Description    string
+	TargetCountryID *int64
+	Direction      string
+	Speed          string
+	MovementType   string
 }
 
 // GetRecentActions returns the most recent actions, newest first.
 func GetRecentActions(limit int) ([]ActionRow, error) {
 	rows, err := DB.Query(
-		`SELECT user_id, country_id, action_type, description
+		`SELECT user_id, country_id, action_type, description,
+		       target_country_id, direction, speed, movement_type
 		 FROM game_actions
 		 ORDER BY id DESC
 		 LIMIT $1`, limit)
@@ -510,7 +777,8 @@ func GetRecentActions(limit int) ([]ActionRow, error) {
 	var result []ActionRow
 	for rows.Next() {
 		var r ActionRow
-		if err := rows.Scan(&r.UserID, &r.CountryID, &r.ActionType, &r.Description); err != nil {
+		if err := rows.Scan(&r.UserID, &r.CountryID, &r.ActionType, &r.Description,
+			&r.TargetCountryID, &r.Direction, &r.Speed, &r.MovementType); err != nil {
 			return nil, err
 		}
 		result = append(result, r)

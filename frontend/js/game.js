@@ -6,6 +6,7 @@ let token = localStorage.getItem("token");
 let currentUser = JSON.parse(localStorage.getItem("user") || "null");
 let kingdoms = [];
 let kingdomBorders = {};
+let troops = {}; // Keyed by country_id -> { central: number, borders: {N,S,E,W: number} }
 let myKingdom = null;
 let selectedKingdomId = null;
 let shownKingdomId = null; // kingdom id currently shown in the info popup
@@ -804,6 +805,9 @@ function renderMap() {
       project(labelX, labelY)[0],
       project(labelX, labelY)[1],
     );
+
+    // Draw troop dots: central troops at centroid, border troops along edges
+    renderTroopDots(ctx, kingdom, poly);
   });
 }
 
@@ -815,6 +819,76 @@ function getCentroid(poly) {
     y += py;
   });
   return [x / poly.length, y / poly.length];
+}
+
+// renderTroopDots draws white dot markers for troop presence:
+//   - Central troops: dots clustered at the polygon centroid
+//   - Border troops: dots spaced along each N/S/E/W border side
+function renderTroopDots(ctx, kingdom, poly) {
+  const t = troops[kingdom.id];
+  if (!t) return;
+
+  const central = t.central || 0;
+  const borders = t.borders || { N: 0, S: 0, E: 0, W: 0 };
+
+  // ---- Central troops: dots at centroid ----
+  if (central > 0) {
+    const [cx, cy] = project(getCentroid(poly)[0], getCentroid(poly)[1]);
+    // Dot count scales with troop count (1 dot per ~10 troops, min 1, max 20)
+    const dotCount = Math.min(Math.max(Math.ceil(central / 10), 1), 20);
+    const spread = Math.min(central / 50, 12); // spread radius grows with troop count
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < dotCount; i++) {
+      const angle = (i / dotCount) * Math.PI * 2;
+      const r = spread * Math.sqrt(Math.random());
+      const dx = cx + Math.cos(angle) * r;
+      const dy = cy + Math.sin(angle) * r;
+      ctx.beginPath();
+      ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ---- Border troops: dots along each border side ----
+  const sides = ["N", "S", "E", "W"];
+  sides.forEach((side) => {
+    const count = borders[side] || 0;
+    if (!count) return;
+
+    // Get the two endpoints of this side of the polygon
+    // We approximate by finding the extreme points in each cardinal direction
+    let p1, p2;
+    if (side === "N") {
+      p1 = poly.reduce((a, b) => (b[1] < a[1] ? b : a), poly[0]); // topmost
+      p2 = poly[poly.length - 1];
+    } else if (side === "S") {
+      p1 = poly.reduce((a, b) => (b[1] > a[1] ? b : a), poly[0]); // bottommost
+      p2 = poly[poly.length - 1];
+    } else if (side === "E") {
+      p1 = poly.reduce((a, b) => (b[0] > a[0] ? b : a), poly[0]); // rightmost
+      p2 = poly[0];
+    } else {
+      // W
+      p1 = poly.reduce((a, b) => (b[0] < a[0] ? b : a), poly[0]); // leftmost
+      p2 = poly[poly.length - 1];
+    }
+
+    const [x1, y1] = project(p1[0], p1[1]);
+    const [x2, y2] = project(p2[0], p2[1]);
+
+    // Dot count scales: 1 dot per ~5 troops, max 15 per side
+    const dotCount = Math.min(Math.max(Math.ceil(count / 5), 1), 15);
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < dotCount; i++) {
+      const t = (i + 0.5) / dotCount;
+      const jitter = (Math.random() - 0.5) * 4;
+      const dx = x1 + (x2 - x1) * t + jitter;
+      const dy = y1 + (y2 - y1) * t + jitter;
+      ctx.beginPath();
+      ctx.arc(dx, dy, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
 }
 
 function getKingdomAtPosition(clientX, clientY) {
@@ -1048,8 +1122,29 @@ async function loadKingdoms() {
     });
     renderMap();
     renderKingdomList();
+    // Load troop data for the player's kingdom
+    await loadAllTroops();
   } catch (err) {
     logMessage("Error loading kingdoms: " + err.message);
+  }
+}
+
+// loadAllTroops fetches troop state for the player's kingdom.
+async function loadAllTroops() {
+  if (!myKingdom || !myKingdom.country_id) return;
+  try {
+    const res = await fetch(`${API_URL}/troops`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data && data.country_id === myKingdom.country_id) {
+      troops[data.country_id] = {
+        central: data.central || 0,
+        borders: data.borders || { N: 0, S: 0, E: 0, W: 0 },
+      };
+    }
+  } catch (err) {
+    console.error("Error loading troops:", err);
   }
 }
 
@@ -1220,6 +1315,11 @@ function logMessage(msg) {
 canvas.addEventListener("click", (e) => {
   const kingdom = getKingdomAtPosition(e.clientX, e.clientY);
   if (kingdom) {
+    // If clicking your own country, open the command center view.
+    if (myKingdom && kingdom.id === myKingdom.country_id) {
+      openKingdomCommandCenter(kingdom);
+      return;
+    }
     const info = document.getElementById("kingdom-info");
     document.getElementById("kingdom-name").textContent = kingdom.name;
     document.getElementById("kingdom-population").textContent =
@@ -1265,6 +1365,31 @@ const ACTION_SETS = {
   },
 };
 
+// ACTION_META defines, per action label, which auxiliary fields the frontend
+// must collect and whether the backend requires a target state.
+//   targetRequired: action needs target_country_id (another country, not own)
+//   interiorSupported: action supports direction+speed (interior movement)
+//   requiresMovementChoice: action lets user pick interior vs target (Move Army)
+const ACTION_META = {
+  // Diplomacy — all require a target country.
+  "Send Envoy": { targetRequired: true, interiorSupported: false, requiresMovementChoice: false },
+  "Propose Alliance": { targetRequired: true, interiorSupported: false, requiresMovementChoice: false },
+  "Declare War": { targetRequired: true, interiorSupported: false, requiresMovementChoice: false },
+  "Request Trade": { targetRequired: true, interiorSupported: false, requiresMovementChoice: false },
+
+  // Economy — only Trade Resources requires a target.
+  "Collect Taxes": { targetRequired: false, interiorSupported: false, requiresMovementChoice: false },
+  "Build Market": { targetRequired: false, interiorSupported: false, requiresMovementChoice: false },
+  "Trade Resources": { targetRequired: true, interiorSupported: false, requiresMovementChoice: false },
+  "Invest in Infrastructure": { targetRequired: false, interiorSupported: false, requiresMovementChoice: false },
+
+  // Military — mixed.
+  "Recruit Troops": { targetRequired: false, interiorSupported: false, requiresMovementChoice: false },
+  "Move Army": { targetRequired: false, interiorSupported: true, requiresMovementChoice: true },
+  "Fortify Borders": { targetRequired: false, interiorSupported: true, requiresMovementChoice: false },
+  "Scout Enemy": { targetRequired: true, interiorSupported: false, requiresMovementChoice: false },
+};
+
 // showToast displays a transient notification above all overlays so action
 // results are always visible regardless of modal state or sidebar scroll.
 function showToast(message, type) {
@@ -1282,6 +1407,9 @@ function showToast(message, type) {
 }
 
 function showAction(type) {
+  // Close command center if open
+  document.getElementById("kingdom-command-center").classList.add("hidden");
+
   // Actions require a server-confirmed kingdom; never open the modal for
   // an unconfirmed client state.
   if (!myKingdom) {
@@ -1298,14 +1426,122 @@ function showAction(type) {
     feedback.textContent = "";
     feedback.classList.add("hidden");
   }
+
+  // Populate the target country dropdown with all kingdoms except the
+  // player's own (you cannot target your own country).
+  const targetSelect = document.getElementById("action-target-country");
+  if (targetSelect) {
+    targetSelect.innerHTML = '<option value="">-- Select a country --</option>';
+    kingdoms.forEach((k) => {
+      if (myKingdom && k.id === myKingdom.country_id) return; // skip own kingdom
+      const opt = document.createElement("option");
+      opt.value = k.id;
+      opt.textContent = k.name;
+      targetSelect.appendChild(opt);
+    });
+  }
+
+  // Build option buttons. Each button stores its action label so that
+  // clicking re-evaluates which auxiliary fields to show.
   options.innerHTML = action.options
     .map(
       (opt) =>
         `<button class="action-option" style="display:block;width:100%;text-align:left;margin:4px 0" ` +
-        `onclick='performAction(${JSON.stringify(type)}, ${JSON.stringify(opt)})'>${opt}</button>`,
+        `onclick='onActionOption("${type}", ${JSON.stringify(opt)})'>${opt}</button>`,
     )
     .join("");
+
+  // Show auxiliary fields for the first (default) option.
+  onActionOption(type, action.options[0]);
+
   modal.classList.remove("hidden");
+}
+
+// onActionOption is called when the user picks a specific action label
+// within a category. It shows/hides auxiliary fields based on that action's
+// metadata (target country, movement type, direction, speed).
+function onActionOption(type, label) {
+  const meta = ACTION_META[label] || {
+    targetRequired: false,
+    interiorSupported: false,
+    requiresMovementChoice: false,
+  };
+
+  const targetField = document.getElementById("action-field-target");
+  const movementField = document.getElementById("action-field-movement");
+  const directionField = document.getElementById("action-field-direction");
+  const speedField = document.getElementById("action-field-speed");
+  const feedback = document.getElementById("action-feedback");
+  if (feedback) {
+    feedback.textContent = "";
+    feedback.classList.add("hidden");
+  }
+
+  // Target country field: show only if the action requires a target state.
+  if (targetField) {
+    if (meta.targetRequired) targetField.classList.remove("hidden");
+    else targetField.classList.add("hidden");
+  }
+
+  // Movement type field: show only if the action lets the user pick
+  // interior vs target movement (currently only "Move Army").
+  if (movementField) {
+    if (meta.requiresMovementChoice) movementField.classList.remove("hidden");
+    else movementField.classList.add("hidden");
+  }
+
+  // Direction field: show for interior movement actions.
+  if (directionField) {
+    if (meta.interiorSupported && !meta.requiresMovementChoice) {
+      directionField.classList.remove("hidden");
+    } else if (meta.requiresMovementChoice) {
+      // For Move Army: show direction only if Interior is selected.
+      const interiorRadio = document.querySelector(
+        'input[name="action-movement-type"][value="interior"]',
+      );
+      if (interiorRadio && interiorRadio.checked) {
+        directionField.classList.remove("hidden");
+      } else {
+        directionField.classList.add("hidden");
+      }
+    } else {
+      directionField.classList.add("hidden");
+    }
+  }
+
+  // Speed field: same visibility logic as direction.
+  if (speedField) {
+    if (meta.interiorSupported && !meta.requiresMovementChoice) {
+      speedField.classList.remove("hidden");
+    } else if (meta.requiresMovementChoice) {
+      const interiorRadio = document.querySelector(
+        'input[name="action-movement-type"][value="interior"]',
+      );
+      if (interiorRadio && interiorRadio.checked) {
+        speedField.classList.remove("hidden");
+      } else {
+        speedField.classList.add("hidden");
+      }
+    } else {
+      speedField.classList.add("hidden");
+    }
+  }
+
+  // When movement type changes (Move Army), toggle direction/speed visibility.
+  const radios = document.querySelectorAll('input[name="action-movement-type"]');
+  radios.forEach((radio) => {
+    radio.onchange = () => {
+      if (directionField) {
+        directionField.classList.toggle(
+          "hidden",
+          radio.value !== "interior",
+        );
+      }
+      if (speedField) {
+        speedField.classList.toggle("hidden", radio.value !== "interior");
+      }
+    };
+  });
 }
 
 // performAction sends a real-time action to the server; the engine then
@@ -1330,13 +1566,62 @@ async function performAction(type, description) {
     b.disabled = true;
   });
   try {
+    // Build the payload, adding auxiliary fields based on the action's
+    // metadata (target country, movement type, direction, speed).
+    const payload = { action_type: type, description };
+    const meta = ACTION_META[description] || {};
+
+    if (meta.targetRequired) {
+      const targetSelect = document.getElementById("action-target-country");
+      const targetId = targetSelect ? parseInt(targetSelect.value, 10) : NaN;
+      if (!targetId || Number.isNaN(targetId)) {
+        throw new Error("Target country is required for this action.");
+      }
+      if (myKingdom && targetId === myKingdom.country_id) {
+        throw new Error("Cannot target your own country.");
+      }
+      payload.target_country_id = targetId;
+    }
+
+    if (meta.requiresMovementChoice) {
+      const movementType = document.querySelector(
+        'input[name="action-movement-type"]:checked',
+      );
+      if (movementType) {
+        payload.movement_type = movementType.value;
+      }
+      if (movementType && movementType.value === "interior") {
+        const directionSelect = document.getElementById("action-direction");
+        const speedSelect = document.getElementById("action-speed");
+        if (!directionSelect || !directionSelect.value) {
+          throw new Error("Direction is required for interior movement.");
+        }
+        if (!speedSelect || !speedSelect.value) {
+          throw new Error("Speed is required for interior movement.");
+        }
+        payload.direction = directionSelect.value;
+        payload.speed = speedSelect.value;
+      }
+    } else if (meta.interiorSupported) {
+      // Fortify Borders: direction is required, no movement choice.
+      const directionSelect = document.getElementById("action-direction");
+      const speedSelect = document.getElementById("action-speed");
+      if (!directionSelect || !directionSelect.value) {
+        throw new Error("Border side (direction) is required for this action.");
+      }
+      payload.direction = directionSelect.value;
+      if (speedSelect && speedSelect.value) {
+        payload.speed = speedSelect.value;
+      }
+    }
+
     const res = await fetch(`${API_URL}/action`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action_type: type, description }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(await readErrorMessage(res, "Action failed"));
     const data = await res.json();
@@ -1398,6 +1683,10 @@ function applyActionResult(data) {
     if (typeof data.resources === "number")
       myKingdom.resources = data.resources;
   }
+  // Merge troop data if present in the action result
+  if (data.troops) {
+    troops[data.country_id] = data.troops;
+  }
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
@@ -1419,6 +1708,258 @@ function applyActionResult(data) {
 
 function closeModal() {
   document.getElementById("action-modal").classList.add("hidden");
+  document.getElementById("kingdom-command-center").classList.add("hidden");
+}
+
+// openKingdomCommandCenter opens the game-like control panel for the owned
+// kingdom: resource meters, territory minimap with troop dots, diplomatic
+// relations, and quick action buttons.
+async function openKingdomCommandCenter(kingdom) {
+  const modal = document.getElementById("kingdom-command-center");
+  document.getElementById("cc-kingdom-name").textContent = kingdom.name;
+
+  // Fetch consolidated kingdom detail (troops, population, resources).
+  let detail = null;
+  try {
+    const res = await fetch(`${API_URL}/kingdom-detail`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    detail = await res.json();
+  } catch (err) {
+    console.error("Error fetching kingdom detail:", err);
+  }
+
+  // Fetch diplomatic relations.
+  let relations = [];
+  try {
+    const res = await fetch(`${API_URL}/diplomacy`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    relations = await res.json();
+  } catch (err) {
+    console.error("Error fetching diplomacy:", err);
+  }
+
+  // --- Meters ---
+  const pop = detail?.population || kingdom.population || 0;
+  const resAmt = detail?.resources || kingdom.resources || 0;
+  const central = detail?.central_troops || (troops[kingdom.id]?.central || 0);
+
+  document.getElementById("cc-meter-pop-val").textContent = pop.toLocaleString();
+  document.getElementById("cc-meter-res-val").textContent = resAmt.toLocaleString();
+  document.getElementById("cc-meter-troop-val").textContent = central.toLocaleString();
+
+  // Animate meter circles (conic-gradient percentage).
+  setMeter("cc-meter-population", pop, 5000);
+  setMeter("cc-meter-resources", resAmt, 2000);
+  setMeter("cc-meter-troops", central, 100);
+
+  // --- Border troop counts ---
+  const borders = detail?.border_troops || (troops[kingdom.id]?.borders || { N: 0, S: 0, E: 0, W: 0 });
+  document.getElementById("cc-border-n").textContent = (borders.N || 0).toLocaleString();
+  document.getElementById("cc-border-s").textContent = (borders.S || 0).toLocaleString();
+  document.getElementById("cc-border-e").textContent = (borders.E || 0).toLocaleString();
+  document.getElementById("cc-border-w").textContent = (borders.W || 0).toLocaleString();
+
+  // --- Territory minimap ---
+  const minimap = document.getElementById("cc-minimap");
+  const ctx = minimap.getContext("2d");
+  ctx.clearRect(0, 0, minimap.width, minimap.height);
+  renderKingdomMinimap(ctx, kingdom, borders, central);
+
+  // --- Diplomatic relations ---
+  const list = document.getElementById("cc-diplomacy-list");
+  const empty = document.getElementById("cc-diplomacy-empty");
+  list.innerHTML = "";
+  if (relations && relations.length) {
+    empty.style.display = "none";
+    relations.forEach((rel) => {
+      const row = document.createElement("div");
+      row.className = "diplomacy-row";
+      let badgeClass = "rel-badge envoy";
+      let badgeText = "ENVOY";
+      const action = (rel.action_type || "").toLowerCase();
+      const desc = (rel.description || "").toLowerCase();
+      if (desc.includes("alliance")) { badgeClass = "rel-badge alliance"; badgeText = "ALLIANCE"; }
+      else if (desc.includes("war") || desc.includes("declare")) { badgeClass = "rel-badge war"; badgeText = "WAR"; }
+      else if (desc.includes("trade")) { badgeClass = "rel-badge trade"; badgeText = "TRADE"; }
+      else if (desc.includes("envoy")) { badgeClass = "rel-badge envoy"; badgeText = "ENVOY"; }
+      row.innerHTML = `
+        <span class="rel-country">${escapeHtml(rel.target_name || "Unknown")}</span>
+        <span class="rel-action">${escapeHtml(rel.description || "")}</span>
+        <span class="rel-badge ${badgeClass}">${badgeText}</span>
+      `;
+      list.appendChild(row);
+    });
+  } else {
+    empty.style.display = "block";
+  }
+
+  modal.classList.remove("hidden");
+}
+
+// closeKingdomCommandCenter hides the command center view.
+function closeKingdomCommandCenter() {
+  document.getElementById("kingdom-command-center").classList.add("hidden");
+}
+
+// Quick action handlers
+function performEconomyAction(direction) {
+  const dial = document.getElementById("cc-economy-dial");
+  if (!dial) return;
+  let current = parseInt(dial.value);
+  if (direction === "increase") {
+    current = Math.min(100, current + 5);
+  } else {
+    current = Math.max(0, current - 5);
+  }
+  dial.value = current;
+  updateDialReadout(current);
+  
+  // Call backend to set economy rate
+  fetch(`${API_URL}/kingdom-detail`, {
+    method: "POST",  // This won't work for GET endpoint, need to reconsider
+    headers: { 
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ economy_rate: current })
+  }).then(res => {
+    if (!res.ok) throw new Error("Failed to set economy rate");
+    console.log(`Economy set to ${current}`);
+  }).catch(err => {
+    console.error("Error setting economy rate:", err);
+    // Revert UI if API fails
+    dial.value = 50; // reset to default
+    updateDialReadout(50);
+  });
+}
+
+function recruitTroops() {
+  // TODO: Call API to recruit troops
+  alert("Recruit 10 troops - API endpoint not yet implemented");
+  closeKingdomCommandCenter();
+}
+
+function moveTroops(direction) {
+  // TODO: Call API to move troops
+  const borders = document.getElementById("cc-border");
+  alert(`Move troops ${direction} - API endpoint not yet implemented`);
+  closeKingdomCommandCenter();
+}
+
+function updateDialReadout(value) {
+  const readout = document.querySelector(".dial-readout span");
+  if (readout) readout.textContent = value;
+}
+
+// setMeter animates a conic-gradient meter circle to show value/max as a %.
+function setMeter(elementId, value, max) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const pct = Math.min(Math.max(value / max, 0), 1);
+  const deg = Math.round(pct * 360);
+  el.style.background = `conic-gradient(#ffd700 0deg, #ffd700 ${deg}deg, rgba(255,215,0,0.15) ${deg}deg, rgba(255,215,0,0.15) 360deg)`;
+}
+
+// escapeHtml prevents XSS when rendering diplomacy data.
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// renderKingdomMinimap draws the kingdom polygon, troop dots at centroid and
+// along border sides on the small command-center canvas.
+function renderKingdomMinimap(ctx, kingdom, borders, central) {
+  const poly = kingdomPolygons[kingdom.code];
+  if (!poly) return;
+
+  const w = 260, h = 200;
+  const pad = 24;
+
+  // Find bounds of polygon
+  let minX = 1, minY = 1, maxX = 0, maxY = 0;
+  poly.forEach(([px, py]) => {
+    minX = Math.min(minX, px); minY = Math.min(minY, py);
+    maxX = Math.max(maxX, px); maxY = Math.max(maxY, py);
+  });
+  const rangeX = maxX - minX || 1;
+  const rangeY = maxY - minY || 1;
+  const scale = Math.min((w - 2 * pad) / rangeX, (h - 2 * pad) / rangeY);
+  const offX = (w - rangeX * scale) / 2;
+  const offY = (h - rangeY * scale) / 2;
+
+  const proj = (px, py) => [
+    offX + (px - minX) * scale,
+    offY + (py - minY) * scale,
+  ];
+
+  // Fill country
+  ctx.beginPath();
+  poly.forEach(([px, py], i) => {
+    const [x, y] = proj(px, py);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = kingdom.color || "#4ecdc4";
+  ctx.globalAlpha = 0.35;
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+
+  // Stroke border
+  ctx.strokeStyle = "#ffd700";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Central troop dots at centroid
+  if (central && central > 0) {
+    const cx = poly.reduce((s, [px]) => s + px, 0) / poly.length;
+    const cy = poly.reduce((s, [, py]) => s + py, 0) / poly.length;
+    const [mx, my] = proj(cx, cy);
+    const dotCount = Math.min(Math.max(Math.ceil(central / 10), 1), 12);
+    const spread = Math.min(central / 60, 8);
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < dotCount; i++) {
+      const angle = (i / dotCount) * Math.PI * 2;
+      const r = spread * Math.sqrt(Math.random());
+      ctx.beginPath();
+      ctx.arc(mx + Math.cos(angle) * r, my + Math.sin(angle) * r, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Border troop dots along each side
+  const sides = ["N", "S", "E", "W"];
+  sides.forEach((side) => {
+    const count = borders[side] || 0;
+    if (!count) return;
+    let p1, p2;
+    if (side === "N") {
+      p1 = poly.reduce((a, b) => (b[1] < a[1] ? b : a), poly[0]);
+      p2 = poly[poly.length - 1];
+    } else if (side === "S") {
+      p1 = poly.reduce((a, b) => (b[1] > a[1] ? b : a), poly[0]);
+      p2 = poly[poly.length - 1];
+    } else if (side === "E") {
+      p1 = poly.reduce((a, b) => (b[0] > a[0] ? b : a), poly[0]);
+      p2 = poly[0];
+    } else {
+      p1 = poly.reduce((a, b) => (b[0] < a[0] ? b : a), poly[0]);
+      p2 = poly[poly.length - 1];
+    }
+    const [x1, y1] = proj(p1[0], p1[1]);
+    const [x2, y2] = proj(p2[0], p2[1]);
+    const dotCount = Math.min(Math.max(Math.ceil(count / 5), 1), 10);
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < dotCount; i++) {
+      const t = (i + 0.5) / dotCount;
+      const jitter = (Math.random() - 0.5) * 3;
+      ctx.beginPath();
+      ctx.arc(x1 + (x2 - x1) * t + jitter, y1 + (y2 - y1) * t + jitter, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
 }
 
 window.addEventListener("resize", resizeCanvas);

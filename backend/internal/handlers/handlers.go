@@ -3,13 +3,16 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"kingdom-conquest/backend/internal/database"
 	"kingdom-conquest/backend/internal/game"
+	"kingdom-conquest/backend/internal/models"
 	"kingdom-conquest/backend/pkg/auth"
 )
 
@@ -242,10 +245,106 @@ func GetPlayerCountryHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// GetTroopsHandler returns the troop deployment state for a country.
+// Response: { central: number, borders: { N, S, E, W } }
+func GetTroopsHandler(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	pc, err := database.GetPlayerCountry(user.UserID)
+	if err != nil || pc == nil {
+		http.Error(w, "No country assigned", http.StatusBadRequest)
+		return
+	}
+
+	countryID := pc.CountryID
+	central, borders, err := database.GetTroops(countryID)
+	if err != nil {
+		http.Error(w, "Error fetching troops", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"country_id": countryID,
+		"central":    central,
+		"borders":    borders,
+	})
+}
+
+// GetKingdomDetailHandler returns consolidated command-center data for the
+// player's owned kingdom.
+// Response: { country_id, name, code, population, resources, troops,
+//   central_troops, border_troops: {N,S,E,W}, owner_name }
+func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	pc, err := database.GetPlayerCountry(user.UserID)
+	if err != nil || pc == nil {
+		http.Error(w, "No country assigned", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil {
+		http.Error(w, "Error fetching kingdom detail", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"country_id":     detail.CountryID,
+		"name":           detail.Name,
+		"code":           detail.Code,
+		"population":     detail.Population,
+		"resources":      detail.Resources,
+		"troops":         detail.Troops,
+		"central_troops": detail.CentralTroops,
+		"border_troops":  detail.BorderTroops,
+		"owner_name":     detail.OwnerName,
+	})
+}
+
+// GetDiplomacyHandler returns diplomatic relations for the player's kingdom.
+// Response: [{ target_country_id, target_name, action_type, description, game_date }]
+func GetDiplomacyHandler(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	pc, err := database.GetPlayerCountry(user.UserID)
+	if err != nil || pc == nil {
+		http.Error(w, "No country assigned", http.StatusBadRequest)
+		return
+	}
+
+	relations, err := database.GetDiplomaticRelations(pc.CountryID)
+	if err != nil {
+		http.Error(w, "Error fetching diplomatic relations", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(relations)
+}
+
 // ActionRequest carries one real-time action.
 type ActionRequest struct {
-	ActionType  string `json:"action_type"`
-	Description string `json:"description"`
+	ActionType    string `json:"action_type"`    // diplomacy, economy, military
+	Description   string `json:"description"`    // human-readable action label
+	TargetCountryID *int64 `json:"target_country_id,omitempty"` // required for target-state actions
+	Direction     string `json:"direction,omitempty"`   // N, S, E, W, or 0-360 (interior movement)
+	Speed         string `json:"speed,omitempty"`       // Slow, Fast (interior movement)
+	MovementType  string `json:"movement_type,omitempty"` // interior, target
 }
 
 // ActionHandler handles diplomacy / economy / military actions. Each action
@@ -274,17 +373,17 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch actionType {
 	case "economy":
-		if err := handleEconomy(user.UserID, req.Description); err != nil {
+		if err := handleEconomy(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	case "diplomacy":
-		if err := handleDiplomacy(user.UserID, req.Description); err != nil {
+		if err := handleDiplomacy(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	case "military":
-		if err := handleMilitary(user.UserID, req.Description); err != nil {
+		if err := handleMilitary(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -332,10 +431,19 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleEconomy applies a tax/market action to the player's kingdom.
-func handleEconomy(userID int64, description string) error {
+func handleEconomy(userID int64, description string, req ActionRequest) error {
 	pc, err := database.GetPlayerCountry(userID)
 	if err != nil || pc == nil {
 		return errors.New("no country assigned")
+	}
+	// Trade Resources requires a target country; other economy actions do not.
+	if description == "Trade Resources" {
+		if req.TargetCountryID == nil || *req.TargetCountryID == 0 {
+			return errors.New("target country required for Trade Resources")
+		}
+		if *req.TargetCountryID == pc.CountryID {
+			return errors.New("cannot target own country for Trade Resources")
+		}
 	}
 	countries, err := database.GetCountries("medieval")
 	if err != nil {
@@ -355,39 +463,72 @@ func handleEconomy(userID int64, description string) error {
 	if err := database.UpdateCountryResources(pc.CountryID, resources+tax); err != nil {
 		return err
 	}
-	if err := database.LogAction(userID, pc.CountryID, "economy", "collected taxes ("+strconv.FormatInt(tax, 10)+" resources)"); err != nil {
+	if err := database.LogAction(userID, pc.CountryID, "economy", description,
+		req.TargetCountryID, req.Direction, req.Speed, req.MovementType); err != nil {
 		return err
 	}
 	return nil
 }
 
 // handleDiplomacy logs a diplomacy action (e.g. envoy).
-func handleDiplomacy(userID int64, description string) error {
+// All diplomacy options require a target state (another country).
+func handleDiplomacy(userID int64, description string, req ActionRequest) error {
 	pc, err := database.GetPlayerCountry(userID)
 	if err != nil || pc == nil {
 		return errors.New("no country assigned")
+	}
+	// Diplomacy always requires a target country.
+	if req.TargetCountryID == nil || *req.TargetCountryID == 0 {
+		return errors.New("target country required for diplomacy action")
+	}
+	if *req.TargetCountryID == pc.CountryID {
+		return errors.New("cannot target own country for diplomacy action")
 	}
 	desc := description
 	if desc == "" {
 		desc = "sent envoy"
 	}
-	return database.LogAction(userID, pc.CountryID, "diplomacy", desc)
+	return database.LogAction(userID, pc.CountryID, "diplomacy", desc,
+		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
 
-// handleMilitary applies a recruitment action to the player's kingdom.
-func handleMilitary(userID int64, description string) error {
+// handleMilitary applies a recruitment/movement action to the player's kingdom.
+// Military actions have mixed target requirements:
+//   - Recruit Troops: no target, interior movement
+//   - Move Army: interior (direction+speed) OR target (target_country_id)
+//   - Fortify Borders: no target, interior movement
+//   - Scout Enemy: target country required
+func handleMilitary(userID int64, description string, req ActionRequest) error {
 	pc, err := database.GetPlayerCountry(userID)
 	if err != nil || pc == nil {
 		return errors.New("no country assigned")
 	}
+
+	switch description {
+	case "Recruit Troops":
+		return handleMilitaryRecruit(userID, pc, req)
+	case "Move Army":
+		return handleMilitaryMove(userID, pc, req)
+	case "Fortify Borders":
+		return handleMilitaryFortify(userID, pc, req)
+	case "Scout Enemy":
+		return handleMilitaryScout(userID, pc, req)
+	default:
+		return handleMilitaryRecruit(userID, pc, req)
+	}
+}
+
+// handleMilitaryRecruit recruits troops within the player's own kingdom.
+// Recruited troops accumulate at a central location in the country.
+func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
 	countries, err := database.GetCountries("medieval")
 	if err != nil {
 		return err
 	}
-	var population, resources int64
+	var population, resources, troops int64
 	for _, c := range countries {
 		if c.ID == pc.CountryID {
-			population, resources = c.Population, c.Resources
+			population, resources, troops = c.Population, c.Resources, c.Troops
 			break
 		}
 	}
@@ -400,13 +541,176 @@ func handleMilitary(userID int64, description string) error {
 	}
 	population += 10
 	resources -= cost
+	troops += 10 // Recruited troops accumulate at central location
 	if err := database.UpdateCountryResources(pc.CountryID, resources); err != nil {
 		return err
 	}
 	if err := database.UpdateCountryPopulation(pc.CountryID, population); err != nil {
 		return err
 	}
-	return database.LogAction(userID, pc.CountryID, "military", "recruited troops ("+strconv.FormatInt(cost, 10)+" resources, +10 population)")
+	if err := database.UpdateCountryTroops(pc.CountryID, troops); err != nil {
+		return err
+	}
+	return database.LogAction(userID, pc.CountryID, "military", "recruited troops ("+strconv.FormatInt(cost, 10)+" resources, +10 population)",
+		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+}
+
+// handleMilitaryMove moves troops either interior (guard a border) or toward a target.
+func handleMilitaryMove(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
+	movementType := req.MovementType
+	if movementType == "" {
+		// Infer movement type from what was provided.
+		if req.TargetCountryID != nil && *req.TargetCountryID != 0 {
+			movementType = "target"
+		} else if req.Direction != "" && req.Speed != "" {
+			movementType = "interior"
+		}
+	}
+
+	if movementType == "interior" {
+		// Interior movement: direction + speed required, no target country.
+		if req.Direction == "" || req.Speed == "" {
+			return errors.New("direction and speed required for interior army movement")
+		}
+		if req.TargetCountryID != nil && *req.TargetCountryID != 0 {
+			return errors.New("target country not allowed for interior movement")
+		}
+		// Persist troop deployment to the specified border side.
+		borderSide := directionToBorderSide(req.Direction)
+		strength := 10 // Each Move Army action deploys 10 troops
+		if _, err := database.DB.Exec(
+			`INSERT INTO troop_deployments (user_id, country_id, border_side, direction, speed, strength, deployed_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			 ON CONFLICT DO NOTHING`,
+			userID, pc.CountryID, borderSide, req.Direction, req.Speed, strength); err != nil {
+			return err
+		}
+	} else if movementType == "target" {
+		// Target movement: target country required.
+		if req.TargetCountryID == nil || *req.TargetCountryID == 0 {
+			return errors.New("target country required for target army movement")
+		}
+		if *req.TargetCountryID == pc.CountryID {
+			return errors.New("cannot target own country for army movement")
+		}
+		if req.Direction != "" || req.Speed != "" {
+			return errors.New("direction and speed not allowed for target movement")
+		}
+	} else {
+		return errors.New("either target country or direction+speed required for Move Army")
+	}
+	return database.LogAction(userID, pc.CountryID, "military", "moved army",
+		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+}
+
+// directionToBorderSide converts a compass direction or degrees to a border side.
+func directionToBorderSide(direction string) string {
+	switch direction {
+	case "N":
+		return "N"
+	case "S":
+		return "S"
+	case "E":
+		return "E"
+	case "W":
+		return "W"
+	default:
+		// Try to parse as degrees (0-360) and map to nearest cardinal direction.
+		var deg float64
+		if _, err := fmt.Sscanf(direction, "%f", &deg); err == nil {
+			// Normalize to 0-360
+			deg = math.Mod(deg, 360)
+			if deg < 0 {
+				deg += 360
+			}
+			switch {
+			case deg >= 337.5 || deg < 22.5:
+				return "N"
+			case deg >= 22.5 && deg < 67.5:
+				return "E"
+			case deg >= 67.5 && deg < 112.5:
+				return "S"
+			case deg >= 112.5 && deg < 157.5:
+				return "E" // SE -> closest side; keeping simple cardinal
+			case deg >= 157.5 && deg < 202.5:
+				return "S"
+			case deg >= 202.5 && deg < 247.5:
+				return "W"
+			case deg >= 247.5 && deg < 292.5:
+				return "W"
+			case deg >= 292.5 && deg < 337.5:
+				return "N"
+			}
+		}
+		return "N" // Default fallback
+	}
+}
+
+// handleMilitaryFortify fortifies an owned border side.
+func handleMilitaryFortify(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
+	if req.TargetCountryID != nil && *req.TargetCountryID != 0 {
+		return errors.New("target country not allowed for fortify borders")
+	}
+	if req.Direction == "" {
+		return errors.New("border side required for fortify borders")
+	}
+	return database.LogAction(userID, pc.CountryID, "military", "fortified borders",
+		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+}
+
+// handleMilitaryScout scouts an enemy country.
+func handleMilitaryScout(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
+	if req.TargetCountryID == nil || *req.TargetCountryID == 0 {
+		return errors.New("target country required for scout enemy")
+	}
+	if *req.TargetCountryID == pc.CountryID {
+		return errors.New("cannot target own country for scout enemy")
+	}
+	return database.LogAction(userID, pc.CountryID, "military", "scouted enemy",
+		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+}
+
+func SetEconomyRateHandler(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	pc, err := database.GetPlayerCountry(user.UserID)
+	if err != nil || pc == nil {
+		http.Error(w, "No country assigned", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		EconomyRate int64 `json:"economy_rate"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	err = database.SetEconomyRate(pc.CountryID, req.EconomyRate)
+	if err != nil {
+		http.Error(w, "Error setting economy rate", http.StatusInternalServerError)
+		return
+	}
+
+	// Return updated kingdom detail
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil {
+		http.Error(w, "Error fetching updated detail", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"country_id": detail.CountryID,
+		"name":       detail.Name,
+		"code":       detail.Code,
+		"economy_rate": detail.EconomyRate,
+	})
 }
 
 func HeartbeatHandler(w http.ResponseWriter, r *http.Request) {
