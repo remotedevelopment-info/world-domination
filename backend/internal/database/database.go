@@ -112,6 +112,8 @@ func InitSchema() error {
 		economy_rate INTEGER DEFAULT 50,
 		markets INTEGER DEFAULT 0,
 		infrastructure INTEGER DEFAULT 0,
+		investment INTEGER DEFAULT 0,
+		social_costs INTEGER DEFAULT 0,
 		territory_type VARCHAR(50) DEFAULT 'kingdom',
 		era VARCHAR(50) DEFAULT 'medieval',
 		is_island BOOLEAN DEFAULT false,
@@ -126,6 +128,8 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS economy_rate INTEGER DEFAULT 50;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS markets INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS infrastructure INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS investment INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS social_costs INTEGER DEFAULT 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
 		id SERIAL PRIMARY KEY,
@@ -349,7 +353,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.territory_type, c.borders, c.is_island
+		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs, c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1`, era)
 	if err != nil {
@@ -361,7 +365,7 @@ func GetCountries(era string) ([]models.Country, error) {
 	for rows.Next() {
 		var c models.Country
 		var ownerID, ownerName sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
@@ -634,11 +638,35 @@ type EconomyRateRow struct {
 	EconomyRate int64 `json:"economy_rate"`
 }
 
+// EconomySettingsRow describes the economic settings for a country.
+type EconomySettingsRow struct {
+	CountryID   int64 `json:"country_id"`
+	EconomyRate int64 `json:"economy_rate"`
+	Investment  int64 `json:"investment"`
+	SocialCosts int64 `json:"social_costs"`
+}
+
 // GetEconomyRate returns the current economy_rate for a country.
 func GetEconomyRate(countryID int64) (int64, error) {
 	var rate int64
 	err := DB.QueryRow(`SELECT economy_rate FROM countries WHERE id = $1`, countryID).Scan(&rate)
 	return rate, err
+}
+
+// GetEconomySettings returns the economic settings for a country.
+func GetEconomySettings(countryID int64) (EconomySettingsRow, error) {
+	var r EconomySettingsRow
+	err := DB.QueryRow(`SELECT economy_rate, investment, social_costs FROM countries WHERE id = $1`, countryID).Scan(&r.EconomyRate, &r.Investment, &r.SocialCosts)
+	if err == sql.ErrNoRows {
+		return r, nil
+	}
+	return r, err
+}
+
+// SetEconomySettings updates the economic settings for a country.
+func SetEconomySettings(countryID int64, rate, investment, socialCosts int64) error {
+	_, err := DB.Exec(`UPDATE countries SET economy_rate = $1, investment = $2, social_costs = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`, rate, investment, socialCosts, countryID)
+	return err
 }
 
 // SetEconomyRate updates the economy_rate for a country.

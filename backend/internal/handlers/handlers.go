@@ -783,4 +783,68 @@ func HeartbeatHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "active",
 	})
+
+
+// SetEconomySettingsHandler persists the tax rate, investment, and social-cost
+// sliders for a country and broadcasts the resulting economy state. All levers
+// persist, so their effect on future economic periods is automatic on the next
+// tick.
+func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	pc, err := database.GetPlayerCountry(user.UserID)
+	if err != nil || pc == nil {
+		http.Error(w, "No country assigned", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		EconomyRate int64 `json:"economy_rate"`
+		Investment  int64 `json:"investment"`
+		SocialCosts int64 `json:"social_costs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	err = database.SetEconomySettings(pc.CountryID, req.EconomyRate, req.Investment, req.SocialCosts)
+	if err != nil {
+		http.Error(w, "Error setting economy settings", http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast immediately so the computed inflation, currency value, and GDP
+	// reflect the new settings.
+	game.GetEngine().Advance()
+
+	// Return the updated settings and derived economy
+	settings, err := database.GetEconomySettings(pc.CountryID)
+	if err != nil {
+		http.Error(w, "Error fetching updated settings", http.StatusInternalServerError)
+		return
+	}
+
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil {
+		http.Error(w, "Error fetching updated detail", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"country_id":     detail.CountryID,
+		"name":           detail.Name,
+		"code":           detail.Code,
+		"economy_rate":   settings.EconomyRate,
+		"investment":     settings.Investment,
+		"social_costs":   settings.SocialCosts,
+		"gdp":            detail.GDP,
+		"currency_value": detail.CurrencyValue,
+		"inflation_rate": detail.InflationRate,
+	})
 }

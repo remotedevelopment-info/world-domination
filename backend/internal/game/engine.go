@@ -128,7 +128,7 @@ func (g *GameEngine) TickEconomy() {
 		if c.OwnerID == nil {
 			continue // unclaimed kingdoms stagnate
 		}
-		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure)
+		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
 		newResources := c.Resources + econ.BudgetBalance
 		if newResources < -10000 {
 			newResources = -10000 // bounded debt
@@ -140,7 +140,7 @@ func (g *GameEngine) TickEconomy() {
 			}
 			changed = true
 		}
-		newPopulation := c.Population + PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure)
+		newPopulation := c.Population + PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
 		if newPopulation != c.Population {
 			if err := database.UpdateCountryPopulation(c.ID, newPopulation); err != nil {
 				log.Printf("Error applying growth for country %d: %v", c.ID, err)
@@ -174,7 +174,7 @@ func (g *GameEngine) BuildState() GameState {
 			TerritoryType: c.TerritoryType,
 			Borders:       c.Borders,
 			IsIsland:      c.IsIsland,
-			Economy:       ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure),
+			Economy:       ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts),
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID

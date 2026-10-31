@@ -105,6 +105,8 @@ func setupRouter() *mux.Router {
 	api.HandleFunc("/diplomacy", handlers.GetDiplomacyHandler).Methods("GET")
 api.HandleFunc("/set-economy-rate", handlers.SetEconomyRateHandler).Methods("POST")
 
+api.HandleFunc("/set-economy-settings", handlers.SetEconomySettingsHandler).Methods("POST")
+
 	// WebSocket endpoint
 	r.HandleFunc("/ws", wsHandler)
 

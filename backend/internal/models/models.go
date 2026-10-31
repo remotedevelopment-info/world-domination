@@ -30,6 +30,8 @@ type Country struct {
 	Resources     int64     `json:"resources"`
 	Troops        int64     `json:"troops"`     // Central troop count for this kingdom
 	EconomyRate   int64     `json:"economy_rate"`  // Tax rate 0-100 set by the owning player
+	Investment    int64     `json:"investment"`    // Future GDP multiplier (0-100 slider)
+	SocialCosts   int64     `json:"social_costs"`  // Growth/wealth vs currency strength (0-100 slider)
 	Markets       int64     `json:"markets"`       // Build level: boosts trade output
 	Infrastructure int64    `json:"infrastructure"` // Build level: boosts productivity & growth
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
