@@ -172,108 +172,505 @@
                 </div>
             </div>
 
-            <!-- Kingdom Command Center Modal (control panel for owned country) -->
+            <!-- Kingdom Command Center Modal (War Room Console with Dials, Meters, and Controls) -->
             <div id="kingdom-command-center" class="hidden modal">
-                <div class="modal-content command-center-panel">
-                    <div class="command-header">
-                        <h3 id="cc-kingdom-name"></h3>
-                        <button onclick="closeKingdomCommandCenter()" class="close-btn">×</button>
-                    </div>
-
-                    <!-- Resource & troop meters -->
-                    <div class="command-meters">
-                        <div class="command-meter">
-                            <div class="meter-label">Population</div>
-                            <div class="meter-circle" id="cc-meter-population"></div>
-                            <div class="meter-value" id="cc-meter-pop-val">0</div>
-                        </div>
-                        <div class="command-meter">
-                            <div class="meter-label">Resources</div>
-                            <div class="meter-circle" id="cc-meter-resources"></div>
-                            <div class="meter-value" id="cc-meter-res-val">0</div>
-                        </div>
-                        <div class="command-meter">
-                            <div class="meter-label">Central Troops</div>
-                            <div class="meter-circle" id="cc-meter-troops"></div>
-                            <div class="meter-value" id="cc-meter-troop-val">0</div>
-                        </div>
-                    </div>
-
-                    <!-- Economy dial -->
-                    <div class="command-meter" style="order: 5;">
-                        <div class="meter-label">Economy Rate</div>
-                        <div id="cc-economy-dial" class="dial-face">
-                            <div class="dial-arc"></div>
-                            <div class="dial-ticks"></div>
-                            <div class="dial-labels">
-                                <span class="label-0">0</span>
-                                <span class="label-25">25</span>
-                                <span class="label-50">50</span>
-                                <span class="label-75">75</span>
-                                <span class="label-100">100</span>
-                            </div>
-                            <div class="dial-pointer"></div>
-                        </div>
-                        <div class="dial-readout">
-                            <span class="dial-label">ECONOMY RATE</span>
-                            <span class="dial-value" id="cc-economy-dial-value">50</span>
-                            <span class="dial-unit">%</span>
-                        </div>
-                    </div>
-
-                    <!-- Territory minimap with troop dots -->
-                    <div class="command-minimap-wrap">
-                        <h4
-                            style="margin:0 0 8px 0;color:#ffd700;font-size:0.9em;text-transform:uppercase;letter-spacing:1px;">
-                            Territory</h4>
-                        <canvas id="cc-minimap" width="260" height="200"
-                            style="width:260px;height:200px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:6px;"></canvas>
-                        <div class="command-border-legs" style="display:flex;gap:10px;margin-top:8px;">
-                            <div style="flex:1;text-align:center;font-size:0.8em;">
-                                <div style="color:#aaa;">N</div>
-                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-n">0</div>
-                            </div>
-                            <div style="flex:1;text-align:center;font-size:0.8em;">
-                                <div style="color:#aaa;">S</div>
-                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-s">0</div>
-                            </div>
-                            <div style="flex:1;text-align:center;font-size:0.8em;">
-                                <div style="color:#aaa;">E</div>
-                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-e">0</div>
-                            </div>
-                            <div style="flex:1;text-align:center;font-size:0.8em;">
-                                <div style="color:#aaa;">W</div>
-                                <div style="font-weight:bold;color:#ffd700;" id="cc-border-w">0</div>
+                <div class="modal-content command-center-panel war-room-console">
+                    <!-- Console Header: Crest, Titles, Status, Bay Nav, Close -->
+                    <div class="console-header">
+                        <div class="console-title-group">
+                            <span class="realm-crest" id="cc-realm-crest">🏰</span>
+                            <div>
+                                <h2 id="cc-kingdom-name" class="console-title">KINGDOM COMMAND CONSOLE</h2>
+                                <div class="console-subtext">
+                                    <span id="cc-ruler-name">Lord Sovereign</span> · 
+                                    <span id="cc-kingdom-code" class="code-badge">KINGDOM</span> · 
+                                    <span class="console-status-lamp active">REAL-TIME VARIABLE CONTROL</span>
+                                </div>
                             </div>
                         </div>
+                        <div class="console-nav-tabs">
+                            <button class="nav-tab active" data-bay="all" onclick="switchConsoleBay('all')">🎛️ Master Console</button>
+                            <button class="nav-tab" data-bay="fiscal" onclick="switchConsoleBay('fiscal')">💰 Treasury &amp; Economy</button>
+                            <button class="nav-tab" data-bay="military" onclick="switchConsoleBay('military')">⚔️ Military &amp; Defense</button>
+                            <button class="nav-tab" data-bay="diplomacy" onclick="switchConsoleBay('diplomacy')">🤝 Foreign Affairs</button>
+                        </div>
+                        <button onclick="closeKingdomCommandCenter()" class="console-close-btn" title="Close Control Panel">×</button>
                     </div>
 
-                    <!-- Diplomatic relations -->
-                    <div class="command-diplomacy">
-                        <h4
-                            style="margin:0 0 10px 0;color:#ffd700;font-size:0.9em;text-transform:uppercase;letter-spacing:1px;">
-                            Diplomatic Relations</h4>
-                        <div id="cc-diplomacy-list" class="diplomacy-list">
-                            <!-- rows injected by JS -->
+                    <!-- Telemetry Bar: 4 Primary Analog Gauges -->
+                    <div class="telemetry-bar">
+                        <!-- Population Gauge -->
+                        <div class="analog-gauge-card" id="gauge-card-pop">
+                            <div class="gauge-header">
+                                <span class="gauge-title">POPULATION</span>
+                                <span class="gauge-delta" id="cc-pop-growth">+0/tick</span>
+                            </div>
+                            <div class="analog-gauge" id="cc-meter-population">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-pop-val">0</span>
+                                <span class="gauge-sub">CITIZENS</span>
+                            </div>
                         </div>
-                        <div id="cc-diplomacy-empty"
-                            style="color:#888;font-size:0.85em;padding:10px;text-align:center;">No diplomatic relations
-                            recorded.</div>
+
+                        <!-- Treasury Reserve Gauge -->
+                        <div class="analog-gauge-card" id="gauge-card-res">
+                            <div class="gauge-header">
+                                <span class="gauge-title">GOLD RESERVES</span>
+                                <span class="gauge-delta" id="cc-budget-balance">+0/tick</span>
+                            </div>
+                            <div class="analog-gauge gold-gauge" id="cc-meter-resources">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-res-val">0</span>
+                                <span class="gauge-sub">GOLD COIN</span>
+                            </div>
+                        </div>
+
+                        <!-- Central Army Armory Gauge -->
+                        <div class="analog-gauge-card" id="gauge-card-troops">
+                            <div class="gauge-header">
+                                <span class="gauge-title">CENTRAL ARMY</span>
+                                <span class="military-tier-badge" id="cc-army-tier">LEVY</span>
+                            </div>
+                            <div class="analog-gauge iron-gauge" id="cc-meter-troops">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-troop-val">0</span>
+                                <span class="gauge-sub">TROOPS READY</span>
+                            </div>
+                        </div>
+
+                        <!-- Economic Vitality Gauge (GDP & Currency Parity) -->
+                        <div class="analog-gauge-card" id="gauge-card-vitality">
+                            <div class="gauge-header">
+                                <span class="gauge-title">GDP PRODUCTIVITY</span>
+                                <span class="gauge-delta" id="cc-currency-val">1.00 gold</span>
+                            </div>
+                            <div class="analog-gauge vitality-gauge" id="cc-meter-gdp">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-gdp-val">0</span>
+                                <span class="gauge-sub">OUTPUT / CYCLE</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Quick actions -->
-                    <div class="command-actions">
-                        <h4
-                            style="margin:0 0 10px 0;color:#ffd700;font-size:0.9em;text-transform:uppercase;letter-spacing:1px;">
-                            Quick Actions</h4>
-                        <div class="action-buttons">
-                            <button onclick="showAction('diplomacy'); closeKingdomCommandCenter();"
-                                class="cc-btn cc-btn-diplo">🤝 Diplomacy</button>
-                            <button onclick="showAction('economy'); closeKingdomCommandCenter();"
-                                class="cc-btn cc-btn-econ">💰 Economy</button>
-                            <button onclick="showAction('military'); closeKingdomCommandCenter();"
-                                class="cc-btn cc-btn-mil">⚔️ Military</button>
+                    <!-- Main Console Bays -->
+                    <div class="console-bays">
+                        <!-- BAY 1: FISCAL & ECONOMIC REGULATOR -->
+                        <section class="console-bay bay-fiscal" id="bay-fiscal">
+                            <div class="bay-plate-title">
+                                <span class="plate-rivet"></span>
+                                <span>💰 FISCAL REGULATOR &amp; TREASURY CONTROLS</span>
+                                <span class="plate-rivet"></span>
+                            </div>
+
+                            <div class="bay-content">
+                                <!-- Rotary Dials: Tax Rate, Investment, Social Spending -->
+                                <div class="dials-row">
+                                    <!-- Tax Rate Dial -->
+                                    <div class="dial-container">
+                                        <div class="control-label">TAX LEVY RATE</div>
+                                        <div id="cc-economy-dial" class="rotary-dial brass-dial" data-dial-type="tax" tabindex="0" role="slider" aria-label="Tax Rate" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="dial-bezel"></div>
+                                            <div class="dial-arc"></div>
+                                            <div class="dial-ticks"></div>
+                                            <div class="dial-labels">
+                                                <span class="label-0">0</span>
+                                                <span class="label-25">25</span>
+                                                <span class="label-50">50</span>
+                                                <span class="label-75">75</span>
+                                                <span class="label-100">100</span>
+                                            </div>
+                                            <div class="dial-sweet-spot" title="Optimal Laffer Band (~58%)"></div>
+                                            <div class="dial-pointer"></div>
+                                        </div>
+                                        <div class="dial-digital-readout">
+                                            <span class="readout-num" id="cc-economy-dial-value">50</span><span class="readout-unit">%</span>
+                                            <div class="readout-hint" id="cc-tax-impact-hint">Tax Revenue: +25/cycle</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Investment Allocation Dial -->
+                                    <div class="dial-container">
+                                        <div class="control-label">CAPITAL INVESTMENT</div>
+                                        <div id="cc-investment-dial" class="rotary-dial cyan-dial" data-dial-type="investment" tabindex="0" role="slider" aria-label="Capital Investment" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="dial-bezel"></div>
+                                            <div class="dial-arc"></div>
+                                            <div class="dial-ticks"></div>
+                                            <div class="dial-labels">
+                                                <span class="label-0">0</span>
+                                                <span class="label-25">25</span>
+                                                <span class="label-50">50</span>
+                                                <span class="label-75">75</span>
+                                                <span class="label-100">100</span>
+                                            </div>
+                                            <div class="dial-pointer"></div>
+                                        </div>
+                                        <div class="dial-digital-readout">
+                                            <span class="readout-num" id="cc-investment-dial-value">0</span><span class="readout-unit">%</span>
+                                            <div class="readout-hint" id="cc-investment-hint">+0.0% GDP Multiplier</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Social Welfare Spending Dial -->
+                                    <div class="dial-container">
+                                        <div class="control-label">SOCIAL WELFARE</div>
+                                        <div id="cc-social-dial" class="rotary-dial purple-dial" data-dial-type="social" tabindex="0" role="slider" aria-label="Social Spending" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="dial-bezel"></div>
+                                            <div class="dial-arc"></div>
+                                            <div class="dial-ticks"></div>
+                                            <div class="dial-labels">
+                                                <span class="label-0">0</span>
+                                                <span class="label-25">25</span>
+                                                <span class="label-50">50</span>
+                                                <span class="label-75">75</span>
+                                                <span class="label-100">100</span>
+                                            </div>
+                                            <div class="dial-pointer"></div>
+                                        </div>
+                                        <div class="dial-digital-readout">
+                                            <span class="readout-num" id="cc-social-dial-value">0</span><span class="readout-unit">%</span>
+                                            <div class="readout-hint" id="cc-social-hint">Growth vs Inflation</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Economic Telemetry & Action Levers -->
+                                <div class="fiscal-levers-panel">
+                                    <!-- Treasury Harvest Lever -->
+                                    <div class="tactical-lever-card">
+                                        <div class="lever-info">
+                                            <div class="lever-title">HARVEST TAX LEVY</div>
+                                            <div class="lever-sub">Collect immediate tax cycle into gold reserve</div>
+                                        </div>
+                                        <button id="cc-lever-collect-taxes" class="mechanical-lever-btn lever-gold" onclick="triggerCollectTaxes()">
+                                            <div class="lever-arm"><div class="lever-knob"></div></div>
+                                            <span class="lever-caption">PULL TO COLLECT</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Stepper: Market Trading Posts -->
+                                    <div class="tactical-stepper-card">
+                                        <div class="stepper-header">
+                                            <span class="stepper-title">MARKET TRADING POSTS</span>
+                                            <span class="stepper-level-text" id="cc-market-level-label">Tier 0</span>
+                                        </div>
+                                        <div class="stepper-pips" id="cc-market-pips">
+                                            <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+                                        </div>
+                                        <div class="stepper-meta">
+                                            <span class="meta-cost">Cost: 200 Gold</span>
+                                            <span class="meta-benefit">+5% Trade GDP</span>
+                                        </div>
+                                        <button id="cc-btn-upgrade-market" class="stepper-actuator-btn" onclick="triggerUpgradeMarket()">
+                                            <span>🏗️ BUILD MARKET POST</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Stepper: Civil Infrastructure -->
+                                    <div class="tactical-stepper-card">
+                                        <div class="stepper-header">
+                                            <span class="stepper-title">CIVIL INFRASTRUCTURE</span>
+                                            <span class="stepper-level-text" id="cc-infra-level-label">Tier 0</span>
+                                        </div>
+                                        <div class="stepper-pips" id="cc-infra-pips">
+                                            <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+                                        </div>
+                                        <div class="stepper-meta">
+                                            <span class="meta-cost">Cost: 150 Gold</span>
+                                            <span class="meta-benefit">+3% Productivity &amp; Pop</span>
+                                        </div>
+                                        <button id="cc-btn-upgrade-infra" class="stepper-actuator-btn" onclick="triggerUpgradeInfra()">
+                                            <span>🛠️ EXPAND INFRASTRUCTURE</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- BAY 2: TACTICAL WAR ROOM & BORDER DEFENSE -->
+                        <section class="console-bay bay-military" id="bay-military">
+                            <div class="bay-plate-title">
+                                <span class="plate-rivet"></span>
+                                <span>⚔️ TACTICAL WAR ROOM &amp; BORDER DEFENSE</span>
+                                <span class="plate-rivet"></span>
+                            </div>
+
+                            <div class="bay-content military-grid">
+                                <!-- Minimap with 4 Border Garrison Gauges -->
+                                <div class="minimap-command-station">
+                                    <div class="station-heading">TERRITORY GARRISONS &amp; FRONTIERS</div>
+                                    
+                                    <div class="minimap-gauge-matrix">
+                                        <!-- North Border Meter -->
+                                        <div class="border-gauge-pod pod-n" id="pod-border-n" onclick="selectCompassSide('N')">
+                                            <div class="pod-dir">NORTH BORDER</div>
+                                            <div class="pod-meter-bar"><div class="pod-bar-fill" id="bar-fill-n"></div></div>
+                                            <div class="pod-val" id="cc-border-n">0</div>
+                                            <div class="pod-hint">TROOPS</div>
+                                        </div>
+
+                                        <div class="matrix-mid-row">
+                                            <!-- West Border Meter -->
+                                            <div class="border-gauge-pod pod-w" id="pod-border-w" onclick="selectCompassSide('W')">
+                                                <div class="pod-dir">WEST</div>
+                                                <div class="pod-meter-bar vertical"><div class="pod-bar-fill" id="bar-fill-w"></div></div>
+                                                <div class="pod-val" id="cc-border-w">0</div>
+                                            </div>
+
+                                            <!-- Minimap Screen -->
+                                            <div class="radar-scope-frame">
+                                                <canvas id="cc-minimap" width="240" height="180"></canvas>
+                                                <div class="scope-grid-overlay"></div>
+                                            </div>
+
+                                            <!-- East Border Meter -->
+                                            <div class="border-gauge-pod pod-e" id="pod-border-e" onclick="selectCompassSide('E')">
+                                                <div class="pod-dir">EAST</div>
+                                                <div class="pod-meter-bar vertical"><div class="pod-bar-fill" id="bar-fill-e"></div></div>
+                                                <div class="pod-val" id="cc-border-e">0</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- South Border Meter -->
+                                        <div class="border-gauge-pod pod-s" id="pod-border-s" onclick="selectCompassSide('S')">
+                                            <div class="pod-dir">SOUTH BORDER</div>
+                                            <div class="pod-meter-bar"><div class="pod-bar-fill" id="bar-fill-s"></div></div>
+                                            <div class="pod-val" id="cc-border-s">0</div>
+                                            <div class="pod-hint">TROOPS</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tactical Controls: Compass Knob, Mode Rocker, Speed Throttle & Deploy Lever -->
+                                <div class="tactical-controls-station">
+                                    <div class="controls-subgrid">
+                                        <!-- Direction Compass Dial -->
+                                        <div class="compass-station">
+                                            <div class="control-label">MARCH DIRECTION COMPASS</div>
+                                            <div class="compass-dial-wrap">
+                                                <div id="cc-compass-dial" class="compass-dial-face" tabindex="0" role="slider" aria-label="March Direction" aria-valuemin="0" aria-valuemax="360">
+                                                    <div class="compass-ring"></div>
+                                                    <div class="compass-ticks"></div>
+                                                    <div class="compass-cardinals">
+                                                        <button type="button" class="cardinal-btn card-n active" onclick="selectCompassSide('N', event)">N</button>
+                                                        <button type="button" class="cardinal-btn card-e" onclick="selectCompassSide('E', event)">E</button>
+                                                        <button type="button" class="cardinal-btn card-s" onclick="selectCompassSide('S', event)">S</button>
+                                                        <button type="button" class="cardinal-btn card-w" onclick="selectCompassSide('W', event)">W</button>
+                                                    </div>
+                                                    <div class="compass-needle" id="cc-compass-needle"></div>
+                                                    <div class="compass-hub"></div>
+                                                </div>
+                                            </div>
+                                            <div class="compass-readout">
+                                                <span class="active-side-badge" id="cc-compass-direction-label">NORTH</span>
+                                                <span class="side-deg" id="cc-compass-deg">0°</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Movement Mode & Speed Switches -->
+                                        <div class="tactical-switches-group">
+                                            <!-- Movement Mode Rocker Switch -->
+                                            <div class="switch-block">
+                                                <div class="control-label">TACTICAL DEPLOYMENT MODE</div>
+                                                <div class="industrial-rocker" id="cc-mode-rocker" onclick="toggleMovementMode()">
+                                                    <div class="rocker-position active" id="rocker-pos-interior">
+                                                        <span class="rocker-indicator"></span>
+                                                        <span>🛡️ INTERIOR DEFENSE</span>
+                                                    </div>
+                                                    <div class="rocker-position" id="rocker-pos-target">
+                                                        <span class="rocker-indicator"></span>
+                                                        <span>⚔️ EXPEDITIONARY</span>
+                                                    </div>
+                                                </div>
+                                                <div class="switch-subtext" id="cc-mode-description">Station 10 troops on selected border side</div>
+                                            </div>
+
+                                            <!-- Speed Throttle Lever -->
+                                            <div class="switch-block">
+                                                <div class="control-label">MARCH TEMPO (SPEED)</div>
+                                                <div class="throttle-lever-track" id="cc-speed-throttle" onclick="toggleMarchSpeed()">
+                                                    <div class="throttle-slot">
+                                                        <div class="throttle-lever" id="cc-throttle-handle">
+                                                            <div class="throttle-knob"></div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="throttle-labels">
+                                                        <span class="th-label active" id="th-label-slow">🐢 SLOW (Defensive)</span>
+                                                        <span class="th-label" id="th-label-fast">⚡ FAST (Forced)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Levers: Conscribe, Fortify, Deploy -->
+                                    <div class="military-actuators-row">
+                                        <!-- Conscribe Troops Lever / Plunger -->
+                                        <div class="actuator-box">
+                                            <button id="cc-lever-recruit" class="chunky-actuator-btn btn-recruit" onclick="triggerRecruitTroops()">
+                                                <span class="btn-icon">🎖️</span>
+                                                <span class="btn-main">CONSCRIBE TROOPS</span>
+                                                <span class="btn-meta" id="cc-recruit-cost-label">Cost: 10 Gold · +10 Troops</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Fortify Border Actuator -->
+                                        <div class="actuator-box">
+                                            <button id="cc-lever-fortify" class="chunky-actuator-btn btn-fortify" onclick="triggerFortifyBorder()">
+                                                <span class="btn-icon">🏰</span>
+                                                <span class="btn-main">FORTIFY BORDER</span>
+                                                <span class="btn-meta" id="cc-fortify-border-label">Reinforce North Frontier</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Master Dispatch Forces Lever -->
+                                        <div class="actuator-box action-master">
+                                            <button id="cc-lever-deploy" class="master-dispatch-lever-btn" onclick="triggerDispatchTroops()">
+                                                <div class="master-lever-handle"><div class="lever-head"></div></div>
+                                                <div class="master-label-block">
+                                                    <span class="master-title">⚔️ DISPATCH FORCES</span>
+                                                    <span class="master-order" id="cc-deploy-order-preview">March to North Border (Slow)</span>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- BAY 3: FOREIGN AFFAIRS & DIPLOMATIC TARGETING -->
+                        <section class="console-bay bay-diplomacy" id="bay-diplomacy">
+                            <div class="bay-plate-title">
+                                <span class="plate-rivet"></span>
+                                <span>🤝 FOREIGN AFFAIRS &amp; DIPLOMATIC RADAR</span>
+                                <span class="plate-rivet"></span>
+                            </div>
+
+                            <div class="bay-content diplomacy-grid">
+                                <!-- Left: Rotary Target Kingdom Selector Wheel -->
+                                <div class="target-radar-station">
+                                    <div class="control-label">TARGET KINGDOM RADAR SELECTOR</div>
+                                    <div class="radar-station-body">
+                                        <!-- Target Selector Dial Wheel -->
+                                        <div class="target-dial-wheel-wrap">
+                                            <button type="button" class="wheel-step-btn prev" onclick="stepTargetKingdom(-1)" title="Previous Kingdom">◀</button>
+                                            <div id="cc-target-dial" class="target-wheel-face" tabindex="0" role="slider" aria-label="Target Kingdom">
+                                                <div class="target-wheel-rim"></div>
+                                                <div class="target-wheel-ticks"></div>
+                                                <div class="target-heraldry-pod" id="cc-target-heraldry-pod">
+                                                    <div class="target-shield-icon" id="cc-target-color-shield">🛡️</div>
+                                                    <div class="target-code-display" id="cc-target-code">FRA</div>
+                                                </div>
+                                                <div class="target-wheel-pointer"></div>
+                                            </div>
+                                            <button type="button" class="wheel-step-btn next" onclick="stepTargetKingdom(1)" title="Next Kingdom">▶</button>
+                                        </div>
+
+                                        <!-- Target Country Telemetry Card -->
+                                        <div class="target-telemetry-card">
+                                            <div class="target-name-banner" id="cc-target-name">Kingdom of France</div>
+                                            <div class="target-detail-rows">
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">RULER:</span>
+                                                    <span class="td-val" id="cc-target-owner">Lord Philip</span>
+                                                </div>
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">POPULATION:</span>
+                                                    <span class="td-val" id="cc-target-pop">1,200</span>
+                                                </div>
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">TREASURY:</span>
+                                                    <span class="td-val" id="cc-target-res">150 gold</span>
+                                                </div>
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">DIPLOMATIC STATUS:</span>
+                                                    <span class="td-val status-badge" id="cc-target-status">At Peace</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right: Diplomatic Stance Selector Knob, Action Lever & Ledger -->
+                                <div class="diplomacy-actions-station">
+                                    <!-- Stance Selector Knob -->
+                                    <div class="stance-selector-box">
+                                        <div class="control-label">DIPLOMATIC STANCE SELECTOR</div>
+                                        <div class="stance-knob-panel">
+                                            <div id="cc-diplo-stance-dial" class="stance-rotary-knob" tabindex="0" role="radiogroup" aria-label="Diplomatic Stance">
+                                                <div class="stance-positions">
+                                                    <button type="button" class="stance-pos-btn pos-envoy active" data-stance="envoy" onclick="selectDiploStance('envoy')">
+                                                        <span class="stance-led"></span>
+                                                        <span>🤝 ENVOY</span>
+                                                    </button>
+                                                    <button type="button" class="stance-pos-btn pos-alliance" data-stance="alliance" onclick="selectDiploStance('alliance')">
+                                                        <span class="stance-led"></span>
+                                                        <span>📜 ALLIANCE</span>
+                                                    </button>
+                                                    <button type="button" class="stance-pos-btn pos-trade" data-stance="trade" onclick="selectDiploStance('trade')">
+                                                        <span class="stance-led"></span>
+                                                        <span>⚖️ TRADE (50G)</span>
+                                                    </button>
+                                                    <button type="button" class="stance-pos-btn pos-war" data-stance="war" onclick="selectDiploStance('war')">
+                                                        <span class="stance-led"></span>
+                                                        <span>⚔️ DECLARE WAR</span>
+                                                    </button>
+                                                </div>
+                                                <div class="stance-pointer-needle" id="cc-stance-pointer"></div>
+                                            </div>
+                                            <div class="stance-description-card" id="cc-stance-description">
+                                                Dispatch royal envoy to initiate formal diplomatic relations and establish emissary presence.
+                                            </div>
+                                        </div>
+
+                                        <!-- Dispatch Diplomatic Mission Master Lever -->
+                                        <button id="cc-lever-dispatch-diplo" class="diplomatic-dispatch-lever-btn" onclick="triggerDispatchDiplomacy()">
+                                            <span class="seal-icon">📜</span>
+                                            <span class="seal-title">SEAL &amp; DISPATCH DIPLOMATIC MISSION</span>
+                                            <span class="seal-sub" id="cc-diplo-mission-preview">Send Envoy to Kingdom of France</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Diplomatic Ledger & Treaties Log -->
+                                    <div class="diplomatic-ledger-box">
+                                        <div class="control-label">DIPLOMATIC TREATIES &amp; RELATIONS LEDGER</div>
+                                        <div id="cc-diplomacy-list" class="ledger-scroll-container">
+                                            <!-- Dynamic rows injected by JS -->
+                                        </div>
+                                        <div id="cc-diplomacy-empty" class="ledger-empty-note">
+                                            No foreign treaties or diplomatic envoys recorded yet.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Console Footer Status -->
+                    <div class="console-footer-bar">
+                        <div class="footer-status-pill">
+                            <span class="live-dot">●</span> <span>MUD SIMULATION AUTHORITY: 90s CYCLE PERSISTENCE</span>
                         </div>
+                        <div class="footer-version-tag">WORLD DOMINATION v0.2.0 · TACTICAL CONSOLE</div>
                     </div>
                 </div>
             </div>

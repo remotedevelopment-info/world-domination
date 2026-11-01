@@ -46,7 +46,7 @@ Frontend
 
 ## Result
 
-Working three-file client: `frontend/index.html` (107 lines; `auth-screen` ↔ `game-screen` switching, sidebar panels, action modal, plain `<script src="js/game.js">` at L106 — no build tooling), `frontend/css/style.css` (202 lines), `frontend/js/game.js` (359 lines; functions grouped by concern — auth/REST, canvas map, WebSocket, activity log, modal). Session persisted in `localStorage` (`token`, `user`); auto-login on reload (`game.js` L360); window-resize canvas re-render; tick and connection status in the header.
+Working three-file client: `frontend/index.html` (auth screen, interactive world map canvas, sidebar panels, and War Room Territory Command Console), `frontend/css/style.css` (custom dark brass/iron console themes, analog gauges, rotary dials, compass, and throttle controls), and `frontend/js/game.js` (auth/REST, WebSocket transport, canvas rendering, rotary dial math engine, and real-time action triggers connected directly to backend endpoints). Clicking owned territory launches the War Room Console with analog meters, rotary dials (Tax Rate, Capital Investment, Social Welfare), border defense compass and garrison pods, radar kingdom selector, and mechanical action levers replacing text menus and dropdowns. Session persisted in `localStorage` (`token`, `user`); auto-login on reload; window-resize canvas re-render; tick and connection status in the header.
 
 Candidate future sub-skills: `state-management/`, `auth-session/`, `rendering/`, `military-ui/`.
 

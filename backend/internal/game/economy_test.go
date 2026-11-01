@@ -49,51 +49,41 @@ t.Errorf("expected stronger currency with larger reserve (%f vs %f)", rich.Curre
 	}
 
 	// Development compounds GDP.
-
-developed := ComputeEconomy(1000, 500, 100, 50, 3, 2, 0, 0, 0, 0)
-if developed.GDP <= base.GDP {
-	
-t.Errorf("expected higher GDP with markets/infrastructure (got %d vs %d)", developed.GDP, base.GDP)
+	developed := ComputeEconomy(1000, 500, 100, 50, 3, 2, 0, 0)
+	if developed.GDP <= base.GDP {
+		t.Errorf("expected higher GDP with markets/infrastructure (got %d vs %d)", developed.GDP, base.GDP)
 	}
 
 	// Surplus strengthens the currency relative to a deficit.
-
-surplus := ComputeEconomy(1000, 500, 0, 50, 0, 0, 0, 0)
-deficit := ComputeEconomy(1000, 500, 100000, 10, 0, 0, 0, 0)
-if surplus.CurrencyValue <= deficit.CurrencyValue {
-	
-t.Errorf("expected surplus currency (%f) above deficit currency (%f)", surplus.CurrencyValue, deficit.CurrencyValue)
+	surplus := ComputeEconomy(1000, 500, 0, 50, 0, 0, 0, 0)
+	deficit := ComputeEconomy(1000, 500, 100000, 10, 0, 0, 0, 0)
+	if surplus.CurrencyValue <= deficit.CurrencyValue {
+		t.Errorf("expected surplus currency (%f) above deficit currency (%f)", surplus.CurrencyValue, deficit.CurrencyValue)
 	}
 
-if surplus.BudgetBalance <= 0 {
-	
-t.Errorf("expected positive balance with no troops (got %d)", surplus.BudgetBalance)
+	if surplus.BudgetBalance <= 0 {
+		t.Errorf("expected positive balance with no troops (got %d)", surplus.BudgetBalance)
 	}
 
-if deficit.BudgetBalance >= 0 {
-	
-t.Errorf("expected negative balance with a huge army (got %d)", deficit.BudgetBalance)
+	if deficit.BudgetBalance >= 0 {
+		t.Errorf("expected negative balance with a huge army (got %d)", deficit.BudgetBalance)
 	}
 }
 
 func TestPopulationGrowth(t *testing.T) {
-
-if g := PopulationGrowth(0, 50); g != 0 {
-	
-t.Errorf("expected no growth for empty kingdom, got %d", g)
+	if g := PopulationGrowth(0, 50, 0, 0, 0, 0); g != 0 {
+		t.Errorf("expected no growth for empty kingdom, got %d", g)
 	}
 
-low := PopulationGrowth(1000, 10, 0, 0)
-high := PopulationGrowth(1000, 90, 0, 0)
-if low <= high {
-	
-t.Errorf("expected higher growth under low taxes (got %d vs %d)", low, high)
+	low := PopulationGrowth(1000, 10, 0, 0, 0, 0)
+	high := PopulationGrowth(1000, 90, 0, 0, 0, 0)
+	if low <= high {
+		t.Errorf("expected higher growth under low taxes (got %d vs %d)", low, high)
 	}
 
-developed := PopulationGrowth(1000, 50, 4, 4, 0, 0)
-base := PopulationGrowth(1000, 50, 0, 0)
-if developed <= base {
-	
-t.Errorf("expected higher growth with development (got %d vs %d)", developed, base)
+	developed := PopulationGrowth(1000, 50, 4, 4, 0, 0)
+	base := PopulationGrowth(1000, 50, 0, 0, 0, 0)
+	if developed <= base {
+		t.Errorf("expected higher growth with development (got %d vs %d)", developed, base)
 	}
 }

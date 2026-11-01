@@ -298,6 +298,11 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts)
+	detail.GDP = econ.GDP
+	detail.CurrencyValue = econ.CurrencyValue
+	detail.InflationRate = econ.InflationRate
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"country_id":     detail.CountryID,
@@ -308,6 +313,14 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"troops":         detail.Troops,
 		"central_troops": detail.CentralTroops,
 		"border_troops":  detail.BorderTroops,
+		"economy_rate":   detail.EconomyRate,
+		"investment":     detail.Investment,
+		"social_costs":   detail.SocialCosts,
+		"markets":        detail.Markets,
+		"infrastructure": detail.Infrastructure,
+		"gdp":            detail.GDP,
+		"currency_value": detail.CurrencyValue,
+		"inflation_rate": detail.InflationRate,
 		"owner_name":     detail.OwnerName,
 	})
 }
@@ -461,7 +474,7 @@ func handleEconomy(userID int64, description string, req ActionRequest) error {
 	switch description {
 	case "Collect Taxes":
 		// One cycle of rate-aware tax revenue, straight into the treasury.
-		econ := game.ComputeEconomy(self.Population, self.Resources, self.Troops, self.EconomyRate, self.Markets, self.Infrastructure)
+		econ := game.ComputeEconomy(self.Population, self.Resources, self.Troops, self.EconomyRate, self.Markets, self.Infrastructure, self.Investment, self.SocialCosts)
 		gain := econ.TaxRevenue
 		if gain < 1 {
 			gain = 1
@@ -761,12 +774,20 @@ func SetEconomyRateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts)
+	detail.GDP = econ.GDP
+	detail.CurrencyValue = econ.CurrencyValue
+	detail.InflationRate = econ.InflationRate
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"country_id": detail.CountryID,
-		"name":       detail.Name,
-		"code":       detail.Code,
-		"economy_rate": detail.EconomyRate,
+		"country_id":     detail.CountryID,
+		"name":           detail.Name,
+		"code":           detail.Code,
+		"economy_rate":   detail.EconomyRate,
+		"gdp":            detail.GDP,
+		"currency_value": detail.CurrencyValue,
+		"inflation_rate": detail.InflationRate,
 	})
 }
 
@@ -783,6 +804,7 @@ func HeartbeatHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "active",
 	})
+}
 
 
 // SetEconomySettingsHandler persists the tax rate, investment, and social-cost
@@ -834,6 +856,11 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error fetching updated detail", http.StatusInternalServerError)
 		return
 	}
+
+	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts)
+	detail.GDP = econ.GDP
+	detail.CurrencyValue = econ.CurrencyValue
+	detail.InflationRate = econ.InflationRate
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

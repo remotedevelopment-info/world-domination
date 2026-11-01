@@ -546,17 +546,24 @@ func GetTroops(countryID int64) (central int64, borders map[string]int64, err er
 
 // KingdomDetailRow consolidates all data needed for the command center view.
 type KingdomDetailRow struct {
-	CountryID     int64
-	Name          string
-	Code          string
-	Population    int64
-	Resources     int64
-	Troops        int64
-	EconomyRate   int64
-	OwnerID       *int64
-	OwnerName     *string
-	CentralTroops int64
-	BorderTroops  map[string]int64
+	CountryID      int64
+	Name           string
+	Code           string
+	Population     int64
+	Resources      int64
+	Troops         int64
+	EconomyRate    int64
+	Markets        int64
+	Infrastructure int64
+	Investment     int64
+	SocialCosts    int64
+	OwnerID        *int64
+	OwnerName      *string
+	CentralTroops  int64
+	BorderTroops   map[string]int64
+	GDP            int64
+	CurrencyValue  float64
+	InflationRate  float64
 }
 
 // GetKingdomDetail returns all command-center data for a country: basic info,
@@ -567,6 +574,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 
 	err := DB.QueryRow(
 		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops, c.economy_rate,
+		       c.markets, c.infrastructure, c.investment, c.social_costs,
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
@@ -574,6 +582,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		 WHERE c.id = $1`,
 		countryID,
 	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops, &r.EconomyRate,
+		&r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err
