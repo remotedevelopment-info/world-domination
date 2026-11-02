@@ -51,3 +51,12 @@ export function getPolygonBounds(poly) {
   };
 }
 
+export function pointInBounds(px, py, bounds) {
+  return (
+    px >= bounds.minX &&
+    px <= bounds.maxX &&
+    py >= bounds.minY &&
+    py <= bounds.maxY
+  );
+}
+

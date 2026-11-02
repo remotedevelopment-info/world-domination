@@ -2,12 +2,28 @@
 
 import { state } from "../state.js";
 import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
-import { getCentroid, pointInPolygon } from "./geometry.js";
+import { getCentroid, pointInPolygon, getPolygonBounds } from "./geometry.js";
 
 let canvas = null;
 let ctx = null;
 let canvasWidth = 0;
 let canvasHeight = 0;
+let mapOffsetX = 0;
+let mapOffsetY = 0;
+let mapDrawWidth = 0;
+let mapDrawHeight = 0;
+
+const TARGET_ASPECT = 2.15;
+const boundsCache = new Map();
+
+function getPolygonBoundsCached(code, poly) {
+  let b = boundsCache.get(code);
+  if (!b) {
+    b = getPolygonBounds(poly);
+    boundsCache.set(code, b);
+  }
+  return b;
+}
 
 export function initRenderer(canvasElement) {
   canvas = canvasElement;
@@ -23,11 +39,25 @@ export function resizeCanvas() {
   canvasHeight = container.clientHeight;
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
+
+  const containerAspect = canvasWidth / Math.max(1, canvasHeight);
+  if (containerAspect > TARGET_ASPECT) {
+    mapDrawHeight = canvasHeight;
+    mapDrawWidth = canvasHeight * TARGET_ASPECT;
+    mapOffsetX = (canvasWidth - mapDrawWidth) / 2;
+    mapOffsetY = 0;
+  } else {
+    mapDrawWidth = canvasWidth;
+    mapDrawHeight = canvasWidth / TARGET_ASPECT;
+    mapOffsetX = 0;
+    mapOffsetY = (canvasHeight - mapDrawHeight) / 2;
+  }
+
   renderMap();
 }
 
 export function project(x, y) {
-  return [x * canvasWidth, y * canvasHeight];
+  return [mapOffsetX + x * mapDrawWidth, mapOffsetY + y * mapDrawHeight];
 }
 
 // -------------------------------------------------------------
@@ -55,9 +85,9 @@ function drawOcean(ctx, width, height) {
 }
 
 /**
- * Draws subtle latitude & longitude graticule lines
+ * Draws subtle latitude & longitude graticule lines across the world grid
  */
-function drawGraticule(ctx, width, height) {
+function drawGraticule(ctx) {
   ctx.save();
   ctx.strokeStyle = "rgba(212, 175, 55, 0.07)";
   ctx.lineWidth = 1;
@@ -65,56 +95,62 @@ function drawGraticule(ctx, width, height) {
 
   // Parallels (latitude)
   for (let y = 0.1; y < 1.0; y += 0.1) {
+    const [x0, py] = project(0, y);
+    const [x1] = project(1, y);
     ctx.beginPath();
-    ctx.moveTo(0, y * height);
-    ctx.lineTo(width, y * height);
+    ctx.moveTo(x0, py);
+    ctx.lineTo(x1, py);
     ctx.stroke();
   }
 
   // Meridians (longitude)
   for (let x = 0.1; x < 1.0; x += 0.1) {
+    const [px, y0] = project(x, 0);
+    const [, y1] = project(x, 1);
     ctx.beginPath();
-    ctx.moveTo(x * width, 0);
-    ctx.lineTo(x * width, height);
+    ctx.moveTo(px, y0);
+    ctx.lineTo(px, y1);
     ctx.stroke();
   }
   ctx.restore();
 }
 
 /**
- * Draws authentic Portolan chart radiating rhumb lines from 2 navigational loci
+ * Draws authentic Portolan chart radiating rhumb lines from 3 global oceanic loci
  */
-function drawRhumbLines(ctx, width, height) {
+function drawRhumbLines(ctx) {
   const centers = [
-    { x: width * 0.11, y: height * 0.65 }, // Atlantic Hub (Lisbon/Cádiz gateway)
-    { x: width * 0.64, y: height * 0.68 }, // Mediterranean Hub (Aegean/Venice gateway)
+    { x: 0.38, y: 0.48 }, // Mid-Atlantic Hub
+    { x: 0.72, y: 0.72 }, // Indian Ocean Hub
+    { x: 0.08, y: 0.70 }, // South Pacific Hub
   ];
 
   ctx.save();
-  const maxLen = Math.hypot(width, height);
+  const maxLen = Math.hypot(mapDrawWidth, mapDrawHeight);
 
-  centers.forEach((center) => {
+  centers.forEach((centerNorm) => {
+    const [cx, cy] = project(centerNorm.x, centerNorm.y);
     // 32-bearing navigation rays
     for (let i = 0; i < 32; i++) {
       const angle = (i * Math.PI * 2) / 32;
-      const endX = center.x + Math.cos(angle) * maxLen;
-      const endY = center.y + Math.sin(angle) * maxLen;
+      const endX = cx + Math.cos(angle) * maxLen;
+      const endY = cy + Math.sin(angle) * maxLen;
 
       ctx.beginPath();
-      ctx.moveTo(center.x, center.y);
+      ctx.moveTo(cx, cy);
       ctx.lineTo(endX, endY);
 
       if (i % 8 === 0) {
         // Principal 4 cardinal rays (bold gold)
-        ctx.strokeStyle = "rgba(218, 165, 32, 0.18)";
+        ctx.strokeStyle = "rgba(218, 165, 32, 0.16)";
         ctx.lineWidth = 1.2;
       } else if (i % 4 === 0) {
         // Intercardinal rays (warm amber)
-        ctx.strokeStyle = "rgba(205, 133, 63, 0.12)";
+        ctx.strokeStyle = "rgba(205, 133, 63, 0.10)";
         ctx.lineWidth = 0.9;
       } else {
         // Half-wind / quarter-wind rays (faint bronze)
-        ctx.strokeStyle = "rgba(160, 130, 80, 0.05)";
+        ctx.strokeStyle = "rgba(160, 130, 80, 0.04)";
         ctx.lineWidth = 0.6;
       }
       ctx.stroke();
@@ -274,61 +310,63 @@ function drawCompassRose(ctx, cx, cy, radius) {
 }
 
 /**
- * Draws vintage cartographic latitude/longitude graduation border inside canvas
+ * Draws vintage cartographic latitude/longitude graduation border framing the world map
  */
-function drawCartographicBorder(ctx, width, height) {
-  const margin = 3;
-  const borderThick = 12;
-  const w = width - margin * 2;
-  const h = height - margin * 2;
+function drawCartographicBorder(ctx, ox, oy, w, h) {
+  const margin = 2;
+  const borderThick = 10;
+  const bx = ox + margin;
+  const by = oy + margin;
+  const bw = w - margin * 2;
+  const bh = h - margin * 2;
 
   ctx.save();
 
   // Outer brass frame
-  ctx.strokeStyle = "rgba(212, 175, 55, 0.4)";
+  ctx.strokeStyle = "rgba(212, 175, 55, 0.5)";
   ctx.lineWidth = 2;
-  ctx.strokeRect(margin, margin, w, h);
+  ctx.strokeRect(bx, by, bw, bh);
 
   // Inner border frame
-  ctx.strokeStyle = "rgba(212, 175, 55, 0.25)";
+  ctx.strokeStyle = "rgba(212, 175, 55, 0.3)";
   ctx.lineWidth = 1;
   ctx.strokeRect(
-    margin + borderThick,
-    margin + borderThick,
-    w - borderThick * 2,
-    h - borderThick * 2
+    bx + borderThick,
+    by + borderThick,
+    bw - borderThick * 2,
+    bh - borderThick * 2
   );
 
   // Alternating degree blocks along top and bottom borders
-  const numDivsX = 24;
-  const stepX = (w - borderThick * 2) / numDivsX;
+  const numDivsX = 36; // 36 divisions for 360 degrees of longitude (10 deg each)
+  const stepX = (bw - borderThick * 2) / numDivsX;
   for (let i = 0; i < numDivsX; i++) {
-    const x = margin + borderThick + i * stepX;
+    const x = bx + borderThick + i * stepX;
     ctx.fillStyle = i % 2 === 0 ? "rgba(212, 175, 55, 0.35)" : "rgba(10, 20, 30, 0.5)";
     // Top strip
-    ctx.fillRect(x, margin, stepX, borderThick);
+    ctx.fillRect(x, by, stepX, borderThick);
     // Bottom strip
-    ctx.fillRect(x, height - margin - borderThick, stepX, borderThick);
+    ctx.fillRect(x, by + bh - borderThick, stepX, borderThick);
   }
 
   // Alternating degree blocks along left and right borders
-  const numDivsY = 16;
-  const stepY = (h - borderThick * 2) / numDivsY;
+  const numDivsY = 18; // 18 divisions for latitude
+  const stepY = (bh - borderThick * 2) / numDivsY;
   for (let j = 0; j < numDivsY; j++) {
-    const y = margin + borderThick + j * stepY;
+    const y = by + borderThick + j * stepY;
     ctx.fillStyle = j % 2 === 0 ? "rgba(212, 175, 55, 0.35)" : "rgba(10, 20, 30, 0.5)";
     // Left strip
-    ctx.fillRect(margin, y, borderThick, stepY);
+    ctx.fillRect(bx, y, borderThick, stepY);
     // Right strip
-    ctx.fillRect(width - margin - borderThick, y, borderThick, stepY);
+    ctx.fillRect(bx + bw - borderThick, y, borderThick, stepY);
   }
 
   // Corner Brass Rosettes with Rivets
   const corners = [
-    [margin + borderThick / 2, margin + borderThick / 2],
-    [width - margin - borderThick / 2, margin + borderThick / 2],
-    [margin + borderThick / 2, height - margin - borderThick / 2],
-    [width - margin - borderThick / 2, height - margin - borderThick / 2],
+    [bx + borderThick / 2, by + borderThick / 2],
+    [bx + bw - borderThick / 2, by + borderThick / 2],
+    [bx + borderThick / 2, by + bh - borderThick / 2],
+    [bx + bw - borderThick / 2, by + bh - borderThick / 2],
   ];
 
   corners.forEach(([cx, cy]) => {
@@ -357,22 +395,28 @@ export function renderMap() {
   if (!ctx || !canvas) return;
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-  // 1. Deep antique ocean background with radial gradient
+  // 1. Deep antique ocean background with radial gradient (covers whole viewport)
   drawOcean(ctx, canvasWidth, canvasHeight);
 
-  // 2. Graticule coordinate grid (parallels & meridians)
-  drawGraticule(ctx, canvasWidth, canvasHeight);
+  // 2. Graticule coordinate grid (parallels & meridians across world map)
+  drawGraticule(ctx);
 
-  // 3. Portolan navigational rhumb lines radiating across the sea
-  drawRhumbLines(ctx, canvasWidth, canvasHeight);
+  // 3. Portolan navigational rhumb lines radiating across global oceans
+  drawRhumbLines(ctx);
 
-  // 4. Nautical Astrolabe Compass Rose in North Atlantic
-  const roseRadius = Math.min(canvasWidth, canvasHeight) * 0.11;
-  const roseX = canvasWidth * 0.105;
-  const roseY = canvasHeight * 0.35;
-  if (roseRadius > 25) {
+  // 4. Nautical Astrolabe Compass Rose in open South Pacific waters
+  const roseRadius = Math.min(mapDrawWidth, mapDrawHeight) * 0.09;
+  const [roseX, roseY] = project(0.08, 0.72);
+  if (roseRadius > 20) {
     drawCompassRose(ctx, roseX, roseY, roseRadius);
   }
+
+  // Determine badge sizing based on era nation count (discovery=11, modern=200)
+  const isDenseEra = state.kingdoms.length > 80;
+  const fontSize = isDenseEra ? 10 : 12;
+  const badgePadX = isDenseEra ? 3 : 5;
+  const badgePadY = isDenseEra ? 1 : 2;
+  const badgeHeight = isDenseEra ? 13 : 16;
 
   // 5. Draw each sovereign kingdom with Steampunk cartography
   state.kingdoms.forEach((kingdom) => {
@@ -392,7 +436,7 @@ export function renderMap() {
     // Subtle coastline ripple glow (cartographic double contour)
     ctx.save();
     ctx.strokeStyle = "rgba(212, 175, 55, 0.16)";
-    ctx.lineWidth = 6;
+    ctx.lineWidth = isDenseEra ? 4 : 6;
     ctx.lineJoin = "round";
     ctx.stroke();
     ctx.restore();
@@ -418,19 +462,19 @@ export function renderMap() {
 
     if (isMyKingdom) {
       borderColor = "#ffd700"; // Gleaming gold for player's own realm
-      borderWidth = 3.5;
+      borderWidth = 3.2;
     } else if (isNewlyEmergedInEra) {
       borderColor = "#f5d76e"; // Illuminated brass border for newly emerged nations in this era
-      borderWidth = 2.4;
+      borderWidth = 2.2;
     } else if (isIsland) {
       borderColor = "#e67e22"; // Warm brass/amber for maritime island realms
-      borderWidth = 2.6;
+      borderWidth = 2.2;
     } else if (kingdom.owner_id) {
       borderColor = "#ffffff"; // Bright silver for player-claimed realms
-      borderWidth = 2;
+      borderWidth = 1.8;
     } else {
       borderColor = "rgba(20, 15, 10, 0.78)"; // Vintage ink pen stroke for neutral realms
-      borderWidth = 1.4;
+      borderWidth = 1.2;
     }
 
     ctx.strokeStyle = borderColor;
@@ -448,11 +492,9 @@ export function renderMap() {
 
     ctx.save();
     // Parchment badge under label for crisp visibility
-    ctx.font = "bold 12px Georgia, 'Times New Roman', serif";
+    ctx.font = `bold ${fontSize}px Georgia, 'Times New Roman', serif`;
     const displayLabel = isNewlyEmergedInEra ? `★${kingdom.code}` : kingdom.code;
     const textWidth = ctx.measureText(displayLabel).width;
-    const badgePadX = 5;
-    const badgePadY = 2;
 
     ctx.fillStyle = isNewlyEmergedInEra
       ? "rgba(38, 28, 12, 0.88)"
@@ -460,10 +502,10 @@ export function renderMap() {
     ctx.beginPath();
     ctx.roundRect(
       pxX - textWidth / 2 - badgePadX,
-      pxY - 8 - badgePadY,
+      pxY - (badgeHeight / 2) - badgePadY,
       textWidth + badgePadX * 2,
-      16 + badgePadY,
-      4
+      badgeHeight + badgePadY * 2,
+      3
     );
     ctx.fill();
     ctx.strokeStyle = isMyKingdom
@@ -471,7 +513,7 @@ export function renderMap() {
       : isNewlyEmergedInEra
       ? "#f5d76e"
       : "rgba(212, 175, 55, 0.4)";
-    ctx.lineWidth = isNewlyEmergedInEra ? 1.3 : 1;
+    ctx.lineWidth = isNewlyEmergedInEra ? 1.2 : 0.8;
     ctx.stroke();
 
     // Text in antique gold/ivory
@@ -482,12 +524,12 @@ export function renderMap() {
       : isNewlyEmergedInEra
       ? "#fff2a8"
       : "#f5f0db";
-    ctx.fillText(displayLabel, pxX, pxY - 1);
+    ctx.fillText(displayLabel, pxX, pxY);
 
     // Crown insignia if owned by a player
     if (kingdom.owner_id || isMyKingdom) {
-      ctx.font = "10px sans-serif";
-      ctx.fillText("👑", pxX, pxY - 17);
+      ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
+      ctx.fillText("👑", pxX, pxY - (badgeHeight / 2) - 6);
     }
     ctx.restore();
 
@@ -495,8 +537,8 @@ export function renderMap() {
     renderTroopDots(ctx, kingdom, poly);
   });
 
-  // 7. Cartographic Latitude/Longitude graduated degree border
-  drawCartographicBorder(ctx, canvasWidth, canvasHeight);
+  // 7. Cartographic Latitude/Longitude graduated degree border framing world map
+  drawCartographicBorder(ctx, mapOffsetX, mapOffsetY, mapDrawWidth, mapDrawHeight);
 }
 
 // -------------------------------------------------------------
@@ -595,14 +637,29 @@ export function getKingdomAtPosition(clientX, clientY) {
   if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return null;
-  const x = (clientX - rect.left) / rect.width;
-  const y = (clientY - rect.top) / rect.height;
+  if (mapDrawWidth === 0 || mapDrawHeight === 0) return null;
+
+  const canvasX = clientX - rect.left;
+  const canvasY = clientY - rect.top;
+
+  // Unproject from letterboxed canvas space to normalized [0, 1] world coordinates
+  const x = (canvasX - mapOffsetX) / mapDrawWidth;
+  const y = (canvasY - mapOffsetY) / mapDrawHeight;
+
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
 
   // Iterate in reverse order (newest era countries on top of older parent empires)
   for (let i = state.kingdoms.length - 1; i >= 0; i--) {
     const kingdom = state.kingdoms[i];
     const poly = kingdomPolygons[kingdom.code];
     if (!poly) continue;
+
+    // Fast bounding box check before raycasting
+    const b = getPolygonBoundsCached(kingdom.code, poly);
+    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) {
+      continue;
+    }
+
     if (pointInPolygon(x, y, poly)) {
       return kingdom;
     }

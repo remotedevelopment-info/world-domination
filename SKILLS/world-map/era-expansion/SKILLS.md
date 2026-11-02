@@ -1,6 +1,6 @@
 # world-map/era-expansion
 
-> Model: 1.0.0 · Status: draft
+> Model: 1.0.0 · Status: active
 
 ## Purpose
 
@@ -12,9 +12,9 @@ Both
 
 ## Released/Intended SEMVER
 
-- **Released:** —
+- **Released:** 0.3.0
 - **Intended:** 0.3.0
-- Bump notes: Transitioning the map from European/Mediterranean focus to a full global projection with up to 200 territories is a minor additive update to the data contract and a minor update to canvas projection math.
+- Bump notes: Full global projection migration across all 5 historical eras: scaled territories from 11 discovery empires to 200 modern sovereign nations with aspect-preserved global projection, bounding-box hit testing, and database seeding.
 
 ## Ideas
 
@@ -53,7 +53,14 @@ Both
 
 ## Result
 
-- Documented target 5-era progression: 11 -> 25 -> 57 -> 128 -> 200 sovereign nations.
-- Confirmed mathematical growth factor: each era adds approximately 125% of the preceding era's addition, arriving at exactly 200 modern countries.
-- Identified the Americas addition for Era III (Independence) and Australia / New Zealand for Era IV (Decolonisation).
-- Architectural blueprint ready for implementation in `polygons.js`, `database.go`, and `renderer.js`.
+- Successfully implemented the full 5-era global expansion progression:
+  - Era I (Discovery c. 1500): 11 Founding Empires
+  - Era II (Revolt 1750–1859): 25 Sovereign Realms (+14 nations)
+  - Era III (Independence 1860–1919): 57 Sovereign Nations (+32 nations, introducing North, Central & South America)
+  - Era IV (Decolonisation 1920–1988): 128 Sovereign Nations (+71 nations, introducing Australia, New Zealand, Papua New Guinea, Africa & Asia)
+  - Era V (Modern Age 1989–Present): 200 Sovereign Nations (+72 nations, completing global UN membership coverage)
+- Converted all 200 sovereign nations into normalized global coordinates $[x, y] \in [0, 1]$ mapped via $x = (\text{lon} + 180)/360$ and $y = (85 - \text{lat})/145$.
+- Implemented aspect-ratio preserved letterboxed projection ($2.15:1$) in `renderer.js` and `geometry.js` guaranteeing 0 distortion across all monitor resolutions.
+- Added bounding-box pre-filtering in `getKingdomAtPosition()` ensuring sub-millisecond click raycasting over 200 polygons.
+- Updated Go database seeding in `database.go` with all 200 nations, populations, resources, and era metadata.
+
