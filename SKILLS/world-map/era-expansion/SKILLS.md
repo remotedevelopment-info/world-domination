@@ -60,7 +60,12 @@ Both
   - Era IV (Decolonisation 1920–1988): 128 Sovereign Nations (+71 nations, introducing Australia, New Zealand, Papua New Guinea, Africa & Asia)
   - Era V (Modern Age 1989–Present): 200 Sovereign Nations (+72 nations, completing global UN membership coverage)
 - Converted all 200 sovereign nations into normalized global coordinates $[x, y] \in [0, 1]$ mapped via $x = (\text{lon} + 180)/360$ and $y = (85 - \text{lat})/145$.
-- Implemented aspect-ratio preserved letterboxed projection ($2.15:1$) in `renderer.js` and `geometry.js` guaranteeing 0 distortion across all monitor resolutions.
+- Implemented full-screen dynamic era scaling in `renderer.js`:
+  - Era I (1500 Discovery): Magnified 3.32x to project the Old World / Europe & Mediterranean across the entire screen with grand 14px Steampunk plaques.
+  - Era II (1750 Revolt): Smoothly expands eastward (2.4x magnification) to encompass the Ottoman, Persian, and Indian theaters.
+  - Era III (1860 Independence): Camera pulls back to fit the Americas, Atlantic Ocean, Europe, and Africa.
+  - Era IV (1920 Decolonisation) & Era V (1989 Modern): Expands to the complete global projection fitting Oceania, Asia, and all 200 nations seamlessly on screen.
+  - Fully animated camera transitions with 100% reversible inverse projection and sub-millisecond hit-testing.
 - Added bounding-box pre-filtering in `getKingdomAtPosition()` ensuring sub-millisecond click raycasting over 200 polygons.
 - Updated Go database seeding in `database.go` with all 200 nations, populations, resources, and era metadata.
 

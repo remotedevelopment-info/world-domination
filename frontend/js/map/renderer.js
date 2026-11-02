@@ -1,4 +1,5 @@
-// renderer.js - Steampunk Cartographic Rendering Engine for the Age of Discovery (c. 1500)
+// renderer.js - Steampunk Cartographic Rendering Engine with Dynamic Era Scaling
+// Shows full-screen projection of the known world in each Age, scaling smoothly as territories emerge
 
 import { state } from "../state.js";
 import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
@@ -8,12 +9,11 @@ let canvas = null;
 let ctx = null;
 let canvasWidth = 0;
 let canvasHeight = 0;
-let mapOffsetX = 0;
-let mapOffsetY = 0;
-let mapDrawWidth = 0;
-let mapDrawHeight = 0;
 
-const TARGET_ASPECT = 2.15;
+let currentViewport = null;
+let targetViewport = null;
+let viewportAnimFrame = null;
+
 const boundsCache = new Map();
 
 function getPolygonBoundsCached(code, poly) {
@@ -23,6 +23,134 @@ function getPolygonBoundsCached(code, poly) {
     boundsCache.set(code, b);
   }
   return b;
+}
+
+export function computeTargetViewport(
+  kingdoms = state.kingdoms,
+  canvasW = canvasWidth,
+  canvasH = canvasHeight
+) {
+  if (!kingdoms || kingdoms.length === 0 || canvasW <= 0 || canvasH <= 0) {
+    return { minX: 0, maxX: 1, minY: 0, maxY: 1, w: 1, h: 1 };
+  }
+
+  let minX = 1,
+    maxX = 0,
+    minY = 1,
+    maxY = 0;
+  for (let i = 0; i < kingdoms.length; i++) {
+    const poly = kingdomPolygons[kingdoms[i].code];
+    if (!poly) continue;
+    for (let j = 0; j < poly.length; j++) {
+      const px = poly[j][0];
+      const py = poly[j][1];
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+    }
+  }
+
+  // Generous padding around the active theater so coastal margins and labels fit comfortably
+  const rawW = maxX - minX;
+  const rawH = maxY - minY;
+  const padX = Math.max(0.035, rawW * 0.11);
+  const padY = Math.max(0.035, rawH * 0.11);
+
+  const boundedMinX = Math.max(0, minX - padX);
+  const boundedMaxX = Math.min(1, maxX + padX);
+  const boundedMinY = Math.max(0, minY - padY);
+  const boundedMaxY = Math.min(1, maxY + padY);
+
+  let w = boundedMaxX - boundedMinX;
+  let h = boundedMaxY - boundedMinY;
+  const cx = (boundedMinX + boundedMaxX) / 2;
+  const cy = (boundedMinY + boundedMaxY) / 2;
+
+  const canvasAspect = canvasW / Math.max(1, canvasH);
+
+  if (w / h < canvasAspect) {
+    w = h * canvasAspect;
+  } else {
+    h = w / canvasAspect;
+  }
+
+  let vMinX = cx - w / 2;
+  let vMaxX = cx + w / 2;
+  let vMinY = cy - h / 2;
+  let vMaxY = cy + h / 2;
+
+  if (w <= 1) {
+    if (vMinX < 0) {
+      vMaxX += -vMinX;
+      vMinX = 0;
+    }
+    if (vMaxX > 1) {
+      vMinX -= vMaxX - 1;
+      vMaxX = 1;
+    }
+  }
+  if (h <= 1) {
+    if (vMinY < 0) {
+      vMaxY += -vMinY;
+      vMinY = 0;
+    }
+    if (vMaxY > 1) {
+      vMinY -= vMaxY - 1;
+      vMaxY = 1;
+    }
+  }
+
+  return { minX: vMinX, maxX: vMaxX, minY: vMinY, maxY: vMaxY, w, h };
+}
+
+export function syncViewport(immediate = false) {
+  const newTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
+  targetViewport = newTarget;
+
+  if (!currentViewport || immediate) {
+    currentViewport = { ...targetViewport };
+    if (viewportAnimFrame) {
+      cancelAnimationFrame(viewportAnimFrame);
+      viewportAnimFrame = null;
+    }
+    return;
+  }
+
+  if (!viewportAnimFrame) {
+    viewportAnimFrame = requestAnimationFrame(animateViewportStep);
+  }
+}
+
+function animateViewportStep() {
+  if (!currentViewport || !targetViewport) {
+    viewportAnimFrame = null;
+    return;
+  }
+
+  const lerp = 0.12;
+  const dxMin = targetViewport.minX - currentViewport.minX;
+  const dxMax = targetViewport.maxX - currentViewport.maxX;
+  const dyMin = targetViewport.minY - currentViewport.minY;
+  const dyMax = targetViewport.maxY - currentViewport.maxY;
+
+  const totalDiff =
+    Math.abs(dxMin) + Math.abs(dxMax) + Math.abs(dyMin) + Math.abs(dyMax);
+
+  if (totalDiff < 0.0006) {
+    currentViewport = { ...targetViewport };
+    viewportAnimFrame = null;
+    renderMap();
+    return;
+  }
+
+  currentViewport.minX += dxMin * lerp;
+  currentViewport.maxX += dxMax * lerp;
+  currentViewport.minY += dyMin * lerp;
+  currentViewport.maxY += dyMax * lerp;
+
+  renderMap();
+  viewportAnimFrame = requestAnimationFrame(animateViewportStep);
 }
 
 export function initRenderer(canvasElement) {
@@ -40,24 +168,18 @@ export function resizeCanvas() {
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
 
-  const containerAspect = canvasWidth / Math.max(1, canvasHeight);
-  if (containerAspect > TARGET_ASPECT) {
-    mapDrawHeight = canvasHeight;
-    mapDrawWidth = canvasHeight * TARGET_ASPECT;
-    mapOffsetX = (canvasWidth - mapDrawWidth) / 2;
-    mapOffsetY = 0;
-  } else {
-    mapDrawWidth = canvasWidth;
-    mapDrawHeight = canvasWidth / TARGET_ASPECT;
-    mapOffsetX = 0;
-    mapOffsetY = (canvasHeight - mapDrawHeight) / 2;
-  }
-
-  renderMap();
+  syncViewport(true);
+  renderMap(true);
 }
 
 export function project(x, y) {
-  return [mapOffsetX + x * mapDrawWidth, mapOffsetY + y * mapDrawHeight];
+  const vp =
+    currentViewport || targetViewport || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+  const vpW = vp.maxX - vp.minX || 1;
+  const vpH = vp.maxY - vp.minY || 1;
+  const u = (x - vp.minX) / vpW;
+  const v = (y - vp.minY) / vpH;
+  return [u * canvasWidth, v * canvasHeight];
 }
 
 // -------------------------------------------------------------
@@ -85,7 +207,7 @@ function drawOcean(ctx, width, height) {
 }
 
 /**
- * Draws subtle latitude & longitude graticule lines across the world grid
+ * Draws subtle latitude & longitude graticule lines across the current viewport
  */
 function drawGraticule(ctx) {
   ctx.save();
@@ -93,20 +215,25 @@ function drawGraticule(ctx) {
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 8]);
 
-  // Parallels (latitude)
-  for (let y = 0.1; y < 1.0; y += 0.1) {
-    const [x0, py] = project(0, y);
-    const [x1] = project(1, y);
+  const vp =
+    currentViewport || targetViewport || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+  const span = Math.max(vp.maxX - vp.minX, vp.maxY - vp.minY);
+  const step = span < 0.6 ? 0.05 : 0.1;
+
+  const startY = Math.floor(vp.minY / step) * step;
+  for (let y = startY; y <= vp.maxY + step; y += step) {
+    const [x0, py] = project(vp.minX - 0.2, y);
+    const [x1] = project(vp.maxX + 0.2, y);
     ctx.beginPath();
     ctx.moveTo(x0, py);
     ctx.lineTo(x1, py);
     ctx.stroke();
   }
 
-  // Meridians (longitude)
-  for (let x = 0.1; x < 1.0; x += 0.1) {
-    const [px, y0] = project(x, 0);
-    const [, y1] = project(x, 1);
+  const startX = Math.floor(vp.minX / step) * step;
+  for (let x = startX; x <= vp.maxX + step; x += step) {
+    const [px, y0] = project(x, vp.minY - 0.2);
+    const [, y1] = project(x, vp.maxY + 0.2);
     ctx.beginPath();
     ctx.moveTo(px, y0);
     ctx.lineTo(px, y1);
@@ -116,21 +243,31 @@ function drawGraticule(ctx) {
 }
 
 /**
- * Draws authentic Portolan chart radiating rhumb lines from 3 global oceanic loci
+ * Draws authentic Portolan chart radiating rhumb lines from oceanic loci in the known world
  */
 function drawRhumbLines(ctx) {
-  const centers = [
-    { x: 0.38, y: 0.48 }, // Mid-Atlantic Hub
-    { x: 0.72, y: 0.72 }, // Indian Ocean Hub
-    { x: 0.08, y: 0.70 }, // South Pacific Hub
-  ];
+  const isEarlyEra =
+    !state.currentEraId ||
+    state.currentEraId === "discovery" ||
+    state.currentEraId === "revolt";
+
+  const centers = isEarlyEra
+    ? [
+        { x: 0.44, y: 0.32 }, // Lisbon / Atlantic Gateway
+        { x: 0.53, y: 0.27 }, // Venice / Mediterranean Hub
+      ]
+    : [
+        { x: 0.38, y: 0.48 }, // Mid-Atlantic Hub
+        { x: 0.53, y: 0.27 }, // Mediterranean Hub
+        { x: 0.72, y: 0.72 }, // Indian Ocean Hub
+        { x: 0.08, y: 0.7 }, // South Pacific Hub
+      ];
 
   ctx.save();
-  const maxLen = Math.hypot(mapDrawWidth, mapDrawHeight);
+  const maxLen = Math.hypot(canvasWidth, canvasHeight);
 
   centers.forEach((centerNorm) => {
     const [cx, cy] = project(centerNorm.x, centerNorm.y);
-    // 32-bearing navigation rays
     for (let i = 0; i < 32; i++) {
       const angle = (i * Math.PI * 2) / 32;
       const endX = cx + Math.cos(angle) * maxLen;
@@ -310,15 +447,15 @@ function drawCompassRose(ctx, cx, cy, radius) {
 }
 
 /**
- * Draws vintage cartographic latitude/longitude graduation border framing the world map
+ * Draws vintage cartographic latitude/longitude graduation border framing the full screen
  */
-function drawCartographicBorder(ctx, ox, oy, w, h) {
-  const margin = 2;
-  const borderThick = 10;
-  const bx = ox + margin;
-  const by = oy + margin;
-  const bw = w - margin * 2;
-  const bh = h - margin * 2;
+function drawCartographicBorder(ctx, width, height) {
+  const margin = 3;
+  const borderThick = 12;
+  const bx = margin;
+  const by = margin;
+  const bw = width - margin * 2;
+  const bh = height - margin * 2;
 
   ctx.save();
 
@@ -338,26 +475,24 @@ function drawCartographicBorder(ctx, ox, oy, w, h) {
   );
 
   // Alternating degree blocks along top and bottom borders
-  const numDivsX = 36; // 36 divisions for 360 degrees of longitude (10 deg each)
+  const numDivsX = 36;
   const stepX = (bw - borderThick * 2) / numDivsX;
   for (let i = 0; i < numDivsX; i++) {
     const x = bx + borderThick + i * stepX;
-    ctx.fillStyle = i % 2 === 0 ? "rgba(212, 175, 55, 0.35)" : "rgba(10, 20, 30, 0.5)";
-    // Top strip
+    ctx.fillStyle =
+      i % 2 === 0 ? "rgba(212, 175, 55, 0.35)" : "rgba(10, 20, 30, 0.5)";
     ctx.fillRect(x, by, stepX, borderThick);
-    // Bottom strip
     ctx.fillRect(x, by + bh - borderThick, stepX, borderThick);
   }
 
   // Alternating degree blocks along left and right borders
-  const numDivsY = 18; // 18 divisions for latitude
+  const numDivsY = 18;
   const stepY = (bh - borderThick * 2) / numDivsY;
   for (let j = 0; j < numDivsY; j++) {
     const y = by + borderThick + j * stepY;
-    ctx.fillStyle = j % 2 === 0 ? "rgba(212, 175, 55, 0.35)" : "rgba(10, 20, 30, 0.5)";
-    // Left strip
+    ctx.fillStyle =
+      j % 2 === 0 ? "rgba(212, 175, 55, 0.35)" : "rgba(10, 20, 30, 0.5)";
     ctx.fillRect(bx, y, borderThick, stepY);
-    // Right strip
     ctx.fillRect(bx + bw - borderThick, y, borderThick, stepY);
   }
 
@@ -391,32 +526,90 @@ function drawCartographicBorder(ctx, ox, oy, w, h) {
 // MAIN MAP RENDER LOOP
 // -------------------------------------------------------------
 
-export function renderMap() {
+export function renderMap(immediate = false) {
   if (!ctx || !canvas) return;
+
+  // Auto-synchronize camera viewport when kingdoms emerge or era advances
+  const newTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
+  if (!currentViewport || immediate) {
+    currentViewport = { ...newTarget };
+    targetViewport = { ...newTarget };
+    if (viewportAnimFrame) {
+      cancelAnimationFrame(viewportAnimFrame);
+      viewportAnimFrame = null;
+    }
+  } else if (
+    !targetViewport ||
+    Math.abs(targetViewport.minX - newTarget.minX) > 0.001 ||
+    Math.abs(targetViewport.maxX - newTarget.maxX) > 0.001 ||
+    Math.abs(targetViewport.minY - newTarget.minY) > 0.001 ||
+    Math.abs(targetViewport.maxY - newTarget.maxY) > 0.001
+  ) {
+    targetViewport = newTarget;
+    if (!viewportAnimFrame) {
+      viewportAnimFrame = requestAnimationFrame(animateViewportStep);
+    }
+  }
+
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
   // 1. Deep antique ocean background with radial gradient (covers whole viewport)
   drawOcean(ctx, canvasWidth, canvasHeight);
 
-  // 2. Graticule coordinate grid (parallels & meridians across world map)
+  // 2. Graticule coordinate grid (parallels & meridians across current viewport)
   drawGraticule(ctx);
 
-  // 3. Portolan navigational rhumb lines radiating across global oceans
+  // 3. Portolan navigational rhumb lines radiating across known seas
   drawRhumbLines(ctx);
 
-  // 4. Nautical Astrolabe Compass Rose in open South Pacific waters
-  const roseRadius = Math.min(mapDrawWidth, mapDrawHeight) * 0.09;
-  const [roseX, roseY] = project(0.08, 0.72);
-  if (roseRadius > 20) {
+  // 4. Nautical Astrolabe Compass Rose in open waters of the known theater
+  let roseWorldX = 0.08;
+  let roseWorldY = 0.72;
+  const isEarlyEra =
+    !state.currentEraId ||
+    state.currentEraId === "discovery" ||
+    state.currentEraId === "revolt";
+
+  if (isEarlyEra) {
+    roseWorldX = 0.36; // North Atlantic off the coast of Europe
+    roseWorldY = 0.23;
+  }
+
+  const [roseX, roseY] = project(roseWorldX, roseWorldY);
+  const roseRadius = Math.min(canvasWidth, canvasHeight) * 0.1;
+  if (
+    roseX > -roseRadius &&
+    roseX < canvasWidth + roseRadius &&
+    roseY > -roseRadius &&
+    roseY < canvasHeight + roseRadius &&
+    roseRadius > 20
+  ) {
     drawCompassRose(ctx, roseX, roseY, roseRadius);
   }
 
   // Determine badge sizing based on era nation count (discovery=11, modern=200)
-  const isDenseEra = state.kingdoms.length > 80;
-  const fontSize = isDenseEra ? 10 : 12;
-  const badgePadX = isDenseEra ? 3 : 5;
-  const badgePadY = isDenseEra ? 1 : 2;
-  const badgeHeight = isDenseEra ? 13 : 16;
+  const count = state.kingdoms.length;
+  let fontSize = 14;
+  let badgePadX = 6;
+  let badgePadY = 3;
+  let badgeHeight = 18;
+
+  if (count > 120) {
+    fontSize = 9.5;
+    badgePadX = 3;
+    badgePadY = 1;
+    badgeHeight = 13;
+  } else if (count > 50) {
+    fontSize = 11;
+    badgePadX = 4;
+    badgePadY = 2;
+    badgeHeight = 15;
+  } else if (count > 20) {
+    fontSize = 12.5;
+    badgePadX = 5;
+    badgePadY = 2.5;
+    badgeHeight = 16.5;
+  }
 
   // 5. Draw each sovereign kingdom with Steampunk cartography
   state.kingdoms.forEach((kingdom) => {
@@ -436,7 +629,7 @@ export function renderMap() {
     // Subtle coastline ripple glow (cartographic double contour)
     ctx.save();
     ctx.strokeStyle = "rgba(212, 175, 55, 0.16)";
-    ctx.lineWidth = isDenseEra ? 4 : 6;
+    ctx.lineWidth = count > 50 ? 4 : 6;
     ctx.lineJoin = "round";
     ctx.stroke();
     ctx.restore();
@@ -502,7 +695,7 @@ export function renderMap() {
     ctx.beginPath();
     ctx.roundRect(
       pxX - textWidth / 2 - badgePadX,
-      pxY - (badgeHeight / 2) - badgePadY,
+      pxY - badgeHeight / 2 - badgePadY,
       textWidth + badgePadX * 2,
       badgeHeight + badgePadY * 2,
       3
@@ -529,7 +722,7 @@ export function renderMap() {
     // Crown insignia if owned by a player
     if (kingdom.owner_id || isMyKingdom) {
       ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
-      ctx.fillText("👑", pxX, pxY - (badgeHeight / 2) - 6);
+      ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 6);
     }
     ctx.restore();
 
@@ -537,9 +730,10 @@ export function renderMap() {
     renderTroopDots(ctx, kingdom, poly);
   });
 
-  // 7. Cartographic Latitude/Longitude graduated degree border framing world map
-  drawCartographicBorder(ctx, mapOffsetX, mapOffsetY, mapDrawWidth, mapDrawHeight);
+  // 7. Cartographic Latitude/Longitude graduated degree border framing full screen
+  drawCartographicBorder(ctx, canvasWidth, canvasHeight);
 }
+
 
 // -------------------------------------------------------------
 // TROOP MINIATURES & GARRISON MARKERS
@@ -637,16 +831,21 @@ export function getKingdomAtPosition(clientX, clientY) {
   if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return null;
-  if (mapDrawWidth === 0 || mapDrawHeight === 0) return null;
 
   const canvasX = clientX - rect.left;
   const canvasY = clientY - rect.top;
 
-  // Unproject from letterboxed canvas space to normalized [0, 1] world coordinates
-  const x = (canvasX - mapOffsetX) / mapDrawWidth;
-  const y = (canvasY - mapOffsetY) / mapDrawHeight;
+  const u = canvasX / rect.width;
+  const v = canvasY / rect.height;
 
-  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+
+  const vp =
+    currentViewport || targetViewport || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+  const vpW = vp.maxX - vp.minX || 1;
+  const vpH = vp.maxY - vp.minY || 1;
+  const x = vp.minX + u * vpW;
+  const y = vp.minY + v * vpH;
 
   // Iterate in reverse order (newest era countries on top of older parent empires)
   for (let i = state.kingdoms.length - 1; i >= 0; i--) {
