@@ -153,6 +153,40 @@ function animateViewportStep() {
   viewportAnimFrame = requestAnimationFrame(animateViewportStep);
 }
 
+export function getEraMinWidth(year = state.currentSimYear || 1500) {
+  if (year >= 1989) return 2600; // Modern global view with 200 nations: ultra-wide theater
+  if (year >= 1920) return 2200; // Decolonisation view
+  if (year >= 1860) return 1750; // Independence view: Europe + Americas
+  if (year >= 1750) return 1350; // Revolt view
+  return 1100; // Discovery view
+}
+
+// Steampunk Brass Loupe Magnifier state
+export let magnifierState = {
+  active: false,
+  x: 0,
+  y: 0,
+  radius: 125,
+  zoom: 2.4,
+};
+
+export function setMagnifier(active, x, y) {
+  magnifierState.active = active;
+  if (typeof x === "number" && typeof y === "number") {
+    magnifierState.x = x;
+    magnifierState.y = y;
+  }
+  renderMap();
+}
+
+export function updateMagnifierPosition(x, y) {
+  magnifierState.x = x;
+  magnifierState.y = y;
+  if (magnifierState.active) {
+    renderMap();
+  }
+}
+
 export function initRenderer(canvasElement) {
   canvas = canvasElement;
   ctx = canvas.getContext("2d");
@@ -161,12 +195,18 @@ export function initRenderer(canvasElement) {
 
 export function resizeCanvas() {
   if (!canvas) return;
-  const container = document.querySelector(".map-container");
+  const scrollViewport = document.getElementById("map-scroll-viewport");
+  const container = scrollViewport || document.querySelector(".map-container");
   if (!container) return;
-  canvasWidth = container.clientWidth;
-  canvasHeight = container.clientHeight;
+
+  const minW = getEraMinWidth(state.currentSimYear || 1500);
+  canvasWidth = Math.max(container.clientWidth, minW);
+  canvasHeight = container.clientHeight || 600;
+
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
+  canvas.style.width = canvasWidth + "px";
+  canvas.style.height = canvasHeight + "px";
 
   syncViewport(true);
   renderMap(true);
@@ -732,6 +772,11 @@ export function renderMap(immediate = false) {
 
   // 7. Cartographic Latitude/Longitude graduated degree border framing full screen
   drawCartographicBorder(ctx, canvasWidth, canvasHeight);
+
+  // 8. Steampunk Brass Loupe Magnifier overlay (when active)
+  if (magnifierState.active) {
+    drawMagnifierLoupe(ctx, magnifierState.x, magnifierState.y);
+  }
 }
 
 
@@ -827,16 +872,220 @@ export function renderTroopDots(ctx, kingdom, poly) {
   });
 }
 
+/**
+ * Draws an authentic Victorian Steampunk Brass Magnifying Loupe
+ * with beveled brass rim, optical glass glint, astrolabe reticle & vector-scaled map.
+ */
+function drawMagnifierLoupe(ctx, mx, my) {
+  const radius = magnifierState.radius;
+  const zoom = magnifierState.zoom;
+
+  ctx.save();
+
+  // 1. Drop shadow beneath the heavy brass loupe
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(mx, my, radius + 4, 0, Math.PI * 2);
+  ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+  ctx.fill();
+  ctx.restore();
+
+  // 2. Circular clip for magnified optical lens
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(mx, my, radius, 0, Math.PI * 2);
+  ctx.clip();
+
+  // Magnification transform centered around (mx, my)
+  ctx.translate(mx, my);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-mx, -my);
+
+  // Re-render crisp ocean & navigational graticule within the lens
+  drawOcean(ctx, canvasWidth, canvasHeight);
+  drawGraticule(ctx);
+  drawRhumbLines(ctx);
+
+  // Re-draw kingdoms in magnified space with bold high-legibility badges
+  state.kingdoms.forEach((kingdom) => {
+    const poly = kingdomPolygons[kingdom.code];
+    if (!poly) return;
+
+    ctx.beginPath();
+    const [startX, startY] = project(poly[0][0], poly[0][1]);
+    ctx.moveTo(startX, startY);
+    for (let i = 1; i < poly.length; i++) {
+      const [x, y] = project(poly[i][0], poly[i][1]);
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
+    ctx.fillStyle = kingdom.color || "#4ecdc4";
+    ctx.fill();
+
+    ctx.strokeStyle = "#ffe57f";
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+
+    // Magnified realm label with parchment badge
+    const [lxNorm, lyNorm] = getKingdomLabelPosition(
+      kingdom.code,
+      poly,
+      state.currentSimYear || 1500
+    );
+    const [pxX, pxY] = project(lxNorm, lyNorm);
+
+    ctx.save();
+    ctx.font = "bold 13px 'Cinzel', serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const labelText = kingdom.name;
+    const txtMetrics = ctx.measureText(labelText);
+    const badgeW = txtMetrics.width + 12;
+    const badgeH = 18;
+
+    ctx.fillStyle = "rgba(10, 15, 22, 0.88)";
+    ctx.strokeStyle = "#d4af37";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(pxX - badgeW / 2, pxY - badgeH / 2, badgeW, badgeH, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(labelText, pxX, pxY);
+
+    if (kingdom.owner_id) {
+      ctx.font = "10px sans-serif";
+      ctx.fillText("👑", pxX, pxY - badgeH / 2 - 7);
+    }
+    ctx.restore();
+
+    renderTroopDots(ctx, kingdom, poly);
+  });
+
+  ctx.restore(); // Exit optical clip
+
+  // 3. Antique Beveled Brass Rim
+  const rimGrad = ctx.createLinearGradient(
+    mx - radius,
+    my - radius,
+    mx + radius,
+    my + radius
+  );
+  rimGrad.addColorStop(0, "#fff0a3"); // Polished brass highlight
+  rimGrad.addColorStop(0.25, "#d4af37"); // Golden brass
+  rimGrad.addColorStop(0.7, "#8b6508"); // Aged brass
+  rimGrad.addColorStop(1, "#3e2704"); // Deep bronze shadow
+
+  ctx.beginPath();
+  ctx.arc(mx, my, radius + 7, 0, Math.PI * 2);
+  ctx.arc(mx, my, radius - 1, 0, Math.PI * 2, true);
+  ctx.fillStyle = rimGrad;
+  ctx.fill();
+
+  // Inner gold ring
+  ctx.beginPath();
+  ctx.arc(mx, my, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#ffe57f";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Outer bronze rim
+  ctx.beginPath();
+  ctx.arc(mx, my, radius + 7, 0, Math.PI * 2);
+  ctx.strokeStyle = "#2a1a02";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Brass Rivets around the circumference
+  const rivetCount = 14;
+  for (let i = 0; i < rivetCount; i++) {
+    const angle = (i / rivetCount) * Math.PI * 2;
+    const rx = mx + Math.cos(angle) * (radius + 3);
+    const ry = my + Math.sin(angle) * (radius + 3);
+    ctx.beginPath();
+    ctx.arc(rx, ry, 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#3e2704";
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+
+  // 4. Astrolabe Reticle & Ticks
+  ctx.save();
+  ctx.strokeStyle = "rgba(212, 175, 55, 0.35)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath();
+  ctx.moveTo(mx - radius * 0.72, my);
+  ctx.lineTo(mx + radius * 0.72, my);
+  ctx.moveTo(mx, my - radius * 0.72);
+  ctx.lineTo(mx, my + radius * 0.72);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(mx, my, 8, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 215, 0, 0.45)";
+  ctx.stroke();
+  ctx.restore();
+
+  // 5. Optical glass glare arc (curved surface reflection)
+  const glintGrad = ctx.createLinearGradient(mx - radius, my - radius, mx, my);
+  glintGrad.addColorStop(0, "rgba(255, 255, 255, 0.32)");
+  glintGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.08)");
+  glintGrad.addColorStop(1, "transparent");
+
+  ctx.beginPath();
+  ctx.arc(mx, my, radius - 4, -Math.PI * 0.88, -Math.PI * 0.12);
+  ctx.strokeStyle = glintGrad;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  // 6. Engraved Brass Loupe Plaque
+  ctx.fillStyle = "#1e1302";
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect(mx - 34, my - radius - 14, 68, 16, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffd700";
+  ctx.font = "bold 9px 'Cinzel', serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("2.4× LOUPE", mx, my - radius - 6);
+
+  ctx.restore();
+}
+
 export function getKingdomAtPosition(clientX, clientY) {
   if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return null;
 
-  const canvasX = clientX - rect.left;
-  const canvasY = clientY - rect.top;
+  let canvasX = clientX - rect.left;
+  let canvasY = clientY - rect.top;
 
-  const u = canvasX / rect.width;
-  const v = canvasY / rect.height;
+  // If clicking through the magnifier lens, transform coordinates
+  if (magnifierState.active) {
+    const dx = canvasX - magnifierState.x;
+    const dy = canvasY - magnifierState.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq <= magnifierState.radius * magnifierState.radius) {
+      canvasX = magnifierState.x + dx / magnifierState.zoom;
+      canvasY = magnifierState.y + dy / magnifierState.zoom;
+    }
+  }
+
+  const u = canvasX / canvasWidth;
+  const v = canvasY / canvasHeight;
 
   if (u < 0 || u > 1 || v < 0 || v > 1) return null;
 

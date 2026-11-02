@@ -288,7 +288,19 @@
                     <div class="map-corner-bracket bottom-left"></div>
                     <div class="map-corner-bracket bottom-right"></div>
 
-                    <canvas id="world-map"></canvas>
+                    <!-- Steampunk Navigation Tools Bar -->
+                    <div class="map-tool-ribbon">
+                        <button id="toggle-loupe-btn" class="map-ribbon-btn" title="Toggle 2.5× Steampunk Brass Loupe (or hold Right-Click anywhere on map)">
+                            <span class="btn-icon">🔍</span>
+                            <span class="btn-txt">2.5× Loupe</span>
+                        </button>
+                        <span class="map-nav-tip">Tip: Right-click &amp; hold to magnify · Drag or scroll to pan</span>
+                    </div>
+
+                    <div class="map-scroll-viewport" id="map-scroll-viewport">
+                        <canvas id="world-map"></canvas>
+                    </div>
+
                     <div id="map-overlay" class="map-overlay">
                         <div id="kingdom-info" class="hidden kingdom-info">
                             <h3 id="kingdom-name"></h3>

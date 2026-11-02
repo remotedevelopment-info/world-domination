@@ -25,6 +25,9 @@ import {
   resizeCanvas,
   renderMap,
   getKingdomAtPosition,
+  magnifierState,
+  setMagnifier,
+  updateMagnifierPosition,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
 import {
@@ -95,6 +98,7 @@ onSocketStateChange(() => {
 // React to Historical Era transitions (adding new unowned countries to the map in each Age)
 onEraChange((newEra, yearInt, prevEraId) => {
   syncKingdomsForYear(state.allKingdoms, yearInt);
+  resizeCanvas();
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
@@ -348,9 +352,118 @@ function doLogout() {
   });
 }
 
-// Wire canvas click hit-testing
+// Wire canvas interactions: click selection, drag-to-pan, right-click Loupe, wheel scroll
 function setupCanvasInteractions(canvas) {
+  const scrollViewport = document.getElementById("map-scroll-viewport");
+  let isDragging = false;
+  let hasDragged = false;
+  let startX = 0;
+  let scrollStartX = 0;
+  let rightClickDown = false;
+  let loupeToggleLocked = false;
+
+  const toggleBtn = document.getElementById("toggle-loupe-btn");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      loupeToggleLocked = !loupeToggleLocked;
+      toggleBtn.classList.toggle("active", loupeToggleLocked);
+      const rect = canvas.getBoundingClientRect();
+      const cx = (scrollViewport?.clientWidth || rect.width) / 2;
+      const cy = rect.height / 2;
+      setMagnifier(loupeToggleLocked, cx, cy);
+    });
+  }
+
+  // Prevent default context menu on canvas so right-click is dedicated to the magnifier loupe
+  canvas.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+  });
+
+  // Mousedown: Left-click starts drag-to-pan, Right-click triggers Loupe
+  canvas.addEventListener("mousedown", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    if (e.button === 2) {
+      // Right-click: Activate Victorian Steampunk Brass Loupe
+      e.preventDefault();
+      rightClickDown = true;
+      setMagnifier(true, cx, cy);
+      return;
+    }
+
+    if (e.button === 0) {
+      // Left-click: Start horizontal drag-to-pan
+      isDragging = true;
+      hasDragged = false;
+      startX = e.clientX;
+      scrollStartX = scrollViewport ? scrollViewport.scrollLeft : 0;
+    }
+  });
+
+  // Mousemove: update Loupe or perform horizontal panning
+  window.addEventListener("mousemove", (e) => {
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    // Update Loupe position if active
+    if (magnifierState.active) {
+      updateMagnifierPosition(cx, cy);
+    }
+
+    // Drag-to-pan handling
+    if (isDragging && scrollViewport) {
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 4) {
+        hasDragged = true;
+        scrollViewport.classList.add("is-dragging");
+      }
+      scrollViewport.scrollLeft = scrollStartX - dx;
+    }
+  });
+
+  // Mouseup: release drag-to-pan or release Loupe
+  window.addEventListener("mouseup", (e) => {
+    if (e.button === 2 && rightClickDown) {
+      rightClickDown = false;
+      if (!loupeToggleLocked) {
+        setMagnifier(false);
+      }
+    }
+    if (e.button === 0) {
+      isDragging = false;
+      if (scrollViewport) {
+        scrollViewport.classList.remove("is-dragging");
+      }
+    }
+  });
+
+  // Mousewheel: horizontal panning across the map
+  if (scrollViewport) {
+    scrollViewport.addEventListener(
+      "wheel",
+      (e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.shiftKey) {
+          scrollViewport.scrollLeft += e.deltaY * 0.85;
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+  }
+
+  // Click on kingdom (only if not dragging)
   canvas.addEventListener("click", (e) => {
+    if (hasDragged) {
+      hasDragged = false;
+      return;
+    }
+    if (e.button !== 0) return;
+
     const kingdom = getKingdomAtPosition(e.clientX, e.clientY);
     if (kingdom) {
       // If clicking your own country, open the command center view
