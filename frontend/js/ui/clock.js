@@ -235,7 +235,7 @@ function updateHistoricalEraBar(activeEra, yearInt) {
       plaque.classList.add("active");
       plaque.classList.remove("locked", "completed");
       if (badge) {
-        badge.textContent = "ACTIVE ERA";
+        badge.textContent = "ACTIVE";
         badge.className = "plaque-badge active-lamp";
       }
     } else if (idx < activeIdx) {
@@ -249,7 +249,7 @@ function updateHistoricalEraBar(activeEra, yearInt) {
       plaque.classList.remove("active", "completed");
       plaque.classList.add("locked");
       if (badge) {
-        badge.textContent = "🔒 LOCKED";
+        badge.textContent = "LOCKED";
         badge.className = "plaque-badge locked-lamp";
       }
     }

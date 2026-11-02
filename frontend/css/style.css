@@ -49,33 +49,50 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px;
-    background: rgba(0, 0, 0, 0.4);
-    border-bottom: 2px solid #b8860b;
+    padding: 6px 16px;
+    background: linear-gradient(180deg, #241d16 0%, #14100c 100%);
+    border-bottom: 2px solid #8b6508;
+    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.7);
     position: relative;
-    gap: 15px;
+    gap: 14px;
+    z-index: 25;
+    overflow-x: auto;
 }
-.player-info { display: flex; align-items: center; gap: 15px; }
-#player-name { font-weight: bold; font-size: 1.2em; }
-.kingdom-badge {
-    background: #ffd700;
-    color: #1a1a2e;
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-size: 0.9em;
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+#player-name {
     font-weight: bold;
+    font-size: 1.05em;
+    color: #fff2a8;
+    letter-spacing: 0.5px;
+    font-family: Georgia, serif;
 }
-.game-info { display: flex; align-items: center; gap: 15px; }
-#tick-display { font-family: monospace; font-size: 1.1em; }
-.status-indicator { color: #4ecdc4; font-size: 1.2em; }
-.status-indicator.disconnected { color: #ff6b6b; }
-.logout-btn {
-    padding: 8px 20px;
-    background: rgba(255, 107, 107, 0.8);
-    border: none;
-    border-radius: 5px;
-    color: #fff;
-    cursor: pointer;
+.kingdom-badge {
+    background: linear-gradient(180deg, #ffd700 0%, #c49b1a 100%);
+    color: #1a1205;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    border: 1px solid #ffe680;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+}
+.status-indicator {
+    color: #4ecdc4;
+    font-size: 1.1em;
+    cursor: default;
+    filter: drop-shadow(0 0 3px #4ecdc4);
+    user-select: none;
+}
+.status-indicator.disconnected {
+    color: #ff6b6b;
+    filter: drop-shadow(0 0 3px #ff6b6b);
 }
 .game-main { display: flex; flex: 1; overflow: hidden; }
 .map-container { flex: 1; position: relative; background: #1a4d6e; overflow: hidden; }
@@ -1994,34 +2011,35 @@ body {
    STEAMPUNK CARTOGRAPHIC & HISTORICAL ERA SYSTEM (1500 - 1920+)
    ============================================================ */
 
-/* --- 1. Historical Era Chronometer Bar --- */
+/* --- 1. Historical Era Chronometer Bar (Embedded in Header Row) --- */
 .era-chronometer-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 18px;
-    background: linear-gradient(180deg, #241d16 0%, #15110d 100%);
-    border-bottom: 2px solid #8b6508;
-    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.6);
+    gap: 8px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
     overflow-x: auto;
-    z-index: 20;
+    flex-shrink: 0;
 }
 
 .era-track-label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
     white-space: nowrap;
     color: #ffd700;
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 0.85em;
-    letter-spacing: 1.5px;
+    font-size: 0.72em;
+    font-weight: bold;
+    letter-spacing: 1px;
     text-transform: uppercase;
 }
 
 .era-track-label .gear-icon {
-    font-size: 1.25em;
+    font-size: 1.1em;
     animation: slow-gear-spin 25s linear infinite;
     display: inline-block;
 }
@@ -2034,9 +2052,8 @@ body {
 .era-plaques-container {
     display: flex;
     align-items: stretch;
-    gap: 8px;
-    flex: 1;
-    justify-content: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .era-plaque {
@@ -2045,12 +2062,12 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 4px 14px;
-    min-width: 145px;
-    border-radius: 5px;
+    padding: 3px 8px;
+    min-width: 88px;
+    border-radius: 4px;
     border: 1px solid #5a4525;
     background: linear-gradient(180deg, #2a221a 0%, #17130e 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 5px rgba(0,0,0,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.5);
     cursor: default;
     transition: all 0.25s ease;
     user-select: none;
@@ -2059,56 +2076,79 @@ body {
 .era-plaque.active {
     background: linear-gradient(180deg, #44341e 0%, #241a0d 100%);
     border: 1.5px solid #ffd700;
-    box-shadow: 0 0 14px rgba(255, 215, 0, 0.35), inset 0 0 8px rgba(255, 215, 0, 0.18);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.35), inset 0 0 5px rgba(255, 215, 0, 0.18);
+}
+
+.era-plaque.completed {
+    background: linear-gradient(180deg, #222a1b 0%, #12180d 100%);
+    border: 1px solid #5a8a3a;
 }
 
 .era-plaque .plaque-num {
-    font-size: 0.65em;
+    font-size: 0.56em;
     font-weight: bold;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     color: #a89060;
     text-transform: uppercase;
+    line-height: 1.1;
 }
 
 .era-plaque.active .plaque-num {
     color: #ffd700;
 }
 
+.era-plaque.completed .plaque-num {
+    color: #85c276;
+}
+
 .era-plaque .plaque-name {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 0.76em;
+    font-size: 0.68em;
     font-weight: bold;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
     color: #d8c29d;
     text-align: center;
     white-space: nowrap;
+    line-height: 1.1;
 }
 
 .era-plaque.active .plaque-name {
     color: #fff2a8;
-    text-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+}
+
+.era-plaque.completed .plaque-name {
+    color: #c4d8b8;
 }
 
 .era-plaque .plaque-dates {
-    font-size: 0.62em;
+    font-size: 0.54em;
     color: #8c7654;
     font-style: italic;
+    line-height: 1.1;
 }
 
 .era-plaque .plaque-badge {
-    font-size: 0.6em;
-    padding: 1px 7px;
-    border-radius: 8px;
-    margin-top: 2px;
+    font-size: 0.52em;
+    padding: 1px 5px;
+    border-radius: 6px;
+    margin-top: 1px;
     font-weight: bold;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
+    line-height: 1.1;
 }
 
 .era-plaque.active .plaque-badge.active-lamp {
     background: rgba(255, 215, 0, 0.2);
     border: 1px solid #ffd700;
     color: #ffd700;
-    box-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+    box-shadow: 0 0 5px rgba(255, 215, 0, 0.4);
+}
+
+.era-plaque.completed .plaque-badge.completed-lamp {
+    background: rgba(90, 158, 90, 0.2);
+    border: 1px solid #5a9e5a;
+    color: #85d885;
 }
 
 .era-plaque.locked .plaque-badge.locked-lamp {
@@ -2119,16 +2159,16 @@ body {
 
 .era-plaque .plaque-rivet {
     position: absolute;
-    width: 4px;
-    height: 4px;
+    width: 3px;
+    height: 3px;
     border-radius: 50%;
     background: radial-gradient(circle, #ffd700 0%, #5a4525 100%);
     box-shadow: 0 1px 1px rgba(0,0,0,0.5);
 }
-.era-plaque .plaque-rivet.top-left { top: 2px; left: 3px; }
-.era-plaque .plaque-rivet.top-right { top: 2px; right: 3px; }
-.era-plaque .plaque-rivet.btm-left { bottom: 2px; left: 3px; }
-.era-plaque .plaque-rivet.btm-right { bottom: 2px; right: 3px; }
+.era-plaque .plaque-rivet.top-left { top: 2px; left: 2px; }
+.era-plaque .plaque-rivet.top-right { top: 2px; right: 2px; }
+.era-plaque .plaque-rivet.btm-left { bottom: 2px; left: 2px; }
+.era-plaque .plaque-rivet.btm-right { bottom: 2px; right: 2px; }
 
 /* --- 2. Steampunk Map Frame & Cartouche Plaque --- */
 .map-container.steampunk-map-frame {
@@ -2324,18 +2364,18 @@ body {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 6px 18px 8px 14px;
+    gap: 8px;
+    padding: 3px 12px 5px 10px;
     background: linear-gradient(180deg, #2b2116 0%, #17120a 100%);
     border: 2px solid #b8860b;
     border-radius: 6px;
     box-shadow:
         inset 0 1px 0 rgba(255, 215, 0, 0.35),
-        0 4px 12px rgba(0, 0, 0, 0.65);
+        0 3px 8px rgba(0, 0, 0, 0.65);
 }
 
 .legend-crest {
-    font-size: 1.6em;
+    font-size: 1.35em;
     filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.5));
     animation: gentle-bob 4s ease-in-out infinite;
 }
@@ -2354,8 +2394,8 @@ body {
 
 .legend-era-tag {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 0.66em;
-    letter-spacing: 1.6px;
+    font-size: 0.64em;
+    letter-spacing: 1.4px;
     color: #d4af37;
     text-transform: uppercase;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
@@ -2368,7 +2408,7 @@ body {
 }
 
 .legend-ad {
-    font-size: 0.72em;
+    font-size: 0.70em;
     font-weight: bold;
     color: #c4a77d;
     letter-spacing: 1px;
@@ -2376,19 +2416,19 @@ body {
 
 .legend-year-num {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 1.55em;
+    font-size: 1.35em;
     font-weight: bold;
     color: #fff2a8;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
     text-shadow:
         0 0 10px rgba(255, 215, 0, 0.55),
         0 2px 4px rgba(0, 0, 0, 0.9);
 }
 
 .legend-season-badge {
-    font-size: 0.72em;
+    font-size: 0.68em;
     font-weight: bold;
-    padding: 1px 7px;
+    padding: 1px 6px;
     border-radius: 10px;
     background: rgba(255, 215, 0, 0.15);
     border: 1px solid rgba(212, 175, 55, 0.5);

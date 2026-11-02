@@ -44,36 +44,96 @@
                 <div class="player-info">
                     <span id="player-name">Player</span>
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
+                    <span id="connection-status" class="status-indicator" title="Server Connection Status">●</span>
                 </div>
-            <!-- Steampunk Map Legend with In-Game Year & Chronometer -->
-            <div class="map-legend-chronometer" id="header-map-legend">
-                <div class="legend-frame-plate">
-                    <div class="legend-crest" title="Imperial Navigational Astrolabe">🧭</div>
-                    <div class="legend-body">
-                        <div class="legend-year-banner">
-                            <span class="legend-ad">ANNO DOMINI</span>
-                            <span class="legend-year-num" id="legend-year-display">1500</span>
-                            <span class="legend-season-badge" id="legend-season-display">🌱 Spring</span>
+
+                <!-- Steampunk Map Legend with In-Game Year & Chronometer -->
+                <div class="map-legend-chronometer" id="header-map-legend">
+                    <div class="legend-frame-plate">
+                        <div class="legend-crest" title="Imperial Navigational Astrolabe">🧭</div>
+                        <div class="legend-body">
+                            <div class="legend-year-banner">
+                                <span class="legend-ad">ANNO DOMINI</span>
+                                <span class="legend-year-num" id="legend-year-display">1500</span>
+                                <span class="legend-season-badge" id="legend-season-display">🌱 Spring</span>
+                            </div>
+                            <div class="legend-era-tag" id="legend-era-tag">THE AGE OF DISCOVERY</div>
                         </div>
-                        <div class="legend-era-tag" id="legend-era-tag">THE AGE OF DISCOVERY</div>
+                        <div class="legend-year-progress-track" title="Progression through Current Year">
+                            <div class="legend-year-progress-fill" id="legend-year-progress" style="width: 0%;"></div>
+                        </div>
                     </div>
-                    <div class="legend-year-progress-track" title="Progression through Current Year">
-                        <div class="legend-year-progress-fill" id="legend-year-progress" style="width: 0%;"></div>
-                    </div>
+
+                    <!-- Development Activated Time Scale Control Button -->
+                    <button type="button" class="dev-chrono-btn" id="dev-chrono-toggle-btn" onclick="toggleDevChronoControl()" title="Toggle Development Time Regulator (Map Ticks to Years)">
+                        <span class="dev-gear-icon">⚙️</span>
+                        <span class="dev-ratio-tag" id="header-dev-ratio-badge">1d = 1yr</span>
+                    </button>
                 </div>
 
-                <!-- Development Activated Time Scale Control Button -->
-                <button type="button" class="dev-chrono-btn" id="dev-chrono-toggle-btn" onclick="toggleDevChronoControl()" title="Toggle Development Time Regulator (Map Ticks to Years)">
-                    <span class="dev-gear-icon">⚙️</span>
-                    <span class="dev-ratio-tag" id="header-dev-ratio-badge">1d = 1yr</span>
-                </button>
-            </div>
+                <!-- Historical Era Chronometer of Ages (5 Historic Eras) -->
+                <nav class="era-chronometer-bar" aria-label="Historical Eras Timeline">
+                    <div class="era-track-label">
+                        <span class="gear-icon">⚙️</span>
+                        <span class="chronometer-title">AGES</span>
+                    </div>
+                    <div class="era-plaques-container">
+                        <div class="era-plaque active" data-era="discovery" title="Age of Discovery (c. 1500) - Steampunk Astrolabes & Portolan Charts (11 Sovereign Empires)">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA I</div>
+                            <div class="plaque-name">DISCOVERY</div>
+                            <div class="plaque-dates">circa 1500</div>
+                            <div class="plaque-badge active-lamp">ACTIVE</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
 
-            <div class="game-info">
-                <span id="tick-display">Turn 0</span>
-                <span id="connection-status" class="status-indicator">●</span>
-            </div>
-                <button onclick="logout()" class="logout-btn">Logout</button>
+                        <div class="era-plaque locked" data-era="revolt" title="Age of Revolt (1750–1860) - Gunpowder, Steam & Imperial Fractures">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA II</div>
+                            <div class="plaque-name">REVOLT</div>
+                            <div class="plaque-dates">1750–1860</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="independence" title="Age of Independence (1860–1920) - Rise of Nation States & Industrial Steam">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA III</div>
+                            <div class="plaque-name">INDEPENDENCE</div>
+                            <div class="plaque-dates">1860–1920</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="decolonisation" title="Age of Decolonisation - Post-Colonial Emancipation & New Borders">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA IV</div>
+                            <div class="plaque-name">DECOLONISATION</div>
+                            <div class="plaque-dates">1945–1989</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="modern" title="The Modern Age - Digital Geopolitics & Global Trade">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA V</div>
+                            <div class="plaque-name">MODERN</div>
+                            <div class="plaque-dates">1989–Pres</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+                    </div>
+                </nav>
             </header>
 
             <!-- Development Activated Chrono Regulator Drawer / Modal -->
@@ -218,69 +278,7 @@
                 </div>
             </div>
 
-            <!-- Historical Era Chronometer Bar (5 Historic Ages) -->
-            <nav class="era-chronometer-bar" aria-label="Historical Eras Timeline">
-                <div class="era-track-label">
-                    <span class="gear-icon">⚙️</span>
-                    <span class="chronometer-title">CHRONOMETER OF AGES</span>
-                </div>
-                <div class="era-plaques-container">
-                    <div class="era-plaque active" data-era="discovery" title="Age of Discovery (c. 1500) - Steampunk Astrolabes & Portolan Charts (11 Sovereign Empires)">
-                        <div class="plaque-rivet top-left"></div>
-                        <div class="plaque-rivet top-right"></div>
-                        <div class="plaque-num">ERA I</div>
-                        <div class="plaque-name">AGE OF DISCOVERY</div>
-                        <div class="plaque-dates">circa 1500</div>
-                        <div class="plaque-badge active-lamp">ACTIVE ERA</div>
-                        <div class="plaque-rivet btm-left"></div>
-                        <div class="plaque-rivet btm-right"></div>
-                    </div>
 
-                    <div class="era-plaque locked" data-era="revolt" title="Age of Revolt (1750–1860) - Gunpowder, Steam & Imperial Fractures">
-                        <div class="plaque-rivet top-left"></div>
-                        <div class="plaque-rivet top-right"></div>
-                        <div class="plaque-num">ERA II</div>
-                        <div class="plaque-name">AGE OF REVOLT</div>
-                        <div class="plaque-dates">1750 – 1860</div>
-                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
-                        <div class="plaque-rivet btm-left"></div>
-                        <div class="plaque-rivet btm-right"></div>
-                    </div>
-
-                    <div class="era-plaque locked" data-era="independence" title="Age of Independence (1860–1920) - Rise of Nation States & Industrial Steam">
-                        <div class="plaque-rivet top-left"></div>
-                        <div class="plaque-rivet top-right"></div>
-                        <div class="plaque-num">ERA III</div>
-                        <div class="plaque-name">AGE OF INDEPENDENCE</div>
-                        <div class="plaque-dates">1860 – 1920</div>
-                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
-                        <div class="plaque-rivet btm-left"></div>
-                        <div class="plaque-rivet btm-right"></div>
-                    </div>
-
-                    <div class="era-plaque locked" data-era="decolonisation" title="Age of Decolonisation - Post-Colonial Emancipation & New Borders">
-                        <div class="plaque-rivet top-left"></div>
-                        <div class="plaque-rivet top-right"></div>
-                        <div class="plaque-num">ERA IV</div>
-                        <div class="plaque-name">DECOLONISATION</div>
-                        <div class="plaque-dates">1945 – 1989</div>
-                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
-                        <div class="plaque-rivet btm-left"></div>
-                        <div class="plaque-rivet btm-right"></div>
-                    </div>
-
-                    <div class="era-plaque locked" data-era="modern" title="The Modern Age - Digital Geopolitics & Global Trade">
-                        <div class="plaque-rivet top-left"></div>
-                        <div class="plaque-rivet top-right"></div>
-                        <div class="plaque-num">ERA V</div>
-                        <div class="plaque-name">MODERN AGE</div>
-                        <div class="plaque-dates">Present</div>
-                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
-                        <div class="plaque-rivet btm-left"></div>
-                        <div class="plaque-rivet btm-right"></div>
-                    </div>
-                </div>
-            </nav>
 
             <main class="game-main">
                 <div class="map-container steampunk-map-frame">
