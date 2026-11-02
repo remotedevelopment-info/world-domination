@@ -150,7 +150,7 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   const recruitCostLabel = document.getElementById("cc-recruit-cost-label");
   if (recruitCostLabel) {
     const cost = Math.max(1, Math.floor(pop / 100));
-    recruitCostLabel.textContent = `Cost: ${cost} Gold · +10 Troops`;
+    recruitCostLabel.textContent = `Cost: ${cost} Ducats · +10 Troops`;
   }
 
   switchConsoleBay(bay);
@@ -463,7 +463,7 @@ export function updateEconomyHintsLive() {
 
   const socHint = document.getElementById("cc-social-hint");
   if (socHint) {
-    socHint.textContent = `Spend: -${Math.round(socialCostsRate * 0.2)} gold · Infl: +${(socialCostsRate * 0.02).toFixed(1)}%`;
+    socHint.textContent = `Spend: -${Math.round(socialCostsRate * 0.2)} ducats · Infl: +${(socialCostsRate * 0.02).toFixed(1)}%`;
   }
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
@@ -487,7 +487,7 @@ export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance)
 
   const curEl = document.getElementById("cc-currency-val");
   if (curEl && typeof currencyVal === "number") {
-    curEl.textContent = `${currencyVal.toFixed(2)} gold`;
+    curEl.textContent = `${currencyVal.toFixed(2)} ducats`;
   }
 
   const balEl = document.getElementById("cc-budget-balance");
@@ -735,7 +735,7 @@ export function updateTargetKingdomDisplay() {
   if (popEl) popEl.textContent = (target.population || 0).toLocaleString();
 
   const resEl = document.getElementById("cc-target-res");
-  if (resEl) resEl.textContent = `${(target.resources || 0).toLocaleString()} gold`;
+  if (resEl) resEl.textContent = `${(target.resources || 0).toLocaleString()} ducats`;
 
   const statusEl = document.getElementById("cc-target-status");
   if (statusEl) {
@@ -823,7 +823,7 @@ export function updateDiploPreview() {
   const missions = {
     envoy: `Send Royal Envoy to ${targetName}`,
     alliance: `Propose Alliance with ${targetName}`,
-    trade: `Dispatch 50 Gold Caravan to ${targetName}`,
+    trade: `Dispatch 50 Ducat Merchant Fleet to ${targetName}`,
     war: `Declare War Against ${targetName}`,
   };
   preview.textContent = missions[diplomaticStance] || `Mission to ${targetName}`;

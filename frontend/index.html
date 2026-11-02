@@ -61,8 +61,88 @@
                 <button onclick="logout()" class="logout-btn">Logout</button>
             </header>
 
+            <!-- Historical Era Chronometer Bar (5 Historic Ages) -->
+            <nav class="era-chronometer-bar" aria-label="Historical Eras Timeline">
+                <div class="era-track-label">
+                    <span class="gear-icon">⚙️</span>
+                    <span class="chronometer-title">CHRONOMETER OF AGES</span>
+                </div>
+                <div class="era-plaques-container">
+                    <div class="era-plaque active" data-era="discovery" title="Age of Discovery (c. 1500) - Steampunk Astrolabes & Portolan Charts (11 Sovereign Empires)">
+                        <div class="plaque-rivet top-left"></div>
+                        <div class="plaque-rivet top-right"></div>
+                        <div class="plaque-num">ERA I</div>
+                        <div class="plaque-name">AGE OF DISCOVERY</div>
+                        <div class="plaque-dates">circa 1500</div>
+                        <div class="plaque-badge active-lamp">ACTIVE ERA</div>
+                        <div class="plaque-rivet btm-left"></div>
+                        <div class="plaque-rivet btm-right"></div>
+                    </div>
+
+                    <div class="era-plaque locked" data-era="revolt" title="Age of Revolt (1750–1860) - Gunpowder, Steam & Imperial Fractures">
+                        <div class="plaque-rivet top-left"></div>
+                        <div class="plaque-rivet top-right"></div>
+                        <div class="plaque-num">ERA II</div>
+                        <div class="plaque-name">AGE OF REVOLT</div>
+                        <div class="plaque-dates">1750 – 1860</div>
+                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
+                        <div class="plaque-rivet btm-left"></div>
+                        <div class="plaque-rivet btm-right"></div>
+                    </div>
+
+                    <div class="era-plaque locked" data-era="independence" title="Age of Independence (1860–1920) - Rise of Nation States & Industrial Steam">
+                        <div class="plaque-rivet top-left"></div>
+                        <div class="plaque-rivet top-right"></div>
+                        <div class="plaque-num">ERA III</div>
+                        <div class="plaque-name">AGE OF INDEPENDENCE</div>
+                        <div class="plaque-dates">1860 – 1920</div>
+                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
+                        <div class="plaque-rivet btm-left"></div>
+                        <div class="plaque-rivet btm-right"></div>
+                    </div>
+
+                    <div class="era-plaque locked" data-era="decolonisation" title="Age of Decolonisation - Post-Colonial Emancipation & New Borders">
+                        <div class="plaque-rivet top-left"></div>
+                        <div class="plaque-rivet top-right"></div>
+                        <div class="plaque-num">ERA IV</div>
+                        <div class="plaque-name">DECOLONISATION</div>
+                        <div class="plaque-dates">1945 – 1989</div>
+                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
+                        <div class="plaque-rivet btm-left"></div>
+                        <div class="plaque-rivet btm-right"></div>
+                    </div>
+
+                    <div class="era-plaque locked" data-era="modern" title="The Modern Age - Digital Geopolitics & Global Trade">
+                        <div class="plaque-rivet top-left"></div>
+                        <div class="plaque-rivet top-right"></div>
+                        <div class="plaque-num">ERA V</div>
+                        <div class="plaque-name">MODERN AGE</div>
+                        <div class="plaque-dates">Present</div>
+                        <div class="plaque-badge locked-lamp">🔒 LOCKED</div>
+                        <div class="plaque-rivet btm-left"></div>
+                        <div class="plaque-rivet btm-right"></div>
+                    </div>
+                </div>
+            </nav>
+
             <main class="game-main">
-                <div class="map-container">
+                <div class="map-container steampunk-map-frame">
+                    <!-- Steampunk Cartouche Header -->
+                    <div class="cartouche-header-plaque">
+                        <span class="cartouche-flourish">✦</span>
+                        <div class="cartouche-title-group">
+                            <span class="cartouche-title">ORBIS TERRARUM · ANNO DOMINI MD (1500)</span>
+                            <span class="cartouche-subtitle">THE AGE OF DISCOVERY · 11 SOVEREIGN REALMS</span>
+                        </div>
+                        <span class="cartouche-flourish">✦</span>
+                    </div>
+
+                    <!-- Corner Astrolabe Brackets -->
+                    <div class="map-corner-bracket top-left"></div>
+                    <div class="map-corner-bracket top-right"></div>
+                    <div class="map-corner-bracket bottom-left"></div>
+                    <div class="map-corner-bracket bottom-right"></div>
+
                     <canvas id="world-map"></canvas>
                     <div id="map-overlay" class="map-overlay">
                         <div id="kingdom-info" class="hidden kingdom-info">
@@ -76,14 +156,14 @@
 
                 <aside class="game-sidebar">
                     <div id="country-selection" class="panel">
-                        <h3>Claim Your Kingdom</h3>
-                        <p class="panel-desc">Select an unclaimed kingdom on the map</p>
+                        <h3>👑 Claim an Imperial Realm</h3>
+                        <p class="panel-desc">Select a sovereign power operating in 1500 on the cartographic chart</p>
                         <div id="available-kingdoms" class="kingdom-list"></div>
-                        <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Kingdom</button>
+                        <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Realm</button>
                     </div>
 
                     <div id="my-kingdom" class="hidden panel">
-                        <h3>My Kingdom</h3>
+                        <h3>My Imperial Realm</h3>
                         <div id="kingdom-stats">
                             <p>Name: <span id="my-kingdom-name"></span></p>
                             <p>Population: <span id="my-kingdom-pop"></span></p>
@@ -98,9 +178,9 @@
                     </div>
 
                     <div id="economy-panel" class="hidden panel">
-                        <h3>Treasury &amp; Economy</h3>
+                        <h3>Royal Exchequer &amp; Economy</h3>
                         <div id="economy-stats">
-                            <p>Currency Value: <span id="econ-currency">—</span><span class="econ-unit">gold</span><span id="econ-currency-trend" class="econ-trend"></span></p>
+                            <p>Currency Value: <span id="econ-currency">—</span><span class="econ-unit">ducats</span><span id="econ-currency-trend" class="econ-trend"></span></p>
                             <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend" class="econ-trend"></span></p>
                             <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/cycle</span></p>
                             <p>Military Spending: <span id="econ-military">—</span><span class="econ-unit">/cycle</span></p>
@@ -112,7 +192,7 @@
                     </div>
 
                     <div id="activity-log" class="panel">
-                        <h3>Activity Log</h3>
+                        <h3>Chronicle of Imperial Deeds</h3>
                         <div id="log-entries" class="log-container"></div>
                     </div>
                 </aside>
@@ -180,19 +260,19 @@
                         <div class="console-title-group">
                             <span class="realm-crest" id="cc-realm-crest">🏰</span>
                             <div>
-                                <h2 id="cc-kingdom-name" class="console-title">KINGDOM COMMAND CONSOLE</h2>
+                                <h2 id="cc-kingdom-name" class="console-title">IMPERIAL COMMAND CONSOLE · AGE OF DISCOVERY c. 1500</h2>
                                 <div class="console-subtext">
                                     <span id="cc-ruler-name">Lord Sovereign</span> · 
                                     <span id="cc-kingdom-code" class="code-badge">KINGDOM</span> · 
-                                    <span class="console-status-lamp active">REAL-TIME VARIABLE CONTROL</span>
+                                    <span class="console-status-lamp active">STEAMPUNK TELEMETRY &amp; REAL-TIME CONTROL</span>
                                 </div>
                             </div>
                         </div>
                         <div class="console-nav-tabs">
                             <button class="nav-tab active" data-bay="all" onclick="switchConsoleBay('all')">🎛️ Master Console</button>
-                            <button class="nav-tab" data-bay="fiscal" onclick="switchConsoleBay('fiscal')">💰 Treasury &amp; Economy</button>
-                            <button class="nav-tab" data-bay="military" onclick="switchConsoleBay('military')">⚔️ Military &amp; Defense</button>
-                            <button class="nav-tab" data-bay="diplomacy" onclick="switchConsoleBay('diplomacy')">🤝 Foreign Affairs</button>
+                            <button class="nav-tab" data-bay="fiscal" onclick="switchConsoleBay('fiscal')">💰 Exchequer &amp; Trade</button>
+                            <button class="nav-tab" data-bay="military" onclick="switchConsoleBay('military')">⚔️ Tercios &amp; Armadas</button>
+                            <button class="nav-tab" data-bay="diplomacy" onclick="switchConsoleBay('diplomacy')">🤝 Chancery &amp; Envoys</button>
                         </div>
                         <button onclick="closeKingdomCommandCenter()" class="console-close-btn" title="Close Control Panel">×</button>
                     </div>
@@ -213,7 +293,7 @@
                             </div>
                             <div class="gauge-readout">
                                 <span class="gauge-value" id="cc-meter-pop-val">0</span>
-                                <span class="gauge-sub">CITIZENS</span>
+                                <span class="gauge-sub">SUBJECTS &amp; GUILDS</span>
                             </div>
                         </div>
 
@@ -231,15 +311,15 @@
                             </div>
                             <div class="gauge-readout">
                                 <span class="gauge-value" id="cc-meter-res-val">0</span>
-                                <span class="gauge-sub">GOLD COIN</span>
+                                <span class="gauge-sub">GOLD DUCATS</span>
                             </div>
                         </div>
 
                         <!-- Central Army Armory Gauge -->
                         <div class="analog-gauge-card" id="gauge-card-troops">
                             <div class="gauge-header">
-                                <span class="gauge-title">CENTRAL ARMY</span>
-                                <span class="military-tier-badge" id="cc-army-tier">LEVY</span>
+                                <span class="gauge-title">CENTRAL ARMADA</span>
+                                <span class="military-tier-badge" id="cc-army-tier">TERCIO</span>
                             </div>
                             <div class="analog-gauge iron-gauge" id="cc-meter-troops">
                                 <div class="meter-face">
@@ -249,15 +329,15 @@
                             </div>
                             <div class="gauge-readout">
                                 <span class="gauge-value" id="cc-meter-troop-val">0</span>
-                                <span class="gauge-sub">TROOPS READY</span>
+                                <span class="gauge-sub">TERCIOS &amp; CARAVELS</span>
                             </div>
                         </div>
 
                         <!-- Economic Vitality Gauge (GDP & Currency Parity) -->
                         <div class="analog-gauge-card" id="gauge-card-vitality">
                             <div class="gauge-header">
-                                <span class="gauge-title">GDP PRODUCTIVITY</span>
-                                <span class="gauge-delta" id="cc-currency-val">1.00 gold</span>
+                                <span class="gauge-title">TRADE PRODUCTIVITY</span>
+                                <span class="gauge-delta" id="cc-currency-val">1.00 ducat</span>
                             </div>
                             <div class="analog-gauge vitality-gauge" id="cc-meter-gdp">
                                 <div class="meter-face">
@@ -267,7 +347,7 @@
                             </div>
                             <div class="gauge-readout">
                                 <span class="gauge-value" id="cc-meter-gdp-val">0</span>
-                                <span class="gauge-sub">OUTPUT / CYCLE</span>
+                                <span class="gauge-sub">DUCATS / CYCLE</span>
                             </div>
                         </div>
                     </div>
@@ -278,7 +358,7 @@
                         <section class="console-bay bay-fiscal" id="bay-fiscal">
                             <div class="bay-plate-title">
                                 <span class="plate-rivet"></span>
-                                <span>💰 FISCAL REGULATOR &amp; TREASURY CONTROLS</span>
+                                <span>💰 ROYAL EXCHEQUER &amp; TARIFF REGULATOR</span>
                                 <span class="plate-rivet"></span>
                             </div>
 
@@ -287,7 +367,7 @@
                                 <div class="dials-row">
                                     <!-- Tax Rate Dial -->
                                     <div class="dial-container">
-                                        <div class="control-label">TAX LEVY RATE</div>
+                                        <div class="control-label">ROYAL TITHE &amp; TARIFF</div>
                                         <div id="cc-economy-dial" class="rotary-dial brass-dial" data-dial-type="tax" tabindex="0" role="slider" aria-label="Tax Rate" aria-valuemin="0" aria-valuemax="100">
                                             <div class="dial-bezel"></div>
                                             <div class="dial-arc"></div>
@@ -304,13 +384,13 @@
                                         </div>
                                         <div class="dial-digital-readout">
                                             <span class="readout-num" id="cc-economy-dial-value">50</span><span class="readout-unit">%</span>
-                                            <div class="readout-hint" id="cc-tax-impact-hint">Tax Revenue: +25/cycle</div>
+                                            <div class="readout-hint" id="cc-tax-impact-hint">Tithe Revenue: +25 ducats/cycle</div>
                                         </div>
                                     </div>
 
                                     <!-- Investment Allocation Dial -->
                                     <div class="dial-container">
-                                        <div class="control-label">CAPITAL INVESTMENT</div>
+                                        <div class="control-label">COLONIAL EXPEDITIONS</div>
                                         <div id="cc-investment-dial" class="rotary-dial cyan-dial" data-dial-type="investment" tabindex="0" role="slider" aria-label="Capital Investment" aria-valuemin="0" aria-valuemax="100">
                                             <div class="dial-bezel"></div>
                                             <div class="dial-arc"></div>
@@ -326,13 +406,13 @@
                                         </div>
                                         <div class="dial-digital-readout">
                                             <span class="readout-num" id="cc-investment-dial-value">0</span><span class="readout-unit">%</span>
-                                            <div class="readout-hint" id="cc-investment-hint">+0.0% GDP Multiplier</div>
+                                            <div class="readout-hint" id="cc-investment-hint">+0.0% Trade Multiplier</div>
                                         </div>
                                     </div>
 
                                     <!-- Social Welfare Spending Dial -->
                                     <div class="dial-container">
-                                        <div class="control-label">SOCIAL WELFARE</div>
+                                        <div class="control-label">GUILD &amp; CATHEDRAL FUNDS</div>
                                         <div id="cc-social-dial" class="rotary-dial purple-dial" data-dial-type="social" tabindex="0" role="slider" aria-label="Social Spending" aria-valuemin="0" aria-valuemax="100">
                                             <div class="dial-bezel"></div>
                                             <div class="dial-arc"></div>
@@ -358,7 +438,7 @@
                                     <!-- Treasury Harvest Lever -->
                                     <div class="tactical-lever-card">
                                         <div class="lever-info">
-                                            <div class="lever-title">HARVEST TAX LEVY</div>
+                                            <div class="lever-title">HARVEST CROWN TITHE</div>
                                             <div class="lever-sub">Collect immediate tax cycle into gold reserve</div>
                                         </div>
                                         <button id="cc-lever-collect-taxes" class="mechanical-lever-btn lever-gold" onclick="triggerCollectTaxes()">
@@ -370,36 +450,36 @@
                                     <!-- Stepper: Market Trading Posts -->
                                     <div class="tactical-stepper-card">
                                         <div class="stepper-header">
-                                            <span class="stepper-title">MARKET TRADING POSTS</span>
+                                            <span class="stepper-title">PORT CARAVEL &amp; TRADING POSTS</span>
                                             <span class="stepper-level-text" id="cc-market-level-label">Tier 0</span>
                                         </div>
                                         <div class="stepper-pips" id="cc-market-pips">
                                             <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
                                         </div>
                                         <div class="stepper-meta">
-                                            <span class="meta-cost">Cost: 200 Gold</span>
+                                            <span class="meta-cost">Cost: 200 Ducats</span>
                                             <span class="meta-benefit">+5% Trade GDP</span>
                                         </div>
                                         <button id="cc-btn-upgrade-market" class="stepper-actuator-btn" onclick="triggerUpgradeMarket()">
-                                            <span>🏗️ BUILD MARKET POST</span>
+                                            <span>🏗️ CHARTER TRADING POST</span>
                                         </button>
                                     </div>
 
                                     <!-- Stepper: Civil Infrastructure -->
                                     <div class="tactical-stepper-card">
                                         <div class="stepper-header">
-                                            <span class="stepper-title">CIVIL INFRASTRUCTURE</span>
+                                            <span class="stepper-title">GUILD &amp; HARBOR INFRASTRUCTURE</span>
                                             <span class="stepper-level-text" id="cc-infra-level-label">Tier 0</span>
                                         </div>
                                         <div class="stepper-pips" id="cc-infra-pips">
                                             <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
                                         </div>
                                         <div class="stepper-meta">
-                                            <span class="meta-cost">Cost: 150 Gold</span>
+                                            <span class="meta-cost">Cost: 150 Ducats</span>
                                             <span class="meta-benefit">+3% Productivity &amp; Pop</span>
                                         </div>
                                         <button id="cc-btn-upgrade-infra" class="stepper-actuator-btn" onclick="triggerUpgradeInfra()">
-                                            <span>🛠️ EXPAND INFRASTRUCTURE</span>
+                                            <span>🛠️ EXPAND HARBOR WORKS</span>
                                         </button>
                                     </div>
                                 </div>
@@ -528,8 +608,8 @@
                                         <div class="actuator-box">
                                             <button id="cc-lever-recruit" class="chunky-actuator-btn btn-recruit" onclick="triggerRecruitTroops()">
                                                 <span class="btn-icon">🎖️</span>
-                                                <span class="btn-main">CONSCRIBE TROOPS</span>
-                                                <span class="btn-meta" id="cc-recruit-cost-label">Cost: 10 Gold · +10 Troops</span>
+                                                <span class="btn-main">MUSTER TERCIOS &amp; FLEET</span>
+                                                <span class="btn-meta" id="cc-recruit-cost-label">Cost: 10 Ducats · +10 Troops</span>
                                             </button>
                                         </div>
 
@@ -537,7 +617,7 @@
                                         <div class="actuator-box">
                                             <button id="cc-lever-fortify" class="chunky-actuator-btn btn-fortify" onclick="triggerFortifyBorder()">
                                                 <span class="btn-icon">🏰</span>
-                                                <span class="btn-main">FORTIFY BORDER</span>
+                                                <span class="btn-main">FORTIFY CITADEL &amp; BORDER</span>
                                                 <span class="btn-meta" id="cc-fortify-border-label">Reinforce North Frontier</span>
                                             </button>
                                         </div>
@@ -547,7 +627,7 @@
                                             <button id="cc-lever-deploy" class="master-dispatch-lever-btn" onclick="triggerDispatchTroops()">
                                                 <div class="master-lever-handle"><div class="lever-head"></div></div>
                                                 <div class="master-label-block">
-                                                    <span class="master-title">⚔️ DISPATCH FORCES</span>
+                                                    <span class="master-title">⚔️ DISPATCH FORCES &amp; ARMADA</span>
                                                     <span class="master-order" id="cc-deploy-order-preview">March to North Border (Slow)</span>
                                                 </div>
                                             </button>

@@ -242,23 +242,17 @@ func SeedInitialData() error {
 	}
 
 	kingdoms := []kingdom{
-		{"England", "ENG", "#FF6B6B", 5000000, 500, false, `{"borders": ["SCO"]}`},
-		{"Ireland", "IRL", "#FFD700", 3000000, 200, true, `{"borders": []}`},
-		{"Scotland", "SCO", "#FCBAD3", 500000, 200, false, `{"borders": ["ENG"]}`},
-		{"France", "FRA", "#4ECDC4", 18000000, 800, false, `{"borders": ["ESP", "ARA", "HRE", "ITA"]}`},
-		{"Spain", "ESP", "#FFE66D", 8000000, 600, false, `{"borders": ["POR", "CAS", "ARA", "FRA"]}`},
-		{"Portugal", "POR", "#95E1D3", 2000000, 300, false, `{"borders": ["ESP", "CAS"]}`},
-		{"Castile", "CAS", "#F38181", 4000000, 500, false, `{"borders": ["POR", "ESP", "ARA"]}`},
-		{"Aragon", "ARA", "#FFA07A", 3000000, 450, false, `{"borders": ["ESP", "CAS", "FRA"]}`},
-		{"Holy Roman Empire", "HRE", "#A8D8EA", 15000000, 900, false, `{"borders": ["FRA", "ITA", "VEN", "POL"]}`},
-		{"Italy", "ITA", "#98DDCA", 6000000, 700, false, `{"borders": ["FRA", "HRE", "VEN", "PAP"]}`},
-		{"Venice", "VEN", "#4D96FF", 800000, 600, false, `{"borders": ["HRE", "ITA", "PAP"]}`},
-		{"Papal States", "PAP", "#E4BAD4", 1500000, 400, false, `{"borders": ["ITA", "VEN"]}`},
-		{"Norway", "NOR", "#D4F0F0", 400000, 350, false, `{"borders": ["SWE"]}`},
-		{"Sweden", "SWE", "#FFAAA5", 600000, 400, false, `{"borders": ["NOR"]}`},
-		{"Poland", "POL", "#6BCB77", 3000000, 450, false, `{"borders": ["HRE", "RUS"]}`},
-		{"Russia", "RUS", "#C7F9CC", 4000000, 500, false, `{"borders": ["POL"]}`},
-		{"Byzantium", "BYZ", "#FFD93D", 8000000, 1000, false, `{"borders": []}`},
+		{"Crown of Spain", "ESP", "#D35400", 8500000, 750, false, `{"borders": ["POR", "FRA"]}`},
+		{"Kingdom of Portugal", "POR", "#16A085", 2200000, 450, false, `{"borders": ["ESP"]}`},
+		{"Kingdom of France", "FRA", "#2980B9", 16000000, 850, false, `{"borders": ["ESP", "HRE"]}`},
+		{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, false, `{"borders": ["FRA"]}`},
+		{"Holy Roman Empire", "HRE", "#D4AC0D", 14000000, 900, false, `{"borders": ["FRA", "VEN", "POL", "KAL"]}`},
+		{"Ottoman Empire", "OTT", "#1B4F72", 12000000, 1000, false, `{"borders": ["VEN", "POL"]}`},
+		{"Republic of Venice", "VEN", "#00A8FF", 1800000, 700, false, `{"borders": ["HRE", "OTT", "PAP"]}`},
+		{"Papal States", "PAP", "#A569BD", 1500000, 500, false, `{"borders": ["VEN"]}`},
+		{"Poland-Lithuania", "POL", "#8E44AD", 6500000, 650, false, `{"borders": ["HRE", "OTT", "RUS"]}`},
+		{"Tsardom of Muscovy", "RUS", "#795548", 5000000, 500, false, `{"borders": ["POL", "KAL"]}`},
+		{"Kalmar Union", "KAL", "#34495E", 2000000, 400, false, `{"borders": ["HRE", "RUS"]}`},
 	}
 
 	tx, err := DB.Begin()
@@ -268,8 +262,8 @@ func SeedInitialData() error {
 
 	for _, k := range kingdoms {
 		res, err := tx.Exec(
-			`UPDATE countries SET color = $1, is_island = $2, borders = $3::jsonb WHERE code = $4 AND era = 'medieval'`,
-			k.color, k.isIsland, k.bordersJSON, k.code,
+			`UPDATE countries SET name = $1, color = $2, is_island = $3, borders = $4::jsonb WHERE code = $5 AND era = 'medieval'`,
+			k.name, k.color, k.isIsland, k.bordersJSON, k.code,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -342,6 +336,9 @@ func CreateUser(username, password, email, baseColor string) (int64, error) {
 }
 
 func GetCountries(era string) ([]models.Country, error) {
+	if era == "" || era == "discovery" || era == "1500" {
+		era = "medieval"
+	}
 	// LEFT JOIN through player_countries -> users so each country carries the
 	// owning player's username (NULL when unclaimed). The scalar subquery with
 	// LIMIT 1 guards against a hypothetical duplicate active claim producing
