@@ -70,12 +70,10 @@ export function computeGameTime() {
 
   // 12 Months
   const monthIdx = Math.min(11, Math.floor(yearFrac * 12));
-  const monthNames = [
-    "I (Jan)", "II (Feb)", "III (Mar)", "IV (Apr)",
-    "V (May)", "VI (Jun)", "VII (Jul)", "VIII (Aug)",
-    "IX (Sep)", "X (Oct)", "XI (Nov)", "XII (Dec)",
-  ];
-  const month = monthNames[monthIdx];
+  const monthNum = monthIdx + 1;
+  const monthShorts = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthShort = monthShorts[monthIdx];
+  const month = `${monthNum} (${monthShort})`;
 
   // Day of year 1..365
   const dayOfYear = Math.min(365, Math.floor(yearFrac * 365) + 1);
@@ -115,6 +113,8 @@ export function computeGameTime() {
     yearFrac,
     currentYearFrac,
     month,
+    monthNum,
+    monthShort,
     dayOfYear,
     season,
     remainTickSec,
@@ -135,26 +135,17 @@ function formatDuration(sec) {
 }
 
 /**
- * Periodic tick called every 1 second: updates Map Legend, Cartouche, Era Bar, & Dev Drawer
+ * Periodic tick called every 1 second: updates Map Legend, Era Bar, & Dev Drawer
  */
 export function tickClock() {
   const time = computeGameTime();
 
-  // 1. Update Map Legend Year Display
+  // 1. Update Header Map Legend (Clean Year & Era Display)
   const yearNumEl = document.getElementById("legend-year-display");
   if (yearNumEl) yearNumEl.textContent = time.yearInt;
 
   const seasonEl = document.getElementById("legend-season-display");
   if (seasonEl) seasonEl.textContent = time.season;
-
-  const monthDayEl = document.getElementById("legend-month-day");
-  if (monthDayEl) monthDayEl.textContent = `Month ${time.month} · Day ${time.dayOfYear}`;
-
-  const urgencyEl = document.getElementById("legend-urgency-tick");
-  if (urgencyEl) {
-    urgencyEl.textContent = `Next Tick in ${time.remainTickSec}s`;
-    urgencyEl.classList.toggle("urgent", time.remainTickSec <= 5);
-  }
 
   const progressFill = document.getElementById("legend-year-progress");
   if (progressFill) {
@@ -174,15 +165,10 @@ export function tickClock() {
   // 2. Synchronize Era Chronometer Bar Plaques
   updateHistoricalEraBar(time.currentEra, time.yearInt);
 
-  // 3. Update Canvas Cartouche Header Text
-  updateCartouchePlaque(time.currentEra, time.yearInt);
+  // 3. Update Dev Drawer Telemetry (Month, Day, Next Tick, Offsets)
+  updateDevDrawerTelemetry(time);
 
-  // 4. Update Dev Drawer Telemetry if Open
-  if (devDrawerOpen) {
-    updateDevDrawerTelemetry(time);
-  }
-
-  // 5. Fallback for any legacy elements
+  // 4. Fallback for any legacy elements
   const legacyUrgency = document.getElementById("urgency-tick");
   if (legacyUrgency) {
     legacyUrgency.textContent = `Next state update in ${time.remainTickSec}s`;
@@ -231,23 +217,22 @@ function updateHistoricalEraBar(activeEra, yearInt) {
 }
 
 /**
- * Updates the cartouche plaque atop the canvas
- */
-function updateCartouchePlaque(currentEra, yearInt) {
-  const titleEl = document.querySelector(".cartouche-title");
-  if (titleEl) {
-    titleEl.textContent = `ORBIS TERRARUM · ANNO DOMINI ${yearInt}`;
-  }
-  const subEl = document.querySelector(".cartouche-subtitle");
-  if (subEl) {
-    subEl.textContent = `${currentEra.name} · SOVEREIGN REALMS`;
-  }
-}
-
-/**
  * Updates live telemetry inside the Dev Chrono Drawer
  */
 function updateDevDrawerTelemetry(time) {
+  // Calendar month/day moved to dev drawer
+  const monthDayEl = document.getElementById("dev-live-month-day") || document.getElementById("legend-month-day");
+  if (monthDayEl) {
+    monthDayEl.textContent = `Month ${time.monthNum} (${time.monthShort}) · Day ${time.dayOfYear} · ${time.season}`;
+  }
+
+  // Next engine tick moved to dev drawer
+  const nextTickEl = document.getElementById("dev-live-next-tick") || document.getElementById("legend-urgency-tick");
+  if (nextTickEl) {
+    nextTickEl.textContent = `Next Tick in ${time.remainTickSec}s`;
+    nextTickEl.classList.toggle("urgent", time.remainTickSec <= 5);
+  }
+
   const liveYr = document.getElementById("dev-live-year");
   if (liveYr) liveYr.textContent = time.currentYearFrac.toFixed(2);
 

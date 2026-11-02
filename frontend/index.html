@@ -48,19 +48,14 @@
             <!-- Steampunk Map Legend with In-Game Year & Chronometer -->
             <div class="map-legend-chronometer" id="header-map-legend">
                 <div class="legend-frame-plate">
-                    <div class="legend-crest" title="Portolan Astrolabe & Navigational Compass">🧭</div>
+                    <div class="legend-crest" title="Imperial Navigational Astrolabe">🧭</div>
                     <div class="legend-body">
-                        <div class="legend-era-tag" id="legend-era-tag">THE AGE OF DISCOVERY</div>
                         <div class="legend-year-banner">
                             <span class="legend-ad">ANNO DOMINI</span>
                             <span class="legend-year-num" id="legend-year-display">1500</span>
                             <span class="legend-season-badge" id="legend-season-display">🌱 Spring</span>
                         </div>
-                        <div class="legend-sub-telemetry">
-                            <span id="legend-month-day">Month I · Day 1</span>
-                            <span class="legend-sep">·</span>
-                            <span id="legend-urgency-tick" class="legend-tick-pulse">Next Tick in 15s</span>
-                        </div>
+                        <div class="legend-era-tag" id="legend-era-tag">THE AGE OF DISCOVERY</div>
                     </div>
                     <div class="legend-year-progress-track" title="Progression through Current Year">
                         <div class="legend-year-progress-fill" id="legend-year-progress" style="width: 0%;"></div>
@@ -144,6 +139,18 @@
                                 <span class="card-meta">⚓ 23,040 ticks/yr · Epic Multi-Month Saga</span>
                             </div>
                         </label>
+                    </div>
+
+                    <!-- Developer Only Progress & Engine Telemetry -->
+                    <div class="dev-chrono-substatus">
+                        <div class="substatus-box">
+                            <span class="substatus-label">CALENDAR PROGRESSION:</span>
+                            <span class="substatus-val" id="dev-live-month-day">Month 1 (Jan) · Day 1 · 🌱 Spring</span>
+                        </div>
+                        <div class="substatus-box">
+                            <span class="substatus-label">AUTHORITATIVE ENGINE TICK:</span>
+                            <span class="substatus-val legend-tick-pulse" id="dev-live-next-tick">Next Tick in 15s</span>
+                        </div>
                     </div>
 
                     <div class="dev-section-title">HISTORICAL ERA TIME WARP (DEV FAST-FORWARD):</div>
@@ -251,16 +258,6 @@
 
             <main class="game-main">
                 <div class="map-container steampunk-map-frame">
-                    <!-- Steampunk Cartouche Header -->
-                    <div class="cartouche-header-plaque">
-                        <span class="cartouche-flourish">✦</span>
-                        <div class="cartouche-title-group">
-                            <span class="cartouche-title">ORBIS TERRARUM · ANNO DOMINI MD (1500)</span>
-                            <span class="cartouche-subtitle">THE AGE OF DISCOVERY · 11 SOVEREIGN REALMS</span>
-                        </div>
-                        <span class="cartouche-flourish">✦</span>
-                    </div>
-
                     <!-- Corner Astrolabe Brackets -->
                     <div class="map-corner-bracket top-left"></div>
                     <div class="map-corner-bracket top-right"></div>
