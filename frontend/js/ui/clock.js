@@ -4,6 +4,7 @@ import { TICK_INTERVAL_S } from "../config.js";
 import { state } from "../state.js";
 
 export const CHRONO_SCALES = {
+  "5s": { id: "5s", seconds: 5, label: "5s = 1 yr", name: "5 Seconds = 1 Year (Turbo)" },
   "1m": { id: "1m", seconds: 60, label: "1 min = 1 yr", name: "1 Minute = 1 Year" },
   "1h": { id: "1h", seconds: 3600, label: "1 hr = 1 yr", name: "1 Hour = 1 Year" },
   "4h": { id: "4h", seconds: 14400, label: "4 hrs = 1 yr", name: "4 Hours = 1 Year" },
@@ -41,9 +42,10 @@ if (typeof localStorage !== "undefined") {
 }
 
 export function startClock() {
-  if (clockTimer) return;
+  if (clockTimer) clearInterval(clockTimer);
+  const interval = currentScaleKey === "5s" ? 250 : 1000;
   tickClock();
-  clockTimer = setInterval(tickClock, 1000);
+  clockTimer = setInterval(tickClock, interval);
 }
 
 export function stopClock() {
@@ -289,7 +291,7 @@ export function setChronoScale(scaleKey) {
     localStorage.setItem("world_domination_chrono_scale", scaleKey);
   }
   syncRadioCardUI();
-  tickClock();
+  startClock(); // Adapts timer interval (250ms for 5s turbo mode, 1000ms for others)
 }
 
 export function jumpToYear(targetYear) {
