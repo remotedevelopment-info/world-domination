@@ -27,7 +27,17 @@ import {
   getKingdomAtPosition,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
-import { startClock, stopClock } from "./ui/clock.js";
+import {
+  startClock,
+  stopClock,
+  tickClock,
+  toggleDevChronoControl,
+  setChronoScale,
+  jumpToYear,
+  stepYearOffset,
+  resetYearOffset,
+  getCurrentGameYear,
+} from "./ui/clock.js";
 import {
   showAction,
   onActionOption,
@@ -376,6 +386,12 @@ window.triggerDispatchDiplomacy = triggerDispatchDiplomacy;
 window.setTaxRate = setTaxRate;
 window.setInvestmentRate = setInvestmentRate;
 window.setSocialRate = setSocialRate;
+window.toggleDevChronoControl = toggleDevChronoControl;
+window.setChronoScale = setChronoScale;
+window.jumpToYear = jumpToYear;
+window.stepYearOffset = stepYearOffset;
+window.resetYearOffset = resetYearOffset;
+window.getCurrentGameYear = getCurrentGameYear;
 
 // Initialize when DOM is ready
 function initApp() {
@@ -386,6 +402,7 @@ function initApp() {
   }
 
   window.addEventListener("resize", resizeCanvas);
+  tickClock();
 
   if (state.token && state.currentUser) {
     showGameScreen();

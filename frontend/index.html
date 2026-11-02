@@ -45,21 +45,145 @@
                     <span id="player-name">Player</span>
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
                 </div>
-            <div class="header-clock">
-                <div class="clock-digits">
-                    <span id="clock-hours">--</span><span class="clock-sep">:</span>
-                    <span id="clock-mins">--</span><span class="clock-sep">:</span>
-                    <span id="clock-seconds">--</span>
+            <!-- Steampunk Map Legend with In-Game Year & Chronometer -->
+            <div class="map-legend-chronometer" id="header-map-legend">
+                <div class="legend-frame-plate">
+                    <div class="legend-crest" title="Portolan Astrolabe & Navigational Compass">🧭</div>
+                    <div class="legend-body">
+                        <div class="legend-era-tag" id="legend-era-tag">THE AGE OF DISCOVERY</div>
+                        <div class="legend-year-banner">
+                            <span class="legend-ad">ANNO DOMINI</span>
+                            <span class="legend-year-num" id="legend-year-display">1500</span>
+                            <span class="legend-season-badge" id="legend-season-display">🌱 Spring</span>
+                        </div>
+                        <div class="legend-sub-telemetry">
+                            <span id="legend-month-day">Month I · Day 1</span>
+                            <span class="legend-sep">·</span>
+                            <span id="legend-urgency-tick" class="legend-tick-pulse">Next Tick in 15s</span>
+                        </div>
+                    </div>
+                    <div class="legend-year-progress-track" title="Progression through Current Year">
+                        <div class="legend-year-progress-fill" id="legend-year-progress" style="width: 0%;"></div>
+                    </div>
                 </div>
-                <div class="clock-sweep" id="clock-sweep"></div>
-                <div class="urgency-line" id="urgency-tick">Next state update in 89s</div>
+
+                <!-- Development Activated Time Scale Control Button -->
+                <button type="button" class="dev-chrono-btn" id="dev-chrono-toggle-btn" onclick="toggleDevChronoControl()" title="Toggle Development Time Regulator (Map Ticks to Years)">
+                    <span class="dev-gear-icon">⚙️</span>
+                    <span class="dev-ratio-tag" id="header-dev-ratio-badge">1d = 1yr</span>
+                </button>
             </div>
+
             <div class="game-info">
                 <span id="tick-display">Turn 0</span>
                 <span id="connection-status" class="status-indicator">●</span>
             </div>
                 <button onclick="logout()" class="logout-btn">Logout</button>
             </header>
+
+            <!-- Development Activated Chrono Regulator Drawer / Modal -->
+            <div id="dev-chrono-drawer" class="hidden dev-chrono-panel">
+                <div class="dev-chrono-header">
+                    <div class="dev-title-block">
+                        <span class="dev-panel-gear">⚙️</span>
+                        <div>
+                            <h4>CHRONOMETER RATIO REGULATOR</h4>
+                            <div class="dev-subtitle">Development Control · Map Real-World Time &amp; Ticks to Historical Years</div>
+                        </div>
+                    </div>
+                    <button type="button" class="dev-close-x" onclick="toggleDevChronoControl()" title="Close Control">×</button>
+                </div>
+
+                <div class="dev-chrono-body">
+                    <div class="dev-section-title">SELECT TICK-TO-YEAR MAPPING RATIO:</div>
+                    <div class="chrono-scales-grid">
+                        <label class="scale-card" data-scale="1m">
+                            <input type="radio" name="chrono-scale-radio" value="1m" onchange="setChronoScale('1m')">
+                            <div class="card-content">
+                                <span class="card-label">1 MINUTE = 1 YEAR</span>
+                                <span class="card-meta">⚡ ~4 ticks/yr · Ultra-Fast Dev Test</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="1h">
+                            <input type="radio" name="chrono-scale-radio" value="1h" onchange="setChronoScale('1h')">
+                            <div class="card-content">
+                                <span class="card-label">1 HOUR = 1 YEAR</span>
+                                <span class="card-meta">🏃 240 ticks/yr · Fast Dev Sprint</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="4h">
+                            <input type="radio" name="chrono-scale-radio" value="4h" onchange="setChronoScale('4h')">
+                            <div class="card-content">
+                                <span class="card-label">4 HOURS = 1 YEAR</span>
+                                <span class="card-meta">🐎 960 ticks/yr · Accelerated Simulation</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card active" data-scale="1d">
+                            <input type="radio" name="chrono-scale-radio" value="1d" checked onchange="setChronoScale('1d')">
+                            <div class="card-content">
+                                <span class="card-label">1 DAY = 1 YEAR (STANDARD)</span>
+                                <span class="card-meta">🌍 5,760 ticks/yr · Player Reality Normal</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="2d">
+                            <input type="radio" name="chrono-scale-radio" value="2d" onchange="setChronoScale('2d')">
+                            <div class="card-content">
+                                <span class="card-label">2 DAYS = 1 YEAR</span>
+                                <span class="card-meta">🐢 11,520 ticks/yr · Slow Campaign</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="4d">
+                            <input type="radio" name="chrono-scale-radio" value="4d" onchange="setChronoScale('4d')">
+                            <div class="card-content">
+                                <span class="card-label">4 DAYS = 1 YEAR</span>
+                                <span class="card-meta">⚓ 23,040 ticks/yr · Epic Multi-Month Saga</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="dev-section-title">HISTORICAL ERA TIME WARP (DEV FAST-FORWARD):</div>
+                    <div class="dev-warp-buttons">
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1500)">1500 Discovery</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1750)">1750 Revolt</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1860)">1860 Independence</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1945)">1945 Decolonisation</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(2000)">2000 Modern</button>
+                    </div>
+
+                    <div class="dev-fine-tune-row">
+                        <button type="button" class="step-btn" onclick="stepYearOffset(-10)">-10 Yrs</button>
+                        <button type="button" class="step-btn" onclick="stepYearOffset(-1)">-1 Yr</button>
+                        <span class="offset-display" id="dev-offset-display">Offset: +0 years</span>
+                        <button type="button" class="step-btn" onclick="stepYearOffset(1)">+1 Yr</button>
+                        <button type="button" class="step-btn" onclick="stepYearOffset(10)">+10 Yrs</button>
+                        <button type="button" class="step-btn reset" onclick="resetYearOffset()">Reset</button>
+                    </div>
+
+                    <div class="dev-live-readout">
+                        <div class="readout-col">
+                            <span class="r-label">CURRENT SIM YEAR:</span>
+                            <span class="r-val" id="dev-live-year">1500.00</span>
+                        </div>
+                        <div class="readout-col">
+                            <span class="r-label">HISTORICAL ERA:</span>
+                            <span class="r-val" id="dev-live-era">Age of Discovery</span>
+                        </div>
+                        <div class="readout-col">
+                            <span class="r-label">SERVER TICKS:</span>
+                            <span class="r-val" id="dev-live-ticks">0</span>
+                        </div>
+                        <div class="readout-col">
+                            <span class="r-label">NEXT YEAR ROLLOVER:</span>
+                            <span class="r-val" id="dev-live-next-yr">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Historical Era Chronometer Bar (5 Historic Ages) -->
             <nav class="era-chronometer-bar" aria-label="Historical Eras Timeline">
