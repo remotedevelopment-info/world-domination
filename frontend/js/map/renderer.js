@@ -1,7 +1,7 @@
 // renderer.js - Steampunk Cartographic Rendering Engine for the Age of Discovery (c. 1500)
 
 import { state } from "../state.js";
-import { kingdomPolygons } from "./polygons.js";
+import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
 import { getCentroid, pointInPolygon } from "./geometry.js";
 
 let canvas = null;
@@ -407,6 +407,11 @@ export function renderMap() {
       state.myKingdom &&
       (kingdom.id === state.myKingdom.country_id ||
         kingdom.code === state.myKingdom.country_code);
+    const isNewlyEmergedInEra =
+      state.currentEraId &&
+      state.currentEraId !== "discovery" &&
+      kingdom.unlock_era === state.currentEraId &&
+      !kingdom.owner_id;
 
     let borderColor;
     let borderWidth;
@@ -414,14 +419,17 @@ export function renderMap() {
     if (isMyKingdom) {
       borderColor = "#ffd700"; // Gleaming gold for player's own realm
       borderWidth = 3.5;
+    } else if (isNewlyEmergedInEra) {
+      borderColor = "#f5d76e"; // Illuminated brass border for newly emerged nations in this era
+      borderWidth = 2.4;
     } else if (isIsland) {
       borderColor = "#e67e22"; // Warm brass/amber for maritime island realms
-      borderWidth = 3;
+      borderWidth = 2.6;
     } else if (kingdom.owner_id) {
       borderColor = "#ffffff"; // Bright silver for player-claimed realms
       borderWidth = 2;
     } else {
-      borderColor = "rgba(20, 15, 10, 0.75)"; // Vintage ink pen stroke for neutral realms
+      borderColor = "rgba(20, 15, 10, 0.78)"; // Vintage ink pen stroke for neutral realms
       borderWidth = 1.4;
     }
 
@@ -431,35 +439,50 @@ export function renderMap() {
     ctx.stroke();
 
     // Kingdom Code Cartographic Plaque & Typography
-    const [labelX, labelY] = getCentroid(poly);
+    const [labelX, labelY] = getKingdomLabelPosition(
+      kingdom.code,
+      poly,
+      state.currentSimYear || 1500
+    );
     const [pxX, pxY] = project(labelX, labelY);
 
     ctx.save();
     // Parchment badge under label for crisp visibility
-    ctx.font = "bold 13px Georgia, 'Times New Roman', serif";
-    const textWidth = ctx.measureText(kingdom.code).width;
+    ctx.font = "bold 12px Georgia, 'Times New Roman', serif";
+    const displayLabel = isNewlyEmergedInEra ? `★${kingdom.code}` : kingdom.code;
+    const textWidth = ctx.measureText(displayLabel).width;
     const badgePadX = 5;
-    const badgePadY = 3;
+    const badgePadY = 2;
 
-    ctx.fillStyle = "rgba(15, 23, 30, 0.72)";
+    ctx.fillStyle = isNewlyEmergedInEra
+      ? "rgba(38, 28, 12, 0.88)"
+      : "rgba(15, 23, 30, 0.75)";
     ctx.beginPath();
     ctx.roundRect(
       pxX - textWidth / 2 - badgePadX,
-      pxY - 9 - badgePadY,
+      pxY - 8 - badgePadY,
       textWidth + badgePadX * 2,
-      18 + badgePadY,
+      16 + badgePadY,
       4
     );
     ctx.fill();
-    ctx.strokeStyle = isMyKingdom ? "#ffd700" : "rgba(212, 175, 55, 0.4)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = isMyKingdom
+      ? "#ffd700"
+      : isNewlyEmergedInEra
+      ? "#f5d76e"
+      : "rgba(212, 175, 55, 0.4)";
+    ctx.lineWidth = isNewlyEmergedInEra ? 1.3 : 1;
     ctx.stroke();
 
     // Text in antique gold/ivory
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = isMyKingdom ? "#ffe44d" : "#f5f0db";
-    ctx.fillText(kingdom.code, pxX, pxY - 1);
+    ctx.fillStyle = isMyKingdom
+      ? "#ffe44d"
+      : isNewlyEmergedInEra
+      ? "#fff2a8"
+      : "#f5f0db";
+    ctx.fillText(displayLabel, pxX, pxY - 1);
 
     // Crown insignia if owned by a player
     if (kingdom.owner_id || isMyKingdom) {
@@ -487,9 +510,13 @@ export function renderTroopDots(ctx, kingdom, poly) {
   const central = t.central || 0;
   const borders = t.borders || { N: 0, S: 0, E: 0, W: 0 };
 
-  // Central garrison tokens (brass war tokens at centroid)
+  // Central garrison tokens (brass war tokens at label anchor)
   if (central > 0) {
-    const [cxNorm, cyNorm] = getCentroid(poly);
+    const [cxNorm, cyNorm] = getKingdomLabelPosition(
+      kingdom.code,
+      poly,
+      state.currentSimYear || 1500
+    );
     const [cx, cy] = project(cxNorm, cyNorm);
     const dotCount = Math.min(Math.max(Math.ceil(central / 10), 1), 16);
     const spread = Math.min(central / 50, 14);
@@ -571,7 +598,9 @@ export function getKingdomAtPosition(clientX, clientY) {
   const x = (clientX - rect.left) / rect.width;
   const y = (clientY - rect.top) / rect.height;
 
-  for (const kingdom of state.kingdoms) {
+  // Iterate in reverse order (newest era countries on top of older parent empires)
+  for (let i = state.kingdoms.length - 1; i >= 0; i--) {
+    const kingdom = state.kingdoms[i];
     const poly = kingdomPolygons[kingdom.code];
     if (!poly) continue;
     if (pointInPolygon(x, y, poly)) {

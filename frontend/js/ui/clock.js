@@ -32,6 +32,12 @@ let lastTickWallTime = null;
 let devDrawerOpen = false;
 let clockTimer = null;
 let persistCounter = 0;
+let lastSyncedEraId = null;
+let eraChangeCallback = null;
+
+export function onEraChange(callback) {
+  eraChangeCallback = callback;
+}
 
 // Initialize persisted dev scale, start year, and offsets from localStorage
 if (typeof localStorage !== "undefined") {
@@ -179,6 +185,8 @@ function formatDuration(sec) {
  */
 export function tickClock() {
   const time = computeGameTime();
+  state.currentSimYear = time.yearInt;
+  state.currentEraId = time.currentEra.id;
 
   // 1. Update Header Map Legend (Clean Year & Era Display)
   const yearNumEl = document.getElementById("legend-year-display");
@@ -208,7 +216,16 @@ export function tickClock() {
   // 3. Update Dev Drawer Telemetry (Month, Day, Next Tick, Offsets)
   updateDevDrawerTelemetry(time);
 
-  // 4. Fallback for any legacy elements
+  // 4. Notify listeners when the Historical Era changes (spawning new era nations)
+  if (lastSyncedEraId !== time.currentEra.id) {
+    const prevEraId = lastSyncedEraId;
+    lastSyncedEraId = time.currentEra.id;
+    if (typeof eraChangeCallback === "function") {
+      eraChangeCallback(time.currentEra, time.yearInt, prevEraId);
+    }
+  }
+
+  // 5. Fallback for any legacy elements
   const legacyUrgency = document.getElementById("urgency-tick");
   if (legacyUrgency) {
     legacyUrgency.textContent = `Next state update in ${time.remainTickSec}s`;

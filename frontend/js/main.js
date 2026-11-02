@@ -1,6 +1,6 @@
 // main.js - Application bootstrap & orchestrator for Kingdom Conquest
 
-import { state, clearSession } from "./state.js";
+import { state, clearSession, syncKingdomsForYear } from "./state.js";
 import {
   apiGetCountries,
   apiGetTroops,
@@ -31,6 +31,7 @@ import {
   startClock,
   stopClock,
   tickClock,
+  onEraChange,
   toggleDevChronoControl,
   setChronoScale,
   setStartYear,
@@ -91,6 +92,37 @@ onSocketStateChange(() => {
   }
 });
 
+// React to Historical Era transitions (adding new unowned countries to the map in each Age)
+onEraChange((newEra, yearInt, prevEraId) => {
+  syncKingdomsForYear(state.allKingdoms, yearInt);
+  renderMap();
+  renderKingdomList();
+  refreshMyKingdomStats();
+  if (state.myKingdom && state.myKingdom.country_id) {
+    refreshKingdomCommandCenter();
+  }
+
+  if (prevEraId !== null && prevEraId !== newEra.id) {
+    const emergedInEra = state.kingdoms.filter(
+      (k) => k.unlock_era === newEra.id && !k.owner_id
+    );
+    if (emergedInEra.length > 0) {
+      const names = emergedInEra.map((k) => k.name).join(", ");
+      logMessage(
+        `[${newEra.name} · ${newEra.startYear}] New unowned nations emerged: ${names}`
+      );
+      showToast(
+        `${newEra.name}: ${emergedInEra.length} new unowned nations emerged!`,
+        "info"
+      );
+    } else if (newEra.id === "discovery") {
+      logMessage(
+        `[${newEra.name} · 1500] Map restored to the 11 founding Sovereign Empires.`
+      );
+    }
+  }
+});
+
 // Screen transitions & lifecycle
 export function showGameScreen() {
   closeModal();
@@ -120,21 +152,8 @@ export async function loadKingdoms() {
   try {
     const res = await apiGetCountries("medieval");
     if (!res.ok) throw new Error("Failed to load kingdoms");
-    state.kingdoms = await res.json();
-
-    state.kingdomBorders = {};
-    state.kingdoms.forEach((k) => {
-      let parsedBorders = k.borders;
-      if (typeof parsedBorders === "string") {
-        try {
-          parsedBorders = JSON.parse(parsedBorders);
-        } catch {
-          parsedBorders = null;
-        }
-      }
-      state.kingdomBorders[k.code] = new Set(parsedBorders?.borders || []);
-      k.isIsland = Boolean(k.isIsland || k.is_island);
-    });
+    const rawCountries = await res.json();
+    syncKingdomsForYear(rawCountries, getCurrentGameYear());
 
     renderMap();
     renderKingdomList();
@@ -202,9 +221,17 @@ export function renderKingdomList() {
   const available = state.kingdoms.filter((k) => !k.owner_id);
   available.forEach((kingdom) => {
     const div = document.createElement("div");
-    div.className = "kingdom-item";
+    const isNewInEra =
+      state.currentEraId &&
+      state.currentEraId !== "discovery" &&
+      kingdom.unlock_era === state.currentEraId;
+    div.className = isNewInEra ? "kingdom-item newly-emerged" : "kingdom-item";
     div.dataset.kingdomId = kingdom.id;
-    div.innerHTML = `<div class="kingdom-color" style="background: ${kingdom.color || "#4ecdc4"}"></div><span>${kingdom.name}</span>`;
+    const eraBadge =
+      kingdom.birth_year && kingdom.birth_year > 1500
+        ? `<span class="era-origin-badge ${isNewInEra ? "new-era" : ""}" title="${kingdom.historical_note || ""}">${isNewInEra ? "★ NEW" : "c." + kingdom.birth_year}</span>`
+        : "";
+    div.innerHTML = `<div class="kingdom-color" style="background: ${kingdom.color || "#4ecdc4"}"></div><span class="kingdom-list-name">${kingdom.name}</span>${eraBadge}`;
     div.onclick = () => selectKingdom(kingdom.id, div);
     list.appendChild(div);
   });
@@ -345,7 +372,9 @@ function setupCanvasInteractions(canvas) {
         ? "Owner: " + kingdom.owner_name
         : kingdom.owner_id
         ? "Owned"
-        : "Unclaimed";
+        : kingdom.birth_year && kingdom.birth_year > 1500
+        ? `Unclaimed · Emerged c.${kingdom.birth_year}${kingdom.parent ? ` (from ${kingdom.parent})` : ""}`
+        : "Unclaimed · Sovereign Empire (1500)";
       if (ownerEl) ownerEl.textContent = ownerLabel;
 
       if (info) info.classList.remove("hidden");

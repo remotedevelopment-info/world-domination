@@ -242,17 +242,47 @@ func SeedInitialData() error {
 	}
 
 	kingdoms := []kingdom{
-		{"Crown of Spain", "ESP", "#D35400", 8500000, 750, false, `{"borders": ["POR", "FRA"]}`},
-		{"Kingdom of Portugal", "POR", "#16A085", 2200000, 450, false, `{"borders": ["ESP"]}`},
-		{"Kingdom of France", "FRA", "#2980B9", 16000000, 850, false, `{"borders": ["ESP", "HRE"]}`},
-		{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, false, `{"borders": ["FRA"]}`},
-		{"Holy Roman Empire", "HRE", "#D4AC0D", 14000000, 900, false, `{"borders": ["FRA", "VEN", "POL", "KAL"]}`},
-		{"Ottoman Empire", "OTT", "#1B4F72", 12000000, 1000, false, `{"borders": ["VEN", "POL"]}`},
-		{"Republic of Venice", "VEN", "#00A8FF", 1800000, 700, false, `{"borders": ["HRE", "OTT", "PAP"]}`},
-		{"Papal States", "PAP", "#A569BD", 1500000, 500, false, `{"borders": ["VEN"]}`},
-		{"Poland-Lithuania", "POL", "#8E44AD", 6500000, 650, false, `{"borders": ["HRE", "OTT", "RUS"]}`},
-		{"Tsardom of Muscovy", "RUS", "#795548", 5000000, 500, false, `{"borders": ["POL", "KAL"]}`},
-		{"Kalmar Union", "KAL", "#34495E", 2000000, 400, false, `{"borders": ["HRE", "RUS"]}`},
+		// Era I: The Age of Discovery (1500) — 11 Starting Sovereign Empires
+		{"Crown of Spain", "ESP", "#D35400", 8500000, 750, false, `{"borders": ["POR", "FRA", "MAR", "ALG"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Kingdom of Portugal", "POR", "#16A085", 2200000, 450, false, `{"borders": ["ESP", "MAR"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Kingdom of France", "FRA", "#2980B9", 16000000, 850, false, `{"borders": ["ESP", "HRE", "ENG", "NED", "ITA", "ALG"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, true, `{"borders": ["FRA", "SCO", "IRL", "NED", "NOR"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Holy Roman Empire", "HRE", "#D4AC0D", 14000000, 900, false, `{"borders": ["FRA", "VEN", "POL", "KAL", "NED", "PRU", "ITA", "AUT", "CZE"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Ottoman Empire", "OTT", "#1B4F72", 12000000, 1000, false, `{"borders": ["VEN", "POL", "GRE", "ROM", "SRB", "EGY"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Republic of Venice", "VEN", "#00A8FF", 1800000, 700, false, `{"borders": ["HRE", "OTT", "PAP", "ITA", "AUT", "SRB", "CRO", "GRE"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Papal States", "PAP", "#A569BD", 1500000, 500, false, `{"borders": ["VEN", "ITA", "GRE", "TUN"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Poland-Lithuania", "POL", "#8E44AD", 6500000, 650, false, `{"borders": ["HRE", "OTT", "RUS", "PRU", "AUT", "ROM", "HUN", "UKR", "BLT", "CZE"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Tsardom of Muscovy", "RUS", "#795548", 5000000, 500, false, `{"borders": ["POL", "KAL", "SWE", "ROM", "FIN", "UKR", "BLT"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+		{"Kalmar Union", "KAL", "#34495E", 2000000, 400, false, `{"borders": ["HRE", "RUS", "SWE", "PRU", "NOR"], "birth_year": 1500, "unlock_era": "discovery", "parent": ""}`},
+
+		// Era II: The Age of Revolt (1750 – 1859) — 5 New Unowned Countries
+		{"Kingdom of Scotland", "SCO", "#2E86C1", 1300000, 350, true, `{"borders": ["ENG", "IRL", "NOR"], "birth_year": 1750, "unlock_era": "revolt", "parent": "ENG"}`},
+		{"Dutch Republic", "NED", "#E67E22", 2100000, 650, false, `{"borders": ["FRA", "HRE", "ENG"], "birth_year": 1750, "unlock_era": "revolt", "parent": "HRE"}`},
+		{"Kingdom of Prussia", "PRU", "#2C3E50", 5400000, 700, false, `{"borders": ["HRE", "POL", "KAL", "SWE", "BLT", "CZE"], "birth_year": 1750, "unlock_era": "revolt", "parent": "HRE"}`},
+		{"Kingdom of Sweden", "SWE", "#F1C40F", 2400000, 520, false, `{"borders": ["KAL", "NOR", "RUS", "PRU", "FIN", "BLT"], "birth_year": 1750, "unlock_era": "revolt", "parent": "KAL"}`},
+		{"Hellenic Republic", "GRE", "#3498DB", 1600000, 420, false, `{"borders": ["OTT", "VEN", "PAP", "SRB", "EGY"], "birth_year": 1750, "unlock_era": "revolt", "parent": "OTT"}`},
+
+		// Era III: The Age of Independence (1860 – 1919) — 5 New Unowned Countries
+		{"Kingdom of Italy", "ITA", "#27AE60", 6200000, 680, false, `{"borders": ["FRA", "HRE", "VEN", "PAP", "AUT", "CRO", "TUN"], "birth_year": 1860, "unlock_era": "independence", "parent": "HRE"}`},
+		{"Austria-Hungary", "AUT", "#B03A2E", 8200000, 780, false, `{"borders": ["HRE", "ITA", "VEN", "POL", "ROM", "SRB", "HUN", "CZE", "CRO"], "birth_year": 1860, "unlock_era": "independence", "parent": "HRE"}`},
+		{"Kingdom of Romania", "ROM", "#F39C12", 4800000, 540, false, `{"borders": ["POL", "RUS", "OTT", "AUT", "SRB", "HUN", "UKR"], "birth_year": 1860, "unlock_era": "independence", "parent": "OTT"}`},
+		{"Kingdom of Serbia", "SRB", "#922B21", 2600000, 440, false, `{"borders": ["OTT", "VEN", "AUT", "ROM", "GRE", "HUN", "CRO"], "birth_year": 1860, "unlock_era": "independence", "parent": "OTT"}`},
+		{"Kingdom of Norway", "NOR", "#BA4A00", 1900000, 480, false, `{"borders": ["SWE", "KAL", "ENG", "SCO", "FIN"], "birth_year": 1860, "unlock_era": "independence", "parent": "KAL"}`},
+
+		// Era IV: Age of Decolonisation (1920 – 1988) — 6 New Unowned Countries
+		{"Republic of Ireland", "IRL", "#2ECC71", 2900000, 460, true, `{"borders": ["ENG", "SCO"], "birth_year": 1920, "unlock_era": "decolonisation", "parent": "ENG"}`},
+		{"Republic of Finland", "FIN", "#5DADE2", 3100000, 510, false, `{"borders": ["SWE", "NOR", "RUS", "BLT"], "birth_year": 1920, "unlock_era": "decolonisation", "parent": "RUS"}`},
+		{"Republic of Hungary", "HUN", "#1E8449", 4200000, 530, false, `{"borders": ["AUT", "POL", "ROM", "SRB", "CRO", "CZE", "UKR"], "birth_year": 1920, "unlock_era": "decolonisation", "parent": "AUT"}`},
+		{"Republic of Egypt", "EGY", "#B7950B", 9500000, 690, false, `{"borders": ["OTT", "GRE"], "birth_year": 1920, "unlock_era": "decolonisation", "parent": "OTT"}`},
+		{"Kingdom of Morocco", "MAR", "#A93226", 5200000, 520, false, `{"borders": ["ESP", "POR", "ALG"], "birth_year": 1920, "unlock_era": "decolonisation", "parent": "ESP"}`},
+		{"Republic of Algeria", "ALG", "#229954", 6800000, 640, false, `{"borders": ["MAR", "ESP", "FRA", "TUN"], "birth_year": 1920, "unlock_era": "decolonisation", "parent": "FRA"}`},
+
+		// Era V: The Modern Age (1989 – Present) — 5 New Unowned Countries
+		{"Ukraine", "UKR", "#2874A6", 11000000, 760, false, `{"borders": ["RUS", "POL", "ROM", "HUN"], "birth_year": 1989, "unlock_era": "modern", "parent": "RUS"}`},
+		{"Baltic Republics", "BLT", "#117864", 3600000, 550, false, `{"borders": ["FIN", "RUS", "POL", "PRU", "SWE"], "birth_year": 1989, "unlock_era": "modern", "parent": "RUS"}`},
+		{"Czech Republic", "CZE", "#6C3483", 4600000, 620, false, `{"borders": ["HRE", "PRU", "POL", "AUT", "HUN"], "birth_year": 1989, "unlock_era": "modern", "parent": "HRE"}`},
+		{"Republic of Croatia", "CRO", "#CB4335", 2800000, 490, false, `{"borders": ["VEN", "AUT", "HUN", "SRB", "ITA"], "birth_year": 1989, "unlock_era": "modern", "parent": "AUT"}`},
+		{"Republic of Tunisia", "TUN", "#D68910", 3900000, 480, false, `{"borders": ["ALG", "ITA", "PAP"], "birth_year": 1989, "unlock_era": "modern", "parent": "FRA"}`},
 	}
 
 	tx, err := DB.Begin()
@@ -352,7 +382,8 @@ func GetCountries(era string) ([]models.Country, error) {
 		  LIMIT 1) AS owner_name,
 		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs, c.territory_type, c.borders, c.is_island
 		FROM countries c
-		WHERE c.era = $1`, era)
+		WHERE c.era = $1
+		ORDER BY c.id ASC`, era)
 	if err != nil {
 		return nil, err
 	}

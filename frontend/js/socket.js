@@ -1,7 +1,7 @@
 // socket.js - Real-time WebSocket connection, heartbeat, and state synchronization
 
 import { WS_URL, HEARTBEAT_INTERVAL_MS } from "./config.js";
-import { state } from "./state.js";
+import { state, syncKingdomsForYear } from "./state.js";
 import { apiSendHeartbeat } from "./api.js";
 import { logMessage } from "./ui/toast.js";
 
@@ -76,7 +76,7 @@ export function connectWebSocket() {
 
     state.lastStateAt = Date.now();
     state.currentTick = payload.tick || 0;
-    state.kingdoms = payload.countries;
+    syncKingdomsForYear(payload.countries, state.currentSimYear);
 
     const rulers = Array.isArray(payload.players) ? payload.players.length : 0;
     const tickDisplay = document.getElementById("tick-display");
