@@ -12,42 +12,37 @@ Frontend
 
 ## Released/Intended SEMVER
 
-- **Released:** —
+- **Released:** 0.1.0
 - **Intended:** 0.2.0
 
 ## Ideas
 
-- ES modules (`<script type="module">`) and splitting `game.js` into `net/`, `map/`, `ui/`, `auth/` files
-- A small state store to replace scattered globals (single source of truth for `kingdoms`/`myKingdom`)
-- Protocol-relative socket URL (`wss:` when page is `https:`)
+- Splitting world map rendering into specialized layers (terrain, territory borders, frontlines, troops, fog)
+- Replace remaining inline `onclick` attributes with explicit `addEventListener` wiring
 - Unit tests for pure logic (`pointInPolygon`, `getCentroid`, reducers)
-- Replace inline `onclick` attributes with `addEventListener` wiring
-- Populate the full My-Kingdom stat panel and add hover tooltips
 - Military panel: army size label ("levy"/"company"/"battalion"/"legion"/"horde") + strength number; N/S/E/W troop deployment buttons
 - Base colour picker for home territory; colour-override preview on taken territories
 - Border visualization layer on canvas (separate from country fill) showing pushed border segments
 
 ## Concerns
 
-- All session and game state lives in mutable module globals (`token`, `currentUser`, `kingdoms`, `myKingdom`, `selectedKingdomId`, `ws`, `currentTick`) with manual sync between them — easy to desync.
 - `localStorage` is the session source of truth: any XSS can exfiltrate the token; there is no refresh/expiry handling client-side.
-- Zero-dependency, zero-build approach is simple to audit but will strain as features grow — decide now whether a build step is ever allowed.
-- `innerHTML` is used with server data (`renderKingdomList`, `game.js` L254) — safe today because kingdom names are seeded, but a risky pattern once user-controlled strings appear.
+- Zero-dependency, zero-build approach is simple to audit and app-store friendly, but code must remain cleanly modularized as features expand.
 - Military UI must gate actions: hide/disable invade/expand buttons when no troops are deployed on the border side facing the target — this is client-side UX, not a security boundary (server validates).
 
 ## Issues
 
-- **Reconnect interval leak**: `setInterval(sendHeartbeat, 30000)` is registered inside `connectWebSocket()` (`frontend/js/game.js` L307) — every reconnect registers *another* interval, so heartbeat frequency grows with each outage.
-- **Reconnect after logout**: `ws.onclose` unconditionally schedules a 5s reconnect (`frontend/js/game.js` L290-294); `logout()` closes the socket (L198-201), which triggers a reconnect while logged out.
-- **Hardcoded `ws://`** (`frontend/js/game.js` L3) — the socket breaks if the site is ever served over HTTPS.
-- **Implicit global `event`** in `selectKingdom` (`frontend/js/game.js` L263) — depends on the deprecated `window.event` and ignores the passed `id` for element lookup.
-- **Uncaught `JSON.parse`** in `ws.onmessage` (`frontend/js/game.js` L296) — one malformed frame throws inside the handler.
-- **Blank stat fields**: `my-kingdom-pop` / `my-kingdom-res` (`frontend/index.html` L77-78) are never written by `checkMyKingdom` (`frontend/js/game.js` L228-245).
+- **Inline onclick attributes in index.html**: HTML elements still use inline `onclick="..."` attributes mapped to `window.*` globals in `main.js` rather than declarative component-level event listeners.
+- **Tessellation/subdivision missing**: The world map still uses single monolithic polygons per country; dynamic border movement requires multi-cell or province polygon subdivisions.
 
 ## Result
 
-Working three-file client: `frontend/index.html` (auth screen, interactive world map canvas, sidebar panels, and War Room Territory Command Console), `frontend/css/style.css` (custom dark brass/iron console themes, analog gauges, rotary dials, compass, and throttle controls), and `frontend/js/game.js` (auth/REST, WebSocket transport, canvas rendering, rotary dial math engine, and real-time action triggers connected directly to backend endpoints). Clicking owned territory launches the War Room Console with analog meters, rotary dials (Tax Rate, Capital Investment, Social Welfare), border defense compass and garrison pods, radar kingdom selector, and mechanical action levers replacing text menus and dropdowns. Session persisted in `localStorage` (`token`, `user`); auto-login on reload; window-resize canvas re-render; tick and connection status in the header.
-
-Candidate future sub-skills: `state-management/`, `auth-session/`, `rendering/`, `military-ui/`.
-
-Sub-skill dependencies: `base_color`/`home_territory_id` column data from `GET /api/countries` (database); border segment geometry from `GET /api/borders` or WS `border_changed` frames (socket-communications/protocol).
+Framework-free, zero-build native ES module client (`<script type="module" src="js/main.js">`):
+- `frontend/js/state.js`: Single source of truth for session (`token`, `currentUser`), game state (`kingdoms`, `myKingdom`, `troops`, `tick`), and UI flags.
+- `frontend/js/config.js`: Protocol-relative endpoint URLs (`http:`/`https:`, `ws:`/`wss:`) adapting automatically to origin.
+- `frontend/js/api.js`: Reusable REST client with standardized JSON error parsing.
+- `frontend/js/auth.js`: Login, registration, session storage, and form switching.
+- `frontend/js/socket.js`: Reconnecting WebSocket transport with dedicated heartbeat timer (immune to interval leaks) and safe frame parsing.
+- `frontend/js/map/`: Modular geometry math (`geometry.js`), kingdom polygon datasets (`polygons.js`), and canvas rendering (`renderer.js`) with responsive canvas scaling and normalized hit-testing.
+- `frontend/js/ui/`: Toast notifications (`toast.js`), real-time header clock & turn countdown (`clock.js`), modal actions (`actions.js`), and War Room Console (`console.js` with rotary dials, compass, tactical actuators, target radar, and territory minimap).
+- `frontend/js/main.js`: Application lifecycle orchestration and global bridge.

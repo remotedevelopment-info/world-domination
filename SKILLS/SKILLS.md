@@ -104,7 +104,7 @@ External SKILLS files (from other projects, templates, or teammates) are brought
 | `server-architecture/game-engine` | 90-second tick engine | Backend | draft | — | 0.2.0 |
 | `server-architecture/database` | Schema & persistence | Backend | draft | — | 0.2.0 |
 | `server-architecture/http-api` | REST endpoints & auth middleware | Backend | draft | — | 0.2.0 |
-| `javascript-frontend-structure` | Vanilla JS client organization | Frontend | draft | — | 0.2.0 |
+| `javascript-frontend-structure` | Vanilla JS client organization | Frontend | draft | 0.1.0 | 0.2.0 |
 | `world-map` | Map representation & rendering | Both | draft | — | 0.2.0 |
 | `world-map/projection` | Coordinate math (normalized → canvas) | Both | draft | — | 0.2.0 |
 | `world-map/kingdom-data` | Geometry vs. attribute sources of truth | Both | draft | — | 0.2.0 |
