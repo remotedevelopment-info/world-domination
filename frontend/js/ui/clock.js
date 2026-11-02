@@ -4,6 +4,7 @@ import { TICK_INTERVAL_S } from "../config.js";
 import { state } from "../state.js";
 
 export const CHRONO_SCALES = {
+  "1s": { id: "1s", seconds: 1, label: "1s = 1 yr", name: "1 Second = 1 Year (Warp Speed)" },
   "5s": { id: "5s", seconds: 5, label: "5s = 1 yr", name: "5 Seconds = 1 Year (Turbo)" },
   "1m": { id: "1m", seconds: 60, label: "1 min = 1 yr", name: "1 Minute = 1 Year" },
   "1h": { id: "1h", seconds: 3600, label: "1 hr = 1 yr", name: "1 Hour = 1 Year" },
@@ -24,15 +25,29 @@ export const HISTORICAL_ERAS = [
 ];
 
 let currentScaleKey = "1d";
+let startYear = BASE_YEAR;
+let accumulatedYears = 0;
 let manualYearOffset = 0;
+let lastTickWallTime = null;
 let devDrawerOpen = false;
 let clockTimer = null;
+let persistCounter = 0;
 
-// Initialize persisted dev scale & offset from localStorage
+// Initialize persisted dev scale, start year, and offsets from localStorage
 if (typeof localStorage !== "undefined") {
   const savedScale = localStorage.getItem("world_domination_chrono_scale");
   if (savedScale && CHRONO_SCALES[savedScale]) {
     currentScaleKey = savedScale;
+  }
+  const savedStartYear = localStorage.getItem("world_domination_start_year");
+  if (savedStartYear !== null) {
+    const parsed = parseInt(savedStartYear, 10);
+    if (!isNaN(parsed)) startYear = parsed;
+  }
+  const savedAccum = localStorage.getItem("world_domination_accum_years");
+  if (savedAccum !== null) {
+    const parsed = parseFloat(savedAccum);
+    if (!isNaN(parsed)) accumulatedYears = parsed;
   }
   const savedOffset = localStorage.getItem("world_domination_year_offset");
   if (savedOffset !== null) {
@@ -41,11 +56,18 @@ if (typeof localStorage !== "undefined") {
   }
 }
 
+function getTimerInterval() {
+  if (currentScaleKey === "1s") return 100;
+  if (currentScaleKey === "5s") return 200;
+  if (currentScaleKey === "1m") return 500;
+  return 1000;
+}
+
 export function startClock() {
   if (clockTimer) clearInterval(clockTimer);
-  const interval = currentScaleKey === "5s" ? 250 : 1000;
+  lastTickWallTime = Date.now();
   tickClock();
-  clockTimer = setInterval(tickClock, interval);
+  clockTimer = setInterval(tickClock, getTimerInterval());
 }
 
 export function stopClock() {
@@ -56,17 +78,31 @@ export function stopClock() {
 }
 
 /**
- * Computes current game year, season, month, day, and time to next tick/year rollover
+ * Computes current game year continuously and monotonically.
+ * Uses positive delta-time integration so it NEVER resets on WebSocket packets or server ticks.
  */
 export function computeGameTime() {
   const scale = CHRONO_SCALES[currentScaleKey] || CHRONO_SCALES["1d"];
   const now = Date.now();
-  const lastAt = state.lastStateAt || now;
-  const elapsedSinceState = Math.max(0, (now - lastAt) / 1000);
-  const totalElapsedRealSec = ((state.currentTick || 0) * TICK_INTERVAL_S) + elapsedSinceState;
 
-  const yearsPassed = totalElapsedRealSec / scale.seconds;
-  const currentYearFrac = BASE_YEAR + manualYearOffset + yearsPassed;
+  if (lastTickWallTime === null) {
+    lastTickWallTime = now;
+  }
+  const deltaMs = Math.max(0, now - lastTickWallTime);
+  lastTickWallTime = now;
+
+  // Monotonically accumulate elapsed game years
+  if (deltaMs > 0 && scale.seconds > 0) {
+    accumulatedYears += (deltaMs / 1000) / scale.seconds;
+    // Persist to localStorage every 10 ticks
+    persistCounter++;
+    if (persistCounter >= 10 && typeof localStorage !== "undefined") {
+      persistCounter = 0;
+      localStorage.setItem("world_domination_accum_years", String(accumulatedYears));
+    }
+  }
+
+  const currentYearFrac = startYear + manualYearOffset + accumulatedYears;
   const yearInt = Math.floor(currentYearFrac);
   const yearFrac = Math.max(0, Math.min(1, currentYearFrac - yearInt));
 
@@ -95,7 +131,9 @@ export function computeGameTime() {
     }
   }
 
-  // Next tick remaining seconds
+  // Next engine tick countdown (based on last server sync)
+  const lastStateAt = state.lastStateAt || now;
+  const elapsedSinceState = Math.max(0, (now - lastStateAt) / 1000);
   const remainTickSec = Math.max(0, TICK_INTERVAL_S - (Math.floor(elapsedSinceState) % TICK_INTERVAL_S));
 
   // Next year remaining seconds
@@ -137,7 +175,7 @@ function formatDuration(sec) {
 }
 
 /**
- * Periodic tick called every 1 second: updates Map Legend, Era Bar, & Dev Drawer
+ * Periodic tick called at timer interval: updates Map Legend, Era Bar, & Dev Drawer
  */
 export function tickClock() {
   const time = computeGameTime();
@@ -222,13 +260,13 @@ function updateHistoricalEraBar(activeEra, yearInt) {
  * Updates live telemetry inside the Dev Chrono Drawer
  */
 function updateDevDrawerTelemetry(time) {
-  // Calendar month/day moved to dev drawer
+  // Calendar month/day in dev drawer
   const monthDayEl = document.getElementById("dev-live-month-day") || document.getElementById("legend-month-day");
   if (monthDayEl) {
     monthDayEl.textContent = `Month ${time.monthNum} (${time.monthShort}) · Day ${time.dayOfYear} · ${time.season}`;
   }
 
-  // Next engine tick moved to dev drawer
+  // Next engine tick in dev drawer
   const nextTickEl = document.getElementById("dev-live-next-tick") || document.getElementById("legend-urgency-tick");
   if (nextTickEl) {
     nextTickEl.textContent = `Next Tick in ${time.remainTickSec}s`;
@@ -251,6 +289,11 @@ function updateDevDrawerTelemetry(time) {
   if (offsetDisp) {
     const sign = manualYearOffset >= 0 ? "+" : "";
     offsetDisp.textContent = `Offset: ${sign}${manualYearOffset.toFixed(1)} years`;
+  }
+
+  const startInput = document.getElementById("dev-start-year-input");
+  if (startInput && document.activeElement !== startInput) {
+    startInput.value = startYear;
   }
 }
 
@@ -280,6 +323,8 @@ export function toggleDevChronoControl() {
   }
   if (devDrawerOpen) {
     syncRadioCardUI();
+    const startInput = document.getElementById("dev-start-year-input");
+    if (startInput) startInput.value = startYear;
     tickClock();
   }
 }
@@ -291,19 +336,38 @@ export function setChronoScale(scaleKey) {
     localStorage.setItem("world_domination_chrono_scale", scaleKey);
   }
   syncRadioCardUI();
-  startClock(); // Adapts timer interval (250ms for 5s turbo mode, 1000ms for others)
+  startClock(); // Adapts timer interval dynamically (100ms for 1s, 200ms for 5s, etc.)
+}
+
+export function setStartYear(year) {
+  const parsed = parseInt(year, 10);
+  if (isNaN(parsed)) return;
+  startYear = parsed;
+  accumulatedYears = 0;
+  manualYearOffset = 0;
+  lastTickWallTime = Date.now();
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("world_domination_start_year", String(startYear));
+    localStorage.removeItem("world_domination_accum_years");
+    localStorage.removeItem("world_domination_year_offset");
+  }
+  const input = document.getElementById("dev-start-year-input");
+  if (input) input.value = startYear;
+  tickClock();
+}
+
+export function applyStartYearInput() {
+  const input = document.getElementById("dev-start-year-input");
+  if (!input) return;
+  setStartYear(input.value);
+}
+
+export function resetToDefaultStartYear() {
+  setStartYear(BASE_YEAR);
 }
 
 export function jumpToYear(targetYear) {
-  const scale = CHRONO_SCALES[currentScaleKey] || CHRONO_SCALES["1d"];
-  const totalElapsedRealSec = (state.currentTick || 0) * TICK_INTERVAL_S;
-  const yearsFromTicks = totalElapsedRealSec / scale.seconds;
-  manualYearOffset = targetYear - (BASE_YEAR + yearsFromTicks);
-
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("world_domination_year_offset", String(manualYearOffset));
-  }
-  tickClock();
+  setStartYear(targetYear);
 }
 
 export function stepYearOffset(delta) {

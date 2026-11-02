@@ -33,6 +33,9 @@ import {
   tickClock,
   toggleDevChronoControl,
   setChronoScale,
+  setStartYear,
+  applyStartYearInput,
+  resetToDefaultStartYear,
   jumpToYear,
   stepYearOffset,
   resetYearOffset,
@@ -388,6 +391,9 @@ window.setInvestmentRate = setInvestmentRate;
 window.setSocialRate = setSocialRate;
 window.toggleDevChronoControl = toggleDevChronoControl;
 window.setChronoScale = setChronoScale;
+window.setStartYear = setStartYear;
+window.applyStartYearInput = applyStartYearInput;
+window.resetToDefaultStartYear = resetToDefaultStartYear;
 window.jumpToYear = jumpToYear;
 window.stepYearOffset = stepYearOffset;
 window.resetYearOffset = resetYearOffset;

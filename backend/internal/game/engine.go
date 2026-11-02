@@ -13,7 +13,8 @@ import (
 // It is rebuilt on every state mutation and pushed to connected clients in
 // real time — there is no 90-second polling tick.
 type GameState struct {
-	GameDate  time.Time     `json:"game_date"`
+	Tick      int64          `json:"tick"`
+	GameDate  time.Time      `json:"game_date"`
 	Timestamp time.Time      `json:"timestamp"`
 	Countries []CountryState `json:"countries"`
 	Players   []PlayerState  `json:"players"`
@@ -151,6 +152,11 @@ func (g *GameEngine) TickEconomy() {
 	}
 	if changed {
 		g.Advance()
+	} else {
+		g.mu.Lock()
+		g.currentTick++
+		g.mu.Unlock()
+		g.Notify(g.BuildState())
 	}
 }
 
@@ -213,7 +219,12 @@ func (g *GameEngine) BuildState() GameState {
 		})
 	}
 
+	g.mu.RLock()
+	tick := g.currentTick
+	g.mu.RUnlock()
+
 	return GameState{
+		Tick:      tick,
 		GameDate:  time.Now(),
 		Timestamp: time.Now(),
 		Countries: countryStates,

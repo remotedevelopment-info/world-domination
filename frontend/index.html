@@ -92,6 +92,14 @@
                 <div class="dev-chrono-body">
                     <div class="dev-section-title">SELECT TICK-TO-YEAR MAPPING RATIO:</div>
                     <div class="chrono-scales-grid">
+                        <label class="scale-card" data-scale="1s">
+                            <input type="radio" name="chrono-scale-radio" value="1s" onchange="setChronoScale('1s')">
+                            <div class="card-content">
+                                <span class="card-label">⚡ 1 SECOND = 1 YEAR</span>
+                                <span class="card-meta">🚀 Warp Speed Dev Mode (1 yr / sec)</span>
+                            </div>
+                        </label>
+
                         <label class="scale-card" data-scale="5s">
                             <input type="radio" name="chrono-scale-radio" value="5s" onchange="setChronoScale('5s')">
                             <div class="card-content">
@@ -147,6 +155,16 @@
                                 <span class="card-meta">⚓ 23,040 ticks/yr · Epic Multi-Month Saga</span>
                             </div>
                         </label>
+                    </div>
+
+                    <!-- Start Year Calibration Input -->
+                    <div class="dev-start-year-row">
+                        <label for="dev-start-year-input" class="start-year-label">START YEAR CALIBRATION:</label>
+                        <div class="start-year-input-wrap">
+                            <input type="number" id="dev-start-year-input" class="start-year-input" value="1500" min="0" max="9999" step="1" onkeydown="if(event.key==='Enter')applyStartYearInput()">
+                            <button type="button" class="start-year-apply-btn" onclick="applyStartYearInput()">Apply</button>
+                            <button type="button" class="start-year-reset-btn" onclick="resetToDefaultStartYear()" title="Reset to 1500">1500</button>
+                        </div>
                     </div>
 
                     <!-- Developer Only Progress & Engine Telemetry -->
