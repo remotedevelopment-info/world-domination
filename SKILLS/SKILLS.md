@@ -108,6 +108,7 @@ External SKILLS files (from other projects, templates, or teammates) are brought
 | `world-map` | Map representation & rendering | Both | draft | — | 0.2.0 |
 | `world-map/projection` | Coordinate math (normalized → canvas) | Both | draft | — | 0.2.0 |
 | `world-map/kingdom-data` | Geometry vs. attribute sources of truth | Both | draft | — | 0.2.0 |
+| `world-map/era-expansion` | Global scaling to 200 nations (Americas, Oceania) | Both | draft | — | 0.3.0 |
 | `borders` | Ownership boundaries: visuals & rules | Both | draft | — | 0.2.0 |
 | `borders/rendering` | Border strokes & click hit-testing | Both | draft | — | 0.2.0 |
 | `borders/expansion` | Territory gain/loss mechanics | Both | draft | — | 0.2.0 |
