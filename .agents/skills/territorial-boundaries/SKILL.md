@@ -125,7 +125,7 @@ When $\text{GarrisonCost} > \text{Tribute}$, the empire enters **Imperial Overst
 
 | Predecessor Empire | Code | `birth` | `death` | Emergent Client / Sibling States | Historical Context |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Kalmar Union** | `KAL` | 1500 | 1523 | Sweden (`SWE`), Denmark (`DEN`), Norway (`NOR`) | Gustav Vasa's War of Liberation dissolves the union; former clients emerge as sovereign Baltic rivals. |
+| **Kalmar Union** | `KAL` | 1500 | 1523 | Sweden (`SWE`), Denmark (`DEN`), Norway (`NOR`) | Vast Nordic realm spanning Denmark, Norway, Sweden, and Finland, directly bordering Muscovy/Russia (`RUS`) along the Karelian frontier. Acts as a strategic challenge / "trap" with vast frontiers; upon 1523 dissolution, owner inherits Sweden (`SWE`) while Denmark and Norway emerge as sovereign siblings. Russia possesses an immediate westward expansion vector into Finnish territory. |
 | **Holy Roman Empire** | `HRE` | 1500 | 1806 | Prussia (`PRU`), Bavaria (`BAV`), Saxony (`SAX`), Austria (`AUT`) | Confederal umbrella of autonomous electorates; clients strike for independent dominance until formal imperial dissolution in 1806. |
 | **Poland-Lithuania** | `POL` | 1500 | 1795 | Partitioned by Prussia, Russia, and Austria; re-emerges as `POL_REP` (1918) | Imperial overstretch and noble veto lead to triple partition; reborn as independent republic post-WWI. |
 | **Ottoman Empire** | `OTT` | 1500 | 1922 | Turkey (`TUR`), Egypt (`EGY`), Syria (`SYR`), Iraq (`IRQ`), Lebanon (`LBN`) | Centuries of tributary eyalets (Balkans, Levant, North Africa); sultanate abolished in 1922, ceding sovereign siblinghood to Turkey. |
@@ -139,7 +139,7 @@ When $\text{GarrisonCost} > \text{Tribute}$, the empire enters **Imperial Overst
 ### 3.5 Core Landmass Inheritance Rule upon Imperial Dissolution
 
 When an empire reaches its historical `death_year`:
-- **Core Landmass Inheritance**: The owner of the dying empire inherits **only the largest successor landmass** (`successorCode`, e.g., `USSR` $\rightarrow$ `RUS`, `AUH` $\rightarrow$ `AUT`, `OTT` $\rightarrow$ `TUR`, `HRE` $\rightarrow$ `AUT`, `KAL` $\rightarrow$ `DEN`). Player command (`state.myKingdom`) transfers automatically to this core realm.
+- **Core Landmass Inheritance**: The owner of the dying empire inherits **only the largest successor landmass** (`successorCode`, e.g., `USSR` $\rightarrow$ `RUS`, `AUH` $\rightarrow$ `AUT`, `OTT` $\rightarrow$ `TUR`, `HRE` $\rightarrow$ `AUT`, `KAL` $\rightarrow$ `SWE`). Player command (`state.myKingdom`) transfers automatically to this core realm.
 - **Client State Independence**: All connected client states gain full sovereignty and independence, becoming independent sovereign nations (no longer paying tribute, no longer suzerain-bound).
 - **Imperial Dissolution**: The predecessor imperial entity dissolves and retires from the map.
 - **Baseline Emergence**: Unclaimed or AI-held neutral territories transition to the historical successor nation.

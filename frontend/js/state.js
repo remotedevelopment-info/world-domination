@@ -17,7 +17,7 @@ export const IMPERIAL_SUCCESSORS = {
   AUH: "AUT", // Austria-Hungary -> Republic of Austria (Hungary HUN sovereign)
   OTT: "TUR", // Ottoman Empire -> Republic of Turkey
   HRE: "AUT", // Holy Roman Empire -> Archduchy/Empire of Austria (electorates sovereign)
-  KAL: "DEN", // Kalmar Union -> Kingdom of Denmark (Sweden SWE sovereign)
+  KAL: "SWE", // Kalmar Union -> Kingdom of Sweden (Sweden SWE inherited by Kalmar owner)
 };
 
 export const state = {

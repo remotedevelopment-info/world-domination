@@ -673,48 +673,64 @@ export const kingdomPolygons = {
       0.2083
     ],
     [
-      0.5292,
-      0.1897
-    ],
-    [
-      0.5333,
-      0.2
-    ],
-    [
-      0.5444,
-      0.1986
-    ],
-    [
-      0.5522,
-      0.1772
-    ],
-    [
-      0.5625,
-      0.1345
-    ],
-    [
-      0.5722,
-      0.1069
-    ],
-    [
-      0.5556,
-      0.1103
-    ],
-    [
-      0.5361,
-      0.1379
+      0.5153,
+      0.1828
     ],
     [
       0.5139,
       0.1621
     ],
     [
-      0.5153,
-      0.1828
+      0.5361,
+      0.1379
     ],
     [
-      0.525,
-      0.1966
+      0.5556,
+      0.1103
+    ],
+    [
+      0.5722,
+      0.1069
+    ],
+    [
+      0.6111,
+      0.131
+    ],
+    [
+      0.5944,
+      0.1414
+    ],
+    [
+      0.5833,
+      0.1724
+    ],
+    [
+      0.5778,
+      0.169
+    ],
+    [
+      0.5694,
+      0.171
+    ],
+    [
+      0.5589,
+      0.1724
+    ],
+    [
+      0.5522,
+      0.1772
+    ],
+    [
+      0.5444,
+      0.1986
+    ],
+    [
+      0.5333,
+      0.2
+    ],
+    [
+      0.5292,
+      0.1897
     ],
     [
       0.5236,
@@ -931,40 +947,60 @@ export const kingdomPolygons = {
       0.1793
     ],
     [
-      0.5344,
-      0.1979
-    ],
-    [
-      0.5394,
-      0.2041
-    ],
-    [
-      0.5458,
-      0.1959
-    ],
-    [
-      0.5522,
-      0.1772
-    ],
-    [
-      0.5589,
-      0.1483
-    ],
-    [
-      0.5669,
-      0.1324
-    ],
-    [
-      0.5569,
-      0.1145
+      0.5339,
+      0.1641
     ],
     [
       0.5403,
       0.1434
     ],
     [
-      0.5339,
-      0.1641
+      0.5569,
+      0.1145
+    ],
+    [
+      0.5722,
+      0.1069
+    ],
+    [
+      0.6111,
+      0.131
+    ],
+    [
+      0.5944,
+      0.1414
+    ],
+    [
+      0.5833,
+      0.1724
+    ],
+    [
+      0.5778,
+      0.169
+    ],
+    [
+      0.5694,
+      0.171
+    ],
+    [
+      0.5589,
+      0.1724
+    ],
+    [
+      0.5522,
+      0.1772
+    ],
+    [
+      0.5458,
+      0.1959
+    ],
+    [
+      0.5394,
+      0.2041
+    ],
+    [
+      0.5344,
+      0.1979
     ],
     [
       0.5308,
@@ -7854,10 +7890,10 @@ export const HISTORICAL_KINGDOMS = [
     "population": 2400000,
     "resources": 520,
     "is_island": false,
-    "birth_year": 1750,
-    "unlock_era": "revolt",
+    "birth_year": 1523,
+    "unlock_era": "discovery",
     "parent": "KAL",
-    "historical_note": "Post-Great Northern War Baltic kingdom (c. 1750)",
+    "historical_note": "Sovereign Swedish realm restored under Gustav Vasa (1523)",
     "borders": [
       "KAL",
       "NOR",
@@ -7876,10 +7912,10 @@ export const HISTORICAL_KINGDOMS = [
     "population": 1200000,
     "resources": 410,
     "is_island": false,
-    "birth_year": 1750,
-    "unlock_era": "revolt",
+    "birth_year": 1523,
+    "unlock_era": "discovery",
     "parent": "KAL",
-    "historical_note": "Danish realm and guardian of the Baltic Sound (c. 1750)",
+    "historical_note": "Danish realm under Frederick I following union dissolution (1523)",
     "borders": [
       "HRE",
       "SWE",
