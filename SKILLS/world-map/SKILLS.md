@@ -1,10 +1,10 @@
 # world-map
 
-> Model: 1.0.0 · Status: draft
+> Model: 1.0.0 · Status: active
 
 ## Purpose
 
-Representation and rendering of the medieval Europe game map: how territory geometry is defined, projected onto the canvas, painted, and hit-tested by player clicks. It is the visual surface of the entire game.
+Representation and rendering of the historical world map across 5 chronological eras, beginning with the **Age of Discovery (c. 1500)** featuring a **Steampunk** cartographic sensibility: how territory geometry is defined, projected onto the canvas, painted with portolan nautical elements, and hit-tested by player clicks. It is the visual surface of the entire game.
 
 ## Affects
 
@@ -12,34 +12,31 @@ Both
 
 ## Released/Intended SEMVER
 
-- **Released:** —
-- **Intended:** 0.1.0
-
-Replacing the polygon format (e.g. with GeoJSON) is a **major** bump.
+- **Released:** 0.1.0
+- **Intended:** 0.2.0
 
 ## Ideas
 
-- Real GeoJSON geometry + a proper projection (Mercator/equirectangular) instead of hand-placed coordinates
-- Zoom/pan with a transform matrix; hover tooltips; selection highlighting
-- Serve geometry from the backend per era (medieval, renaissance, …) — see `kingdom-data`
-- Render states/regions subdivision once the territory hierarchy exists (README: "Large countries split into states/regions")
-- Animate ownership changes (border pulse / color tween) on tick
+- Progressive era-by-era geographic reveal: Americas unlock in the Age of Independence; Oceania (Australia & New Zealand) and Africa unlock in Decolonisation; scaling to 200 countries in the Modern Age (see sub-skill `world-map/era-expansion`).
+- Level of detail (LOD) and dynamic viewport pan/zoom for high-density modern borders.
+- Sub-skills:
+  - `world-map/projection`: Coordinate math (normalized to canvas pixels).
+  - `world-map/kingdom-data`: Geometry vs attribute sources of truth and sync.
+  - `world-map/era-expansion`: Global territory scaling model (11 -> 25 -> 57 -> 128 -> 200 nations).
 
 ## Concerns
 
-- **Overlapping polygons by design and by accident**: small states sit inside larger shapes (VEN, PAP within the peninsula area) *and* Iberian polygons overlap each other (POR/ESP, CAS/ESP, CAS/ARA — `frontend/js/game.js` L19-36). Whichever kingdom the server returns first wins the click (`getKingdomAtPosition` L98-111), so hit results depend on DB row order, not geometry.
-- Geometry, attributes, and ownership live in three places (JS polygons, `countries` table, `player_countries`) — see `kingdom-data`.
-- The README promises multiple eras; today only `'medieval'` is ever queried.
+- Transitioning from regional Mediterranean/European coordinates to a global map canvas requires remapping coordinate bounds without breaking click hit-testing.
+- Visual clutter on canvas when up to 200 labels and border rivets are active simultaneously.
 
 ## Issues
 
-- **Orphan polygon**: `kingdomPolygons` defines **16** codes but the seed inserts **15** kingdoms — `ITA` has geometry with no `countries` row (`frontend/js/game.js` L26 vs `backend/internal/database/database.go` L167-181). Italy is never drawn and can never be clicked or claimed.
-- **Hit-test/scale mismatch**: `getKingdomAtPosition` normalizes clicks by `canvasWidth`/`canvasHeight` but takes the offset from `getBoundingClientRect()` (`frontend/js/game.js` L99-101) — the two disagree the moment CSS scales the canvas.
-- The map repaints only on WS tick or explicit REST load — no hover/preview state exists.
-- Duplicate fill colors in the seed (ENG/ARA `#FF6B6B`, FRA/CAS `#4ECDC4`, SWE/PAP `#FFAAA5`, `backend/internal/database/database.go` L167-181) make distinct kingdoms visually identical except for borders.
+- **Aspect distortion**: `renderer.js` stretches coordinates non-proportionally when window aspect ratio changes.
+- **Americas and Oceania polygons pending**: World map currently bounded to Europe and North Africa until global projection migration in `world-map/era-expansion`.
 
 ## Result
 
-Working map: 16 normalized `[0,1]` polygons keyed by country code (`frontend/js/game.js` L19-36); `renderMap` paints ocean background, per-kingdom fill, ownership border, and centroid code label (L51-90); ray-casting `pointInPolygon` powers click-to-inspect overlay (L98-123, L328-338); sidebar lists unclaimed kingdoms (L247-258); canvas re-renders on window resize and on every WS tick (note: ticks currently never fire — see `server-architecture/game-engine`).
-
-Sub-skills: `projection` (coordinate math), `kingdom-data` (geometry vs. attribute sources of truth).
+- 1500 Age of Discovery operational with 11 founding sovereign powers (`ESP`, `POR`, `FRA`, `ENG`, `HRE`, `OTT`, `VEN`, `PAP`, `POL`, `RUS`, `KAL`).
+- Steampunk cartography active: 32-bearing portolan rhumb lines, 16-point astrolabe compass rose, graduated degree border, and brass war tokens.
+- Dynamic era synchronization engine operational via `syncKingdomsForYear()` and `onEraChange()`.
+- Documented expansion architecture in `world-map/era-expansion`.

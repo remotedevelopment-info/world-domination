@@ -110,9 +110,13 @@ api.HandleFunc("/set-economy-settings", handlers.SetEconomySettingsHandler).Meth
 	// WebSocket endpoint
 	r.HandleFunc("/ws", wsHandler)
 
-	// Serve static files from the frontend directory, probing the common
-	// working directories the server may be launched from.
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir(frontendDir())))
+	// Serve static files from the frontend directory with no-cache headers
+	// so development updates to ES modules reload reliably without stale browser cache.
+	fileServer := http.FileServer(http.Dir(frontendDir()))
+	r.PathPrefix("/").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		fileServer.ServeHTTP(w, r)
+	}))
 
 	return r
 }

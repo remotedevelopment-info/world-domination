@@ -49,34 +49,53 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 25px;
-    background: rgba(0, 0, 0, 0.3);
-    border-bottom: 2px solid #ffd700;
+    padding: 6px 16px;
+    background: linear-gradient(180deg, #241d16 0%, #14100c 100%);
+    border-bottom: 2px solid #8b6508;
+    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.7);
+    position: relative;
+    gap: 14px;
+    z-index: 25;
+    overflow-x: auto;
 }
-.player-info { display: flex; align-items: center; gap: 15px; }
-#player-name { font-weight: bold; font-size: 1.2em; }
-.kingdom-badge {
-    background: #ffd700;
-    color: #1a1a2e;
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-size: 0.9em;
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+#player-name {
     font-weight: bold;
+    font-size: 1.05em;
+    color: #fff2a8;
+    letter-spacing: 0.5px;
+    font-family: Georgia, serif;
 }
-.game-info { display: flex; align-items: center; gap: 15px; }
-#tick-display { font-family: monospace; font-size: 1.1em; }
-.status-indicator { color: #4ecdc4; font-size: 1.2em; }
-.status-indicator.disconnected { color: #ff6b6b; }
-.logout-btn {
-    padding: 8px 20px;
-    background: rgba(255, 107, 107, 0.8);
-    border: none;
-    border-radius: 5px;
-    color: #fff;
-    cursor: pointer;
+.kingdom-badge {
+    background: linear-gradient(180deg, #ffd700 0%, #c49b1a 100%);
+    color: #1a1205;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    border: 1px solid #ffe680;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
 }
-.game-main { display: flex; flex: 1; overflow: hidden; }
-.map-container { flex: 1; position: relative; background: #1a4d6e; overflow: hidden; }
+.status-indicator {
+    color: #4ecdc4;
+    font-size: 1.1em;
+    cursor: default;
+    filter: drop-shadow(0 0 3px #4ecdc4);
+    user-select: none;
+}
+.status-indicator.disconnected {
+    color: #ff6b6b;
+    filter: drop-shadow(0 0 3px #ff6b6b);
+}
+.game-main { display: flex; flex: 1; width: 100%; height: 100%; overflow: hidden; position: relative; }
+.map-container { flex: 1; width: 100%; height: 100%; position: relative; background: #1a4d6e; overflow: hidden; }
 #world-map { display: block; width: 100%; height: 100%; }
 .map-overlay { position: absolute; top: 20px; right: 20px; z-index: 10; }
 .kingdom-info {
@@ -88,6 +107,112 @@ body {
 }
 .kingdom-info h3 { color: #ffd700; margin-bottom: 10px; }
 .kingdom-info p { margin: 5px 0; font-size: 0.9em; }
+
+/* Progress Modal & Header Button */
+.progress-modal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 16px;
+    margin-left: 12px;
+    background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
+    border: 1.5px solid #d4af37;
+    border-radius: 6px;
+    color: #f5d76e;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.88em;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.progress-modal-btn:hover, .progress-modal-btn.active {
+    background: linear-gradient(180deg, #3d566e 0%, #243342 100%);
+    border-color: #ffd700;
+    color: #fff;
+    box-shadow: 0 0 14px rgba(255, 215, 0, 0.45);
+    transform: translateY(-1px);
+}
+.progress-btn-icon { font-size: 1.15em; }
+
+.progress-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 14, 20, 0.75);
+    backdrop-filter: blur(5px);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeInProgress 0.2s ease-out;
+}
+.progress-modal-overlay.hidden { display: none; }
+@keyframes fadeInProgress {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+.progress-modal-dialog {
+    width: 100%;
+    max-width: 620px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #182532 0%, #101922 100%);
+    border: 2px solid #d4af37;
+    border-radius: 8px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(212, 175, 55, 0.25);
+    overflow: hidden;
+}
+.progress-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: rgba(0, 0, 0, 0.35);
+    border-bottom: 1.5px solid rgba(212, 175, 55, 0.35);
+}
+.progress-modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.progress-modal-title-group h2 {
+    margin: 0;
+    color: #f5d76e;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.15em;
+    letter-spacing: 0.08em;
+}
+.progress-crest { font-size: 1.3em; }
+.progress-modal-close-btn {
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    color: #d4af37;
+    font-size: 1.2em;
+    line-height: 1;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.progress-modal-close-btn:hover {
+    background: rgba(212, 175, 55, 0.2);
+    border-color: #ffd700;
+    color: #fff;
+}
+.progress-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
 .game-sidebar {
     width: 320px;
     background: rgba(0, 0, 0, 0.4);
@@ -1987,3 +2112,1021 @@ body {
     0%, 100% { box-shadow: 0 0 8px rgba(255,107,107,0.35); }
     50% { box-shadow: 0 0 16px rgba(255,107,107,0.7); }
 }
+
+/* ============================================================
+   STEAMPUNK CARTOGRAPHIC & HISTORICAL ERA SYSTEM (1500 - 1920+)
+   ============================================================ */
+
+/* --- 1. Historical Era Chronometer Bar (Embedded in Header Row) --- */
+.era-chronometer-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.era-track-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    color: #ffd700;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.72em;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.era-track-label .gear-icon {
+    font-size: 1.1em;
+    animation: slow-gear-spin 25s linear infinite;
+    display: inline-block;
+}
+
+@keyframes slow-gear-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.era-plaques-container {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.era-plaque {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    min-width: 88px;
+    border-radius: 4px;
+    border: 1px solid #5a4525;
+    background: linear-gradient(180deg, #2a221a 0%, #17130e 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.5);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    user-select: none;
+}
+
+.era-plaque:hover {
+    border-color: #d4af37;
+    transform: translateY(-1px);
+}
+
+.era-plaque.active {
+    background: linear-gradient(180deg, #44341e 0%, #241a0d 100%);
+    border: 1.5px solid #ffd700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.35), inset 0 0 5px rgba(255, 215, 0, 0.18);
+}
+
+.era-plaque.completed {
+    background: linear-gradient(180deg, #222a1b 0%, #12180d 100%);
+    border: 1px solid #5a8a3a;
+}
+
+.era-plaque .plaque-num {
+    font-size: 0.56em;
+    font-weight: bold;
+    letter-spacing: 0.8px;
+    color: #a89060;
+    text-transform: uppercase;
+    line-height: 1.1;
+}
+
+.era-plaque.active .plaque-num {
+    color: #ffd700;
+}
+
+.era-plaque.completed .plaque-num {
+    color: #85c276;
+}
+
+.era-plaque .plaque-name {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.68em;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+    color: #d8c29d;
+    text-align: center;
+    white-space: nowrap;
+    line-height: 1.1;
+}
+
+.era-plaque.active .plaque-name {
+    color: #fff2a8;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+}
+
+.era-plaque.completed .plaque-name {
+    color: #c4d8b8;
+}
+
+.era-plaque .plaque-dates {
+    font-size: 0.54em;
+    color: #8c7654;
+    font-style: italic;
+    line-height: 1.1;
+}
+
+.era-plaque .plaque-badge {
+    font-size: 0.52em;
+    padding: 1px 5px;
+    border-radius: 6px;
+    margin-top: 1px;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+    line-height: 1.1;
+}
+
+.era-plaque.active .plaque-badge.active-lamp {
+    background: rgba(255, 215, 0, 0.2);
+    border: 1px solid #ffd700;
+    color: #ffd700;
+    box-shadow: 0 0 5px rgba(255, 215, 0, 0.4);
+}
+
+.era-plaque.completed .plaque-badge.completed-lamp {
+    background: rgba(90, 158, 90, 0.2);
+    border: 1px solid #5a9e5a;
+    color: #85d885;
+}
+
+.era-plaque.locked .plaque-badge.locked-lamp {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #776a5a;
+}
+
+.era-plaque .plaque-rivet {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffd700 0%, #5a4525 100%);
+    box-shadow: 0 1px 1px rgba(0,0,0,0.5);
+}
+.era-plaque .plaque-rivet.top-left { top: 2px; left: 2px; }
+.era-plaque .plaque-rivet.top-right { top: 2px; right: 2px; }
+.era-plaque .plaque-rivet.btm-left { bottom: 2px; left: 2px; }
+.era-plaque .plaque-rivet.btm-right { bottom: 2px; right: 2px; }
+
+/* --- 2. Steampunk Map Frame & Cartouche Plaque --- */
+.map-container.steampunk-map-frame {
+    position: relative;
+    border: 3px solid #8b6508;
+    box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.8), 0 8px 25px rgba(0, 0, 0, 0.6);
+    background: #0f1e29;
+}
+
+/* Corner Astrolabe Brackets */
+.map-corner-bracket {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    z-index: 14;
+    pointer-events: none;
+}
+
+.map-corner-bracket.top-left {
+    top: 0;
+    left: 0;
+    border-top: 3px solid #d4af37;
+    border-left: 3px solid #d4af37;
+    border-top-left-radius: 4px;
+    background: radial-gradient(circle at top left, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
+}
+
+.map-corner-bracket.top-right {
+    top: 0;
+    right: 0;
+    border-top: 3px solid #d4af37;
+    border-right: 3px solid #d4af37;
+    border-top-right-radius: 4px;
+    background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
+}
+
+.map-corner-bracket.bottom-left {
+    bottom: 0;
+    left: 0;
+    border-bottom: 3px solid #d4af37;
+    border-left: 3px solid #d4af37;
+    border-bottom-left-radius: 4px;
+    background: radial-gradient(circle at bottom left, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
+}
+
+.map-corner-bracket.bottom-right {
+    bottom: 0;
+    right: 0;
+    border-bottom: 3px solid #d4af37;
+    border-right: 3px solid #d4af37;
+    border-bottom-right-radius: 4px;
+    background: radial-gradient(circle at bottom right, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
+}
+
+/* Steampunk Map Scroll Viewport & Canvas */
+.map-scroll-viewport {
+    width: 100%;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    cursor: grab;
+    scrollbar-width: thin;
+    scrollbar-color: #8b6508 #0f1e29;
+}
+
+.map-scroll-viewport.is-dragging {
+    cursor: grabbing;
+}
+
+.map-scroll-viewport::-webkit-scrollbar {
+    height: 9px;
+}
+.map-scroll-viewport::-webkit-scrollbar-track {
+    background: #0a1721;
+    border-top: 1px solid #3e2704;
+}
+.map-scroll-viewport::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, #5c4006 0%, #d4af37 50%, #5c4006 100%);
+    border-radius: 4px;
+    border: 1px solid #2a1a02;
+    box-shadow: inset 0 0 4px rgba(255, 215, 0, 0.4);
+}
+.map-scroll-viewport::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(90deg, #8b6508 0%, #ffe57f 50%, #8b6508 100%);
+}
+
+#world-map {
+    display: block;
+    height: 100%;
+}
+
+/* Steampunk Map Navigation Tool Ribbon */
+.map-tool-ribbon {
+    position: absolute;
+    bottom: 14px;
+    left: 20px;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+}
+
+.map-ribbon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(180deg, #3a270d 0%, #1e1305 100%);
+    border: 1.5px solid #d4af37;
+    border-radius: 4px;
+    color: #ffd700;
+    padding: 5px 12px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.78rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 215, 0, 0.3);
+    transition: all 0.15s ease;
+}
+
+.map-ribbon-btn:hover {
+    background: linear-gradient(180deg, #4f3612 0%, #2e1e0a 100%);
+    border-color: #fff2a3;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(212, 175, 55, 0.4);
+}
+
+.map-ribbon-btn.active {
+    background: linear-gradient(180deg, #7a5518 0%, #4a340e 100%);
+    border-color: #ffd700;
+    color: #fff;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 215, 0, 0.6);
+}
+
+.map-nav-tip {
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    color: rgba(212, 175, 55, 0.85);
+    background: rgba(10, 23, 33, 0.88);
+    border: 1px solid rgba(139, 101, 8, 0.5);
+    border-radius: 3px;
+    padding: 4px 10px;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* --- 3. Steampunk Age of Discovery Sidebar & Progress Modal Accents --- */
+.game-sidebar, .progress-modal-dialog {
+    background: linear-gradient(180deg, rgba(22, 18, 14, 0.95) 0%, rgba(14, 12, 10, 0.98) 100%);
+    box-shadow: inset 2px 0 10px rgba(0, 0, 0, 0.6);
+}
+
+.game-sidebar .panel, .progress-modal-dialog .panel {
+    background: rgba(30, 24, 18, 0.6);
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.1), 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.game-sidebar .panel h3, .progress-modal-dialog .panel h3 {
+    color: #ffd700;
+    font-family: Georgia, 'Times New Roman', serif;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+    padding-bottom: 6px;
+    text-transform: uppercase;
+    font-size: 0.95em;
+}
+
+.game-sidebar .kingdom-item, .progress-modal-dialog .kingdom-item {
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    background: rgba(18, 14, 10, 0.5);
+    transition: all 0.2s ease;
+}
+
+.game-sidebar .kingdom-item:hover, .progress-modal-dialog .kingdom-item:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: #ffd700;
+    transform: translateX(3px);
+}
+
+.game-sidebar .kingdom-item.selected, .progress-modal-dialog .kingdom-item.selected {
+    border-color: #ffd700;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.25) 0%, rgba(18, 14, 10, 0.8) 100%);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+#claim-btn {
+    background: linear-gradient(180deg, #ffd700 0%, #b8860b 100%);
+    color: #1a140d;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    letter-spacing: 1px;
+    border: 1px solid #ffe44d;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 #fff;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#claim-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(255, 215, 0, 0.4);
+}
+
+#claim-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- 4. War Room Console Steampunk Enhancements --- */
+.war-room-console {
+    background: radial-gradient(ellipse at 50% 15%, #2c2217 0%, #15110c 100%) !important;
+    border: 4px solid #b8860b !important;
+    box-shadow:
+        0 0 0 2px #18120a,
+        0 0 0 6px rgba(212, 175, 55, 0.3),
+        inset 0 0 35px rgba(0, 0, 0, 0.85),
+        0 16px 50px rgba(0, 0, 0, 0.8) !important;
+}
+
+.bay-plate-title {
+    background: linear-gradient(180deg, #3d2f1f 0%, #20170d 100%);
+    border: 1px solid #b8860b;
+    border-radius: 4px;
+    padding: 6px 14px;
+    color: #ffe4a0;
+    font-family: Georgia, serif;
+    letter-spacing: 1.5px;
+    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.plate-rivet {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffd700 0%, #634316 100%);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    display: inline-block;
+}
+
+.analog-gauge-card {
+    background: linear-gradient(180deg, #241c14 0%, #15100a 100%);
+    border: 1.5px solid #8b6508;
+    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.2), 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.analog-gauge .meter-face {
+    background: radial-gradient(circle, #f7f1e1 0%, #ded1b8 75%, #b5a07c 100%);
+    border: 3px solid #8b6508;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.analog-gauge .meter-needle {
+    background: linear-gradient(180deg, #b8321e, #68150a);
+    box-shadow: 0 0 4px rgba(184, 50, 30, 0.6);
+}
+
+.rotary-dial.brass-dial {
+    background: radial-gradient(circle at 40% 35%, #3d2f1e 0%, #18120b 80%);
+    box-shadow:
+        0 0 0 2px #d4af37,
+        0 0 0 5px rgba(0, 0, 0, 0.6),
+        inset 0 3px 0 2px rgba(255, 215, 0, 0.7),
+        inset 0 -3px 0 2px rgba(0, 0, 0, 0.9),
+        0 10px 22px rgba(0, 0, 0, 0.6);
+}
+
+.rotary-dial .dial-bezel {
+    border: 3px solid #d4af37;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+/* ============================================================
+   STEAMPUNK MAP LEGEND WITH YEAR & DEV CHRONO REGULATOR
+   ============================================================ */
+
+/* --- 1. Header Map Legend Chronometer --- */
+.map-legend-chronometer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.legend-frame-plate {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 12px 5px 10px;
+    background: linear-gradient(180deg, #2b2116 0%, #17120a 100%);
+    border: 2px solid #b8860b;
+    border-radius: 6px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 215, 0, 0.35),
+        0 3px 8px rgba(0, 0, 0, 0.65);
+}
+
+.legend-crest {
+    font-size: 1.35em;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.5));
+    animation: gentle-bob 4s ease-in-out infinite;
+}
+
+@keyframes gentle-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+
+.legend-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+}
+
+.legend-era-tag {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.64em;
+    letter-spacing: 1.4px;
+    color: #d4af37;
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.legend-year-banner {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.legend-ad {
+    font-size: 0.70em;
+    font-weight: bold;
+    color: #c4a77d;
+    letter-spacing: 1px;
+}
+
+.legend-year-num {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.35em;
+    font-weight: bold;
+    color: #fff2a8;
+    letter-spacing: 1.5px;
+    text-shadow:
+        0 0 10px rgba(255, 215, 0, 0.55),
+        0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.legend-season-badge {
+    font-size: 0.68em;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(255, 215, 0, 0.15);
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    color: #ffe4a0;
+    letter-spacing: 0.5px;
+}
+
+.legend-sub-telemetry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.68em;
+    color: #a89476;
+    letter-spacing: 0.5px;
+}
+
+.legend-sub-telemetry .legend-sep {
+    color: #d4af37;
+}
+
+.legend-tick-pulse {
+    color: #ffd700;
+    transition: color 0.2s ease;
+}
+
+.legend-tick-pulse.urgent {
+    color: #ff6b6b;
+    font-weight: bold;
+    animation: tick-pulse-fast 0.6s ease-in-out infinite;
+}
+
+@keyframes tick-pulse-fast {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.legend-year-progress-track {
+    position: absolute;
+    bottom: 0;
+    left: 4px;
+    right: 4px;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.legend-year-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #b8860b 0%, #ffd700 100%);
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.7);
+    transition: width 0.3s ease;
+}
+
+/* --- 2. Development Chrono Button --- */
+.dev-chrono-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: linear-gradient(180deg, #3d2e1e 0%, #20170e 100%);
+    border: 1.5px solid #d4af37;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.25), 0 3px 8px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s ease;
+}
+
+.dev-chrono-btn:hover {
+    background: linear-gradient(180deg, #523f2a 0%, #2b2014 100%);
+    border-color: #ffd700;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+}
+
+.dev-chrono-btn .dev-gear-icon {
+    font-size: 1.1em;
+    display: inline-block;
+    transition: transform 0.4s ease;
+}
+
+.dev-chrono-btn:hover .dev-gear-icon {
+    transform: rotate(90deg);
+}
+
+.dev-chrono-btn .dev-ratio-tag {
+    font-family: monospace;
+    font-size: 0.76em;
+    font-weight: bold;
+    color: #ffd700;
+    letter-spacing: 0.5px;
+}
+
+/* --- 3. Development Chrono Drawer / Modal --- */
+.dev-chrono-panel {
+    position: absolute;
+    top: 65px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90vw;
+    max-width: 680px;
+    z-index: 100;
+    background: linear-gradient(180deg, #281f15 0%, #151009 100%);
+    border: 3px solid #b8860b;
+    border-radius: 8px;
+    box-shadow:
+        0 0 0 2px #0f0b07,
+        0 0 0 5px rgba(255, 215, 0, 0.25),
+        inset 0 0 25px rgba(0, 0, 0, 0.8),
+        0 14px 40px rgba(0, 0, 0, 0.85);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    color: #e2e8f0;
+    animation: drawer-fade-down 0.2s ease;
+}
+
+@keyframes drawer-fade-down {
+    from { opacity: 0; transform: translate(-50%, -10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.dev-chrono-panel.hidden {
+    display: none;
+}
+
+.dev-chrono-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1.5px solid #8b6508;
+    padding-bottom: 8px;
+}
+
+.dev-title-block {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dev-panel-gear {
+    font-size: 1.5em;
+    animation: slow-gear-spin 18s linear infinite;
+}
+
+.dev-title-block h4 {
+    margin: 0;
+    color: #ffd700;
+    font-family: Georgia, serif;
+    font-size: 1.05em;
+    letter-spacing: 1.2px;
+}
+
+.dev-subtitle {
+    font-size: 0.72em;
+    color: #a89476;
+}
+
+.dev-close-x {
+    background: rgba(255, 107, 107, 0.2);
+    border: 1px solid #ff6b6b;
+    color: #ff6b6b;
+    border-radius: 4px;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+}
+
+.dev-close-x:hover {
+    background: rgba(255, 107, 107, 0.5);
+    color: #fff;
+}
+
+.dev-chrono-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dev-section-title {
+    font-size: 0.72em;
+    font-weight: bold;
+    color: #ffd700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Scales Grid */
+.chrono-scales-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+}
+
+.scale-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(20, 15, 10, 0.6);
+    border: 1.5px solid rgba(212, 175, 55, 0.25);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.scale-card:hover {
+    background: rgba(212, 175, 55, 0.12);
+    border-color: #ffd700;
+}
+
+.scale-card.active {
+    background: linear-gradient(180deg, rgba(68, 52, 30, 0.8) 0%, rgba(32, 24, 14, 0.9) 100%);
+    border-color: #ffd700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
+}
+
+.scale-card input[type="radio"] {
+    accent-color: #ffd700;
+    cursor: pointer;
+    margin-top: 3px;
+}
+
+.scale-card .card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.scale-card .card-label {
+    font-size: 0.78em;
+    font-weight: bold;
+    color: #fff2a8;
+    letter-spacing: 0.5px;
+}
+
+.scale-card .card-meta {
+    font-size: 0.66em;
+    color: #a89476;
+}
+
+/* Start Year Calibration */
+.dev-start-year-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(12, 9, 6, 0.75);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    border-radius: 5px;
+    padding: 8px 12px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.start-year-label {
+    font-size: 0.72em;
+    font-weight: bold;
+    color: #ffd700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.start-year-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.start-year-input {
+    width: 90px;
+    padding: 5px 8px;
+    background: rgba(10, 8, 5, 0.9);
+    border: 1.5px solid #8b6508;
+    border-radius: 4px;
+    color: #ffd700;
+    font-family: monospace;
+    font-size: 0.88em;
+    font-weight: bold;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.start-year-input:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+}
+
+.start-year-apply-btn,
+.start-year-reset-btn {
+    padding: 5px 12px;
+    background: linear-gradient(180deg, #382c1d 0%, #1e170f 100%);
+    border: 1px solid #8b6508;
+    border-radius: 4px;
+    color: #ffe4a0;
+    font-size: 0.76em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.start-year-apply-btn:hover {
+    background: linear-gradient(180deg, #57432a 0%, #291f13 100%);
+    border-color: #ffd700;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(255, 215, 0, 0.3);
+}
+
+.start-year-reset-btn {
+    background: rgba(180, 100, 30, 0.3);
+    border-color: #a06020;
+    color: #f0c080;
+}
+
+.start-year-reset-btn:hover {
+    background: rgba(212, 120, 40, 0.5);
+    border-color: #ffd700;
+    color: #fff;
+}
+
+/* Developer Substatus: Calendar Progress & Next State Tick */
+.dev-chrono-substatus {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: rgba(12, 9, 6, 0.75);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    border-radius: 5px;
+    padding: 8px 14px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.substatus-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.substatus-label {
+    font-size: 0.62em;
+    font-weight: bold;
+    color: #a89476;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.substatus-val {
+    font-family: monospace;
+    font-size: 0.86em;
+    font-weight: bold;
+    color: #ffd700;
+}
+
+/* Time Warp Buttons */
+.dev-warp-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.warp-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 6px 8px;
+    background: linear-gradient(180deg, #382c1d 0%, #1e170f 100%);
+    border: 1px solid #8b6508;
+    border-radius: 4px;
+    color: #ffe4a0;
+    font-family: Georgia, serif;
+    font-size: 0.78em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.warp-btn:hover {
+    background: linear-gradient(180deg, #57432a 0%, #291f13 100%);
+    border-color: #ffd700;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(255, 215, 0, 0.25);
+}
+
+/* Fine-tune Row */
+.dev-fine-tune-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(10, 8, 5, 0.5);
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.step-btn {
+    padding: 4px 10px;
+    background: linear-gradient(180deg, #302619 0%, #19140c 100%);
+    border: 1px solid #8b6508;
+    border-radius: 3px;
+    color: #ffe4a0;
+    font-size: 0.74em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.step-btn:hover {
+    background: #4a3a24;
+    border-color: #ffd700;
+}
+
+.step-btn.reset {
+    background: rgba(255, 107, 107, 0.25);
+    border-color: #ff6b6b;
+    color: #ff8585;
+}
+
+.step-btn.reset:hover {
+    background: rgba(255, 107, 107, 0.45);
+    color: #fff;
+}
+
+.offset-display {
+    flex: 1;
+    text-align: center;
+    font-family: monospace;
+    font-size: 0.78em;
+    color: #ffd700;
+}
+
+/* Live Readout */
+.dev-live-readout {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.readout-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.readout-col .r-label {
+    font-size: 0.62em;
+    color: #a89476;
+    letter-spacing: 0.8px;
+}
+
+.readout-col .r-val {
+    font-family: monospace;
+    font-size: 0.86em;
+    font-weight: bold;
+    color: #ffd700;
+}
+
+/* Era Emergence Badges in Available Kingdoms Sidebar */
+.kingdom-item .kingdom-list-name {
+    flex: 1;
+}
+
+.kingdom-item.newly-emerged {
+    border-color: rgba(245, 215, 110, 0.55);
+    background: linear-gradient(90deg, rgba(68, 52, 24, 0.55) 0%, rgba(25, 20, 14, 0.65) 100%);
+}
+
+.era-origin-badge {
+    font-size: 0.68em;
+    font-family: monospace;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(212, 175, 55, 0.14);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    color: #d4af37;
+    white-space: nowrap;
+}
+
+.era-origin-badge.new-era {
+    background: rgba(255, 215, 0, 0.24);
+    border-color: #ffd700;
+    color: #fff2a8;
+    font-weight: bold;
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.3);
+}
+
+
+
