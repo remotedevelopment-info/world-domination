@@ -1,6 +1,9 @@
 // polygons.js - Normalized [0, 1] polygon coordinates for all 200 historical nations across 5 eras
 // Global Projection: x = (lon + 180) / 360, y = (85 - lat) / 145
 
+// Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
+export const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
+
 export const kingdomPolygons = {
   "ESP": [
     [

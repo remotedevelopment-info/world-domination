@@ -1,8 +1,12 @@
 // renderer.js - Steampunk Cartographic Rendering Engine with Dynamic Era Scaling
 // Shows full-screen projection of the known world in each Age, scaling smoothly as territories emerge
 
-import { state, POLYNESIAN_ISLES } from "../state.js";
-import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
+import { state } from "../state.js";
+import {
+  kingdomPolygons,
+  getKingdomLabelPosition,
+  POLYNESIAN_ISLES,
+} from "./polygons.js";
 import { getCentroid, pointInPolygon, getPolygonBounds } from "./geometry.js";
 
 let canvas = null;
