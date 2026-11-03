@@ -2,6 +2,9 @@
 
 import { HISTORICAL_KINGDOMS, HISTORICAL_KINGDOM_BY_CODE } from "./map/polygons.js";
 
+// Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
+export const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
+
 export const state = {
   token: null,
   currentUser: null,
@@ -20,6 +23,9 @@ export const state = {
   loggedOut: false,
   authBusy: false,
   actionBusy: false,
+  metaThemes: {
+    polynesiaIsles: false, // Optional advanced oceanic play meta theme
+  },
 };
 
 // Initialize session from localStorage if available

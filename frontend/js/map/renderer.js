@@ -1,7 +1,7 @@
 // renderer.js - Steampunk Cartographic Rendering Engine with Dynamic Era Scaling
 // Shows full-screen projection of the known world in each Age, scaling smoothly as territories emerge
 
-import { state } from "../state.js";
+import { state, POLYNESIAN_ISLES } from "../state.js";
 import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
 import { getCentroid, pointInPolygon, getPolygonBounds } from "./geometry.js";
 
@@ -34,12 +34,19 @@ export function computeTargetViewport(
     return { minX: 0, maxX: 1, minY: 0, maxY: 1, w: 1, h: 1 };
   }
 
+  // If Polynesia meta-theme is inactive (default), exclude remote isles from camera bounds
+  const isPolynesiaActive = Boolean(state?.metaThemes?.polynesiaIsles);
+
   let minX = 1,
     maxX = 0,
     minY = 1,
     maxY = 0;
   for (let i = 0; i < kingdoms.length; i++) {
-    const poly = kingdomPolygons[kingdoms[i].code];
+    const k = kingdoms[i];
+    if (!isPolynesiaActive && POLYNESIAN_ISLES?.has(k.code)) {
+      continue;
+    }
+    const poly = kingdomPolygons[k.code];
     if (!poly) continue;
     for (let j = 0; j < poly.length; j++) {
       const px = poly[j][0];
@@ -51,39 +58,44 @@ export function computeTargetViewport(
     }
   }
 
-  // Generous padding around the active theater so coastal margins and labels fit comfortably
   let rawW = maxX - minX;
   let rawH = maxY - minY;
 
-  // For early discovery / revolt eras, provide expansive widescreen margins so Europe feels wide and desktop-scale
+  // For early discovery / revolt eras, expand margins so Europe feels desktop-scale
   const count = kingdoms.length;
   if (count <= 15) {
-    // Age of Discovery: expand margins so Europe spans broad horizontal canvas
-    rawW = Math.max(rawW, 0.30);
-    rawH = Math.max(rawH, 0.26);
+    rawW = Math.max(rawW, 0.28);
+    rawH = Math.max(rawH, 0.24);
   } else if (count <= 30) {
-    // Age of Revolt
-    rawW = Math.max(rawW, 0.35);
-    rawH = Math.max(rawH, 0.28);
+    rawW = Math.max(rawW, 0.32);
+    rawH = Math.max(rawH, 0.26);
   }
 
-  const padX = Math.max(0.02, rawW * 0.08);
-  const padY = Math.max(0.02, rawH * 0.08);
+  // Tight margins: no huge empty ocean padding
+  const padX = Math.max(0.018, rawW * 0.05);
+  const padY = Math.max(0.018, rawH * 0.05);
 
-  const boundedMinX = minX - padX;
-  const boundedMaxX = maxX + padX;
-  const boundedMinY = minY - padY;
-  const boundedMaxY = maxY + padY;
+  const bMinX = minX - padX;
+  const bMaxX = maxX + padX;
+  const bMinY = minY - padY;
+  const bMaxY = maxY + padY;
 
-  let w = boundedMaxX - boundedMinX;
-  let h = boundedMaxY - boundedMinY;
-  const cx = (boundedMinX + boundedMaxX) / 2;
-  const cy = (boundedMinY + boundedMaxY) / 2;
+  let bW = bMaxX - bMinX;
+  let bH = bMaxY - bMinY;
+  const cx = (bMinX + bMaxX) / 2;
+  const cy = (bMinY + bMaxY) / 2;
 
   const canvasAspect = canvasW / Math.max(1, canvasH);
 
+  // Focus directly on the active theater without rendering vast empty oceans.
+  // On widescreen desktop (16:9, 16:10), tightly bound w so landmass fills ~80% of width
+  let w = bW;
+  let h = bH;
+
   if (w / h < canvasAspect) {
-    w = h * canvasAspect;
+    const tightMaxW = Math.max(bW * 1.15, bW + 0.06);
+    w = Math.min(h * canvasAspect * 0.72, tightMaxW);
+    h = w / canvasAspect;
   } else {
     h = w / canvasAspect;
   }
@@ -324,15 +336,15 @@ function drawRhumbLines(ctx) {
 
   const centers = isEarlyEra
     ? [
-        { x: 0.44, y: 0.32 }, // Lisbon / Atlantic Gateway
-        { x: 0.53, y: 0.27 }, // Venice / Mediterranean Hub
-      ]
+      { x: 0.44, y: 0.32 }, // Lisbon / Atlantic Gateway
+      { x: 0.53, y: 0.27 }, // Venice / Mediterranean Hub
+    ]
     : [
-        { x: 0.38, y: 0.48 }, // Mid-Atlantic Hub
-        { x: 0.53, y: 0.27 }, // Mediterranean Hub
-        { x: 0.72, y: 0.72 }, // Indian Ocean Hub
-        { x: 0.08, y: 0.7 }, // South Pacific Hub
-      ];
+      { x: 0.38, y: 0.48 }, // Mid-Atlantic Hub
+      { x: 0.53, y: 0.27 }, // Mediterranean Hub
+      { x: 0.72, y: 0.72 }, // Indian Ocean Hub
+      { x: 0.08, y: 0.7 }, // South Pacific Hub
+    ];
 
   ctx.save();
   const maxLen = Math.hypot(canvasWidth, canvasHeight);
@@ -408,8 +420,8 @@ function drawCompassRose(ctx, cx, cy, radius = 22) {
     ctx.strokeStyle = isMajor
       ? "rgba(255, 215, 0, 0.9)"
       : isMid
-      ? "rgba(212, 175, 55, 0.6)"
-      : "rgba(180, 140, 60, 0.35)";
+        ? "rgba(212, 175, 55, 0.6)"
+        : "rgba(180, 140, 60, 0.35)";
     ctx.lineWidth = isMajor ? 1.4 : 0.8;
     ctx.stroke();
   }
@@ -673,7 +685,16 @@ export function renderMap(immediate = false) {
     ctx.restore();
 
     // Fill with kingdom realm color
-    ctx.fillStyle = kingdom.color || "#4ecdc4";
+    const isPolynesian = POLYNESIAN_ISLES?.has(kingdom.code);
+    const isPolynesiaActive = Boolean(state?.metaThemes?.polynesiaIsles);
+
+    if (isPolynesian && !isPolynesiaActive) {
+      ctx.fillStyle = "rgba(65, 120, 145, 0.35)";
+    } else if (isPolynesian && isPolynesiaActive) {
+      ctx.fillStyle = kingdom.color || "#00d2d3";
+    } else {
+      ctx.fillStyle = kingdom.color || "#4ecdc4";
+    }
     ctx.fill();
 
     // Border calculation
@@ -694,6 +715,12 @@ export function renderMap(immediate = false) {
     if (isMyKingdom) {
       borderColor = "#ffd700"; // Gleaming gold for player's own realm
       borderWidth = 3.2;
+    } else if (isPolynesian && isPolynesiaActive) {
+      borderColor = "#00f0ff"; // Vivid luminous turquoise for active Polynesian meta theme
+      borderWidth = 2.4;
+    } else if (isPolynesian && !isPolynesiaActive) {
+      borderColor = "rgba(100, 160, 190, 0.4)"; // Soft muted oceanic border when inactive
+      borderWidth = 1.0;
     } else if (isNewlyEmergedInEra) {
       borderColor = "#f5d76e"; // Illuminated brass border for newly emerged nations in this era
       borderWidth = 2.2;
@@ -724,12 +751,22 @@ export function renderMap(immediate = false) {
     ctx.save();
     // Parchment badge under label for crisp visibility
     ctx.font = `bold ${fontSize}px Georgia, 'Times New Roman', serif`;
-    const displayLabel = isNewlyEmergedInEra ? `★${kingdom.code}` : kingdom.code;
+    const displayLabel = isPolynesian && isPolynesiaActive
+      ? `🏝️${kingdom.code}`
+      : isPolynesian && !isPolynesiaActive
+        ? `⚓${kingdom.code}`
+        : isNewlyEmergedInEra
+          ? `★${kingdom.code}`
+          : kingdom.code;
     const textWidth = ctx.measureText(displayLabel).width;
 
-    ctx.fillStyle = isNewlyEmergedInEra
-      ? "rgba(38, 28, 12, 0.88)"
-      : "rgba(15, 23, 30, 0.75)";
+    ctx.fillStyle = isPolynesian && !isPolynesiaActive
+      ? "rgba(15, 23, 30, 0.55)"
+      : isPolynesian && isPolynesiaActive
+        ? "rgba(10, 35, 45, 0.9)"
+        : isNewlyEmergedInEra
+          ? "rgba(38, 28, 12, 0.88)"
+          : "rgba(15, 23, 30, 0.75)";
     ctx.beginPath();
     ctx.roundRect(
       pxX - textWidth / 2 - badgePadX,
@@ -741,10 +778,12 @@ export function renderMap(immediate = false) {
     ctx.fill();
     ctx.strokeStyle = isMyKingdom
       ? "#ffd700"
-      : isNewlyEmergedInEra
-      ? "#f5d76e"
-      : "rgba(212, 175, 55, 0.4)";
-    ctx.lineWidth = isNewlyEmergedInEra ? 1.2 : 0.8;
+      : isPolynesian && isPolynesiaActive
+        ? "#00f0ff"
+        : isNewlyEmergedInEra
+          ? "#f5d76e"
+          : "rgba(212, 175, 55, 0.4)";
+    ctx.lineWidth = (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
     ctx.stroke();
 
     // Text in antique gold/ivory
@@ -752,9 +791,13 @@ export function renderMap(immediate = false) {
     ctx.textBaseline = "middle";
     ctx.fillStyle = isMyKingdom
       ? "#ffe44d"
-      : isNewlyEmergedInEra
-      ? "#fff2a8"
-      : "#f5f0db";
+      : isPolynesian && isPolynesiaActive
+        ? "#80fcff"
+        : isPolynesian && !isPolynesiaActive
+          ? "rgba(220, 235, 245, 0.7)"
+          : isNewlyEmergedInEra
+            ? "#fff2a8"
+            : "#f5f0db";
     ctx.fillText(displayLabel, pxX, pxY);
 
     // Crown insignia if owned by a player

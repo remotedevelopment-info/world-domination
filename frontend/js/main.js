@@ -1,6 +1,6 @@
 // main.js - Application bootstrap & orchestrator for Kingdom Conquest
 
-import { state, clearSession, syncKingdomsForYear } from "./state.js";
+import { state, clearSession, syncKingdomsForYear, POLYNESIAN_ISLES } from "./state.js";
 import {
   apiGetCountries,
   apiGetTroops,
@@ -24,6 +24,7 @@ import {
   initRenderer,
   resizeCanvas,
   renderMap,
+  syncViewport,
   getKingdomAtPosition,
   magnifierState,
   setMagnifier,
@@ -481,6 +482,12 @@ function setupCanvasInteractions(canvas) {
 
     const kingdom = getKingdomAtPosition(e.clientX, e.clientY);
     if (kingdom) {
+      if (POLYNESIAN_ISLES.has(kingdom.code) && !state.metaThemes?.polynesiaIsles) {
+        showToast(
+          `🏝️ ${kingdom.name} (${kingdom.code}) is in the Polynesian Isles Advanced Meta Theme. Click the ribbon button to activate full oceanic theater!`,
+          "info"
+        );
+      }
       // If clicking your own country, open the command center view
       if (state.myKingdom && kingdom.id === state.myKingdom.country_id) {
         openKingdomCommandCenter(kingdom);
@@ -542,7 +549,34 @@ export function handleProgressModalBackdrop(e) {
   }
 }
 
+// Meta Theme: Polynesian & Pacific Island Kingdoms (Advanced Play)
+export function togglePolynesiaMetaTheme(forceState) {
+  if (typeof forceState === "boolean") {
+    state.metaThemes.polynesiaIsles = forceState;
+  } else {
+    state.metaThemes.polynesiaIsles = !state.metaThemes.polynesiaIsles;
+  }
+  const isActive = Boolean(state.metaThemes.polynesiaIsles);
+  const btn = document.getElementById("toggle-polynesia-btn");
+  const label = document.getElementById("polynesia-btn-label");
+  if (btn) {
+    btn.classList.toggle("active", isActive);
+  }
+  if (label) {
+    label.textContent = isActive ? "Polynesia: Active" : "Polynesia: Off";
+  }
+  showToast(
+    isActive
+      ? "Advanced Play: Polynesian & Pacific Isle Kingdoms Activated 🏝️"
+      : "Standard Play: Polynesian Isles Muted & Camera Refocused",
+    "info"
+  );
+  syncViewport();
+  renderMap();
+}
+
 // Expose functions globally to window so HTML inline onclick="..." always resolve
+window.togglePolynesiaMetaTheme = togglePolynesiaMetaTheme;
 window.toggleProgressModal = toggleProgressModal;
 window.handleProgressModalBackdrop = handleProgressModalBackdrop;
 window.login = doLogin;
