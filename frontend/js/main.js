@@ -34,6 +34,7 @@ import {
   updateMagnifierPosition,
   panCamera,
   zoomCamera,
+  resetCamera,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
 import {
@@ -385,11 +386,19 @@ function setupCanvasInteractions(canvas) {
     e.preventDefault();
   });
 
-  // Mousedown: Left-click starts drag-to-pan, Right-click triggers Loupe
+  // Mousedown: Left-click starts drag-to-pan, Right-click triggers Loupe, Middle-click resets zoom
   canvas.addEventListener("mousedown", (e) => {
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
+
+    if (e.button === 1) {
+      // Middle-click: Reset zoom and camera to default era framing
+      e.preventDefault();
+      resetCamera(true);
+      showToast("Camera Reset to Era Framing 🧭", "info");
+      return;
+    }
 
     if (e.button === 2) {
       // Right-click: Activate Victorian Steampunk Brass Loupe
@@ -405,6 +414,15 @@ function setupCanvasInteractions(canvas) {
       hasDragged = false;
       lastX = e.clientX;
       lastY = e.clientY;
+    }
+  });
+
+  // Auxclick: capture middle-click release / click in modern browsers
+  canvas.addEventListener("auxclick", (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      resetCamera(true);
+      showToast("Camera Reset to Era Framing 🧭", "info");
     }
   });
 
@@ -446,7 +464,7 @@ function setupCanvasInteractions(canvas) {
     }
   });
 
-  // Mousewheel: zoom or pan across the map
+  // Mousewheel (third/middle mouse dial): zoom in/out centered on cursor position without bouncing/resetting
   canvas.addEventListener(
     "wheel",
     (e) => {
@@ -455,23 +473,40 @@ function setupCanvasInteractions(canvas) {
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
 
-      if (e.ctrlKey || e.metaKey) {
-        const factor = e.deltaY > 0 ? 1.08 : 0.92;
-        zoomCamera(factor, sx, sy);
-      } else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        panCamera(-e.deltaX, 0);
-      } else {
-        const factor = e.deltaY > 0 ? 1.06 : 0.94;
-        zoomCamera(factor, sx, sy);
-      }
+      // Proportional geometric zoom anchored at exact cursor position
+      const zoomIntensity = 0.0015;
+      const factor = Math.exp(e.deltaY * zoomIntensity);
+      zoomCamera(factor, sx, sy);
     },
     { passive: false }
   );
 
-  // Keyboard shortcut: Esc closes progress modal
+  // Keyboard navigation: Arrow keys pan map smoothly within frame; Esc closes modal
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       toggleProgressModal(false);
+      return;
+    }
+
+    // Ignore arrow navigation if user is typing in form inputs
+    const activeTag = document.activeElement ? document.activeElement.tagName : "";
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(activeTag)) {
+      return;
+    }
+
+    const panStep = e.shiftKey ? 90 : 45;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      panCamera(0, panStep);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      panCamera(0, -panStep);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      panCamera(panStep, 0);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      panCamera(-panStep, 0);
     }
   });
 
@@ -579,6 +614,7 @@ export function togglePolynesiaMetaTheme(forceState) {
 }
 
 // Expose functions globally to window so HTML inline onclick="..." always resolve
+window.resetCamera = resetCamera;
 window.togglePolynesiaMetaTheme = togglePolynesiaMetaTheme;
 window.toggleProgressModal = toggleProgressModal;
 window.handleProgressModalBackdrop = handleProgressModalBackdrop;

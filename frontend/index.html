@@ -296,6 +296,10 @@
 
                     <!-- Steampunk Navigation Tools Bar -->
                     <div class="map-tool-ribbon">
+                        <button type="button" id="reset-view-btn" class="map-ribbon-btn" onclick="resetCamera(true)" title="Reset Camera to Era Framing (or Middle-Click anywhere on map)">
+                            <span class="btn-icon">🧭</span>
+                            <span class="btn-txt">Reset View</span>
+                        </button>
                         <button type="button" id="toggle-loupe-btn" class="map-ribbon-btn" title="Toggle 2.4× Steampunk Brass Loupe (or hold Right-Click anywhere on map)">
                             <span class="btn-icon">🔍</span>
                             <span class="btn-txt">2.4× Loupe</span>
@@ -304,7 +308,7 @@
                             <span class="btn-icon">🏝️</span>
                             <span class="btn-txt" id="polynesia-btn-label">Polynesia: Off</span>
                         </button>
-                        <span class="map-nav-tip">Right-click &amp; hold to magnify · Drag to pan</span>
+                        <span class="map-nav-tip">Wheel: Zoom · Arrows/Drag: Pan · Middle-click: Reset · Right-click: Loupe</span>
                     </div>
 
                     <canvas id="world-map"></canvas>
@@ -937,7 +941,7 @@
         </div>
         <div id="toast-container" aria-live="polite"></div>
     </div>
-    <script type="module" src="js/main.js?v=2.4"></script>
+    <script type="module" src="js/main.js?v=2.5"></script>
 </body>
 
 </html>

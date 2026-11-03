@@ -113,7 +113,7 @@ export function computeTargetViewport(
 
 export function syncViewport(immediate = false) {
   const newTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
-  targetViewport = newTarget;
+  targetViewport = { ...newTarget };
 
   if (!currentViewport || immediate) {
     currentViewport = { ...targetViewport };
@@ -121,6 +121,25 @@ export function syncViewport(immediate = false) {
       cancelAnimationFrame(viewportAnimFrame);
       viewportAnimFrame = null;
     }
+    return;
+  }
+
+  if (!viewportAnimFrame) {
+    viewportAnimFrame = requestAnimationFrame(animateViewportStep);
+  }
+}
+
+export function resetCamera(smooth = true) {
+  const newTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
+  targetViewport = { ...newTarget };
+
+  if (!smooth || !currentViewport) {
+    currentViewport = { ...targetViewport };
+    if (viewportAnimFrame) {
+      cancelAnimationFrame(viewportAnimFrame);
+      viewportAnimFrame = null;
+    }
+    renderMap();
     return;
   }
 
@@ -219,15 +238,27 @@ export function resizeCanvas() {
 
 export function panCamera(deltaScreenX, deltaScreenY) {
   if (!currentViewport || canvasWidth <= 0 || canvasHeight <= 0) return;
+  if (viewportAnimFrame) {
+    cancelAnimationFrame(viewportAnimFrame);
+    viewportAnimFrame = null;
+  }
+
   const vpW = currentViewport.maxX - currentViewport.minX;
   const vpH = currentViewport.maxY - currentViewport.minY;
   const dxWorld = (deltaScreenX / canvasWidth) * vpW;
   const dyWorld = (deltaScreenY / canvasHeight) * vpH;
 
-  currentViewport.minX -= dxWorld;
-  currentViewport.maxX -= dxWorld;
-  currentViewport.minY -= dyWorld;
-  currentViewport.maxY -= dyWorld;
+  let newMinX = currentViewport.minX - dxWorld;
+  let newMinY = currentViewport.minY - dyWorld;
+
+  // Prevent panning completely off the world canvas
+  newMinX = Math.max(-0.4, Math.min(1.4 - vpW, newMinX));
+  newMinY = Math.max(-0.3, Math.min(1.3 - vpH, newMinY));
+
+  currentViewport.minX = newMinX;
+  currentViewport.maxX = newMinX + vpW;
+  currentViewport.minY = newMinY;
+  currentViewport.maxY = newMinY + vpH;
   targetViewport = { ...currentViewport };
 
   renderMap();
@@ -235,24 +266,49 @@ export function panCamera(deltaScreenX, deltaScreenY) {
 
 export function zoomCamera(factor, screenX, screenY) {
   if (!currentViewport || canvasWidth <= 0 || canvasHeight <= 0) return;
+  if (viewportAnimFrame) {
+    cancelAnimationFrame(viewportAnimFrame);
+    viewportAnimFrame = null;
+  }
+
   const vpW = currentViewport.maxX - currentViewport.minX;
   const vpH = currentViewport.maxY - currentViewport.minY;
 
   const pivotU = (screenX ?? canvasWidth / 2) / canvasWidth;
   const pivotV = (screenY ?? canvasHeight / 2) / canvasHeight;
 
-  const newW = vpW * factor;
-  const newH = vpH * factor;
+  let newW = vpW * factor;
+  let newH = vpH * factor;
 
-  if (newW < 0.05 || newW > 2.0) return;
+  // Sensible limits:
+  // Maximise: small sovereign nation fills viewport (min width ~0.012 of world longitude)
+  // Minimise: full era theater view without minimizing into empty void (max width ~1.15)
+  const defaultTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
+  const maxW = Math.max(1.10, (defaultTarget.w || 0.8) * 1.35);
+  const minW = 0.012; // Small territory like Belgium, Netherlands, or Switzerland fills screen
+
+  if (newW < minW) {
+    newW = minW;
+    newH = newW * (vpH / vpW);
+  } else if (newW > maxW) {
+    newW = maxW;
+    newH = newW * (vpH / vpW);
+  }
 
   const pivotX = currentViewport.minX + pivotU * vpW;
   const pivotY = currentViewport.minY + pivotV * vpH;
 
-  currentViewport.minX = pivotX - pivotU * newW;
-  currentViewport.maxX = currentViewport.minX + newW;
-  currentViewport.minY = pivotY - pivotV * newH;
-  currentViewport.maxY = currentViewport.minY + newH;
+  let newMinX = pivotX - pivotU * newW;
+  let newMinY = pivotY - pivotV * newH;
+
+  // Prevent zooming into empty offscreen coordinates
+  newMinX = Math.max(-0.4, Math.min(1.4 - newW, newMinX));
+  newMinY = Math.max(-0.3, Math.min(1.3 - newH, newMinY));
+
+  currentViewport.minX = newMinX;
+  currentViewport.maxX = newMinX + newW;
+  currentViewport.minY = newMinY;
+  currentViewport.maxY = newMinY + newH;
   targetViewport = { ...currentViewport };
 
   renderMap();
@@ -655,25 +711,14 @@ function drawCartographicBorder(ctx, width, height) {
 export function renderMap(immediate = false) {
   if (!ctx || !canvas) return;
 
-  // Auto-synchronize camera viewport when kingdoms emerge or era advances
-  const newTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
+  // Viewport initialization on initial start or immediate reset
   if (!currentViewport || immediate) {
+    const newTarget = computeTargetViewport(state.kingdoms, canvasWidth, canvasHeight);
     currentViewport = { ...newTarget };
     targetViewport = { ...newTarget };
     if (viewportAnimFrame) {
       cancelAnimationFrame(viewportAnimFrame);
       viewportAnimFrame = null;
-    }
-  } else if (
-    !targetViewport ||
-    Math.abs(targetViewport.minX - newTarget.minX) > 0.001 ||
-    Math.abs(targetViewport.maxX - newTarget.maxX) > 0.001 ||
-    Math.abs(targetViewport.minY - newTarget.minY) > 0.001 ||
-    Math.abs(targetViewport.maxY - newTarget.maxY) > 0.001
-  ) {
-    targetViewport = newTarget;
-    if (!viewportAnimFrame) {
-      viewportAnimFrame = requestAnimationFrame(animateViewportStep);
     }
   }
 
