@@ -2,12 +2,11 @@
 // Shows full-screen projection of the known world in each Age, scaling smoothly as territories emerge
 
 import { state } from "../state.js";
-import {
-  kingdomPolygons,
-  getKingdomLabelPosition,
-  POLYNESIAN_ISLES,
-} from "./polygons.js";
+import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
 import { getCentroid, pointInPolygon, getPolygonBounds } from "./geometry.js";
+
+// Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
+const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
 
 let canvas = null;
 let ctx = null;

@@ -1,6 +1,9 @@
 // main.js - Application bootstrap & orchestrator for Kingdom Conquest
 
-import { state, clearSession, syncKingdomsForYear, POLYNESIAN_ISLES } from "./state.js";
+import { state, clearSession, syncKingdomsForYear } from "./state.js";
+
+// Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
+const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
 import {
   apiGetCountries,
   apiGetTroops,

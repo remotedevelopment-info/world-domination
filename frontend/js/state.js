@@ -1,13 +1,9 @@
 // state.js - Centralized application state store
 
-import {
-  HISTORICAL_KINGDOMS,
-  HISTORICAL_KINGDOM_BY_CODE,
-  POLYNESIAN_ISLES,
-} from "./map/polygons.js";
+import { HISTORICAL_KINGDOMS, HISTORICAL_KINGDOM_BY_CODE } from "./map/polygons.js";
 
 // Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
-export { POLYNESIAN_ISLES };
+export const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
 
 export const state = {
   token: null,
