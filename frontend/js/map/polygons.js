@@ -528,11 +528,11 @@ export const kingdomPolygons = {
   "USSR": [
     [
       0.5778,
-      0.2034
+      0.169
     ],
     [
-      0.5833,
-      0.1724
+      0.5847,
+      0.1586
     ],
     [
       0.5944,
@@ -551,20 +551,120 @@ export const kingdomPolygons = {
       0.1586
     ],
     [
-      0.6556,
+      0.7083,
       0.2138
     ],
     [
-      0.6333,
-      0.2345
+      0.7417,
+      0.2483
     ],
     [
-      0.6056,
-      0.231
+      0.7444,
+      0.2828
     ],
     [
-      0.5861,
-      0.2207
+      0.7222,
+      0.2931
+    ],
+    [
+      0.7181,
+      0.3069
+    ],
+    [
+      0.7069,
+      0.3172
+    ],
+    [
+      0.7083,
+      0.3276
+    ],
+    [
+      0.6972,
+      0.3241
+    ],
+    [
+      0.6833,
+      0.3276
+    ],
+    [
+      0.6694,
+      0.3414
+    ],
+    [
+      0.6722,
+      0.3138
+    ],
+    [
+      0.6556,
+      0.3
+    ],
+    [
+      0.6403,
+      0.2931
+    ],
+    [
+      0.6278,
+      0.3034
+    ],
+    [
+      0.6222,
+      0.3138
+    ],
+    [
+      0.6153,
+      0.3
+    ],
+    [
+      0.6111,
+      0.2862
+    ],
+    [
+      0.5972,
+      0.2759
+    ],
+    [
+      0.5833,
+      0.2724
+    ],
+    [
+      0.5783,
+      0.2655
+    ],
+    [
+      0.5722,
+      0.2538
+    ],
+    [
+      0.5667,
+      0.2448
+    ],
+    [
+      0.5667,
+      0.2276
+    ],
+    [
+      0.5625,
+      0.2138
+    ],
+    [
+      0.5583,
+      0.2048
+    ],
+    [
+      0.5583,
+      0.1966
+    ],
+    [
+      0.5611,
+      0.1828
+    ],
+    [
+      0.5694,
+      0.1759
+    ],
+    [
+      0.5778,
+      0.1766
     ]
   ],
   "KAL": [
@@ -6667,8 +6767,8 @@ export const kingdomLabelPositions = {
     0.1831
   ],
   "USSR": [
-    0.6158,
-    0.1831
+    0.6450,
+    0.2150
   ],
   "KAL": [
     0.5373,
@@ -8763,8 +8863,8 @@ export const HISTORICAL_KINGDOMS = [
     "population": 180000000,
     "resources": 1200,
     "is_island": false,
-    "birth_year": 1922,
-    "death_year": 1991,
+    "birth_year": 1920,
+    "death_year": 1989,
     "unlock_era": "decolonisation",
     "parent": "RUS",
     "historical_note": "Union of Soviet Socialist Republics spanning Eurasia (1922-1991)",
@@ -8779,10 +8879,7 @@ export const HISTORICAL_KINGDOMS = [
       "MNG",
       "PRK",
       "NOR",
-      "SWE",
-      "UKR",
-      "BLR",
-      "KAZ"
+      "SWE"
     ]
   },
   {
@@ -10057,13 +10154,12 @@ export const HISTORICAL_KINGDOMS = [
     "population": 48000000,
     "resources": 920,
     "is_island": false,
-    "birth_year": 1922,
-    "unlock_era": "decolonisation",
+    "birth_year": 1989,
+    "unlock_era": "modern",
     "parent": "USSR",
-    "historical_note": "Sovereign breadbasket nation between Carpathians and Black Sea (c. 1922/1991)",
+    "historical_note": "Sovereign breadbasket nation between Carpathians and Black Sea (c. 1989/1991)",
     "borders": [
       "RUS",
-      "USSR",
       "POL_REP",
       "ROM",
       "HUN",
@@ -10080,13 +10176,12 @@ export const HISTORICAL_KINGDOMS = [
     "population": 10000000,
     "resources": 680,
     "is_island": false,
-    "birth_year": 1922,
-    "unlock_era": "decolonisation",
+    "birth_year": 1989,
+    "unlock_era": "modern",
     "parent": "USSR",
-    "historical_note": "Eastern European woodland republic (c. 1922/1991)",
+    "historical_note": "Eastern European woodland republic (c. 1989/1991)",
     "borders": [
       "RUS",
-      "USSR",
       "POL_REP",
       "UKR",
       "LTU",
@@ -10101,13 +10196,12 @@ export const HISTORICAL_KINGDOMS = [
     "population": 16500000,
     "resources": 950,
     "is_island": false,
-    "birth_year": 1922,
-    "unlock_era": "decolonisation",
+    "birth_year": 1989,
+    "unlock_era": "modern",
     "parent": "USSR",
-    "historical_note": "Vast transcontinental Eurasian steppe republic (c. 1922/1991)",
+    "historical_note": "Vast transcontinental Eurasian steppe republic (c. 1989/1991)",
     "borders": [
       "RUS",
-      "USSR",
       "CHN",
       "KGZ",
       "UZB",

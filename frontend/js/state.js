@@ -209,7 +209,7 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
   const rus = byCode.get("RUS");
   const ussr = byCode.get("USSR");
   if (rus) {
-    if (currentYear >= 1991) {
+    if (currentYear >= 1989) {
       rus.name = "Russian Federation";
     } else if (currentYear >= 1721) {
       rus.name = "Russian Empire";
@@ -219,8 +219,8 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
   }
 
   // Core Landmass Inheritance Rule upon Imperial Dissolution / Evolution
-  // 1. Decolonisation emergence (1922): RUS transforms into USSR
-  if (currentYear >= 1922 && currentYear < 1991) {
+  // 1. Decolonisation emergence (1920): RUS transforms into USSR
+  if (currentYear >= 1920 && currentYear < 1989) {
     if (rus && ussr && rus.owner_id && !ussr.owner_id) {
       ussr.owner_id = rus.owner_id;
       ussr.owner_name = rus.owner_name;
@@ -266,11 +266,12 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
   const active = masterList
     .filter((k) => {
       // Mutual timeline exclusivity between RUS and USSR
+      // USSR appears in Decolonisation (1920-1988) and fragments in the Modern Age (1989+)
       if (k.code === "RUS") {
-        return currentYear < 1922 || currentYear >= 1991;
+        return currentYear < 1920 || currentYear >= 1989;
       }
       if (k.code === "USSR") {
-        return currentYear >= 1922 && currentYear < 1991;
+        return currentYear >= 1920 && currentYear < 1989;
       }
 
       const birth = typeof k.birth_year === "number" ? k.birth_year : 1500;
