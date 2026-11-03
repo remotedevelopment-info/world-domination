@@ -28,6 +28,8 @@ import {
   magnifierState,
   setMagnifier,
   updateMagnifierPosition,
+  panCamera,
+  zoomCamera,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
 import {
@@ -354,11 +356,10 @@ function doLogout() {
 
 // Wire canvas interactions: click selection, drag-to-pan, right-click Loupe, wheel scroll
 function setupCanvasInteractions(canvas) {
-  const scrollViewport = document.getElementById("map-scroll-viewport");
   let isDragging = false;
   let hasDragged = false;
-  let startX = 0;
-  let scrollStartX = 0;
+  let lastX = 0;
+  let lastY = 0;
   let rightClickDown = false;
   let loupeToggleLocked = false;
 
@@ -369,7 +370,7 @@ function setupCanvasInteractions(canvas) {
       loupeToggleLocked = !loupeToggleLocked;
       toggleBtn.classList.toggle("active", loupeToggleLocked);
       const rect = canvas.getBoundingClientRect();
-      const cx = (scrollViewport?.clientWidth || rect.width) / 2;
+      const cx = rect.width / 2;
       const cy = rect.height / 2;
       setMagnifier(loupeToggleLocked, cx, cy);
     });
@@ -395,15 +396,15 @@ function setupCanvasInteractions(canvas) {
     }
 
     if (e.button === 0) {
-      // Left-click: Start horizontal drag-to-pan
+      // Left-click: Start canvas drag-to-pan
       isDragging = true;
       hasDragged = false;
-      startX = e.clientX;
-      scrollStartX = scrollViewport ? scrollViewport.scrollLeft : 0;
+      lastX = e.clientX;
+      lastY = e.clientY;
     }
   });
 
-  // Mousemove: update Loupe or perform horizontal panning
+  // Mousemove: update Loupe or perform canvas panning
   window.addEventListener("mousemove", (e) => {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -415,14 +416,16 @@ function setupCanvasInteractions(canvas) {
       updateMagnifierPosition(cx, cy);
     }
 
-    // Drag-to-pan handling
-    if (isDragging && scrollViewport) {
-      const dx = e.clientX - startX;
-      if (Math.abs(dx) > 4) {
+    // Drag-to-pan handling on canvas
+    if (isDragging) {
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         hasDragged = true;
-        scrollViewport.classList.add("is-dragging");
+        panCamera(dx, dy);
+        lastX = e.clientX;
+        lastY = e.clientY;
       }
-      scrollViewport.scrollLeft = scrollStartX - dx;
     }
   });
 
@@ -436,25 +439,37 @@ function setupCanvasInteractions(canvas) {
     }
     if (e.button === 0) {
       isDragging = false;
-      if (scrollViewport) {
-        scrollViewport.classList.remove("is-dragging");
-      }
     }
   });
 
-  // Mousewheel: horizontal panning across the map
-  if (scrollViewport) {
-    scrollViewport.addEventListener(
-      "wheel",
-      (e) => {
-        if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && !e.shiftKey) {
-          scrollViewport.scrollLeft += e.deltaY * 0.85;
-          e.preventDefault();
-        }
-      },
-      { passive: false }
-    );
-  }
+  // Mousewheel: zoom or pan across the map
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      if (e.ctrlKey || e.metaKey) {
+        const factor = e.deltaY > 0 ? 1.08 : 0.92;
+        zoomCamera(factor, sx, sy);
+      } else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        panCamera(-e.deltaX, 0);
+      } else {
+        const factor = e.deltaY > 0 ? 1.06 : 0.94;
+        zoomCamera(factor, sx, sy);
+      }
+    },
+    { passive: false }
+  );
+
+  // Keyboard shortcut: Esc closes progress modal
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      toggleProgressModal(false);
+    }
+  });
 
   // Click on kingdom (only if not dragging)
   canvas.addEventListener("click", (e) => {
@@ -496,12 +511,40 @@ function setupCanvasInteractions(canvas) {
       if (!kingdom.owner_id) {
         const listItem = document.querySelector(`.kingdom-item[data-kingdom-id="${kingdom.id}"]`);
         selectKingdom(kingdom.id, listItem);
+        // If player has not yet claimed a realm, open the progress modal so they can claim it easily
+        if (!state.myKingdom) {
+          toggleProgressModal(true);
+        }
       }
     }
   });
 }
 
+export function toggleProgressModal(forceOpen) {
+  const modal = document.getElementById("progress-modal-overlay");
+  const toggleBtn = document.getElementById("progress-modal-toggle-btn");
+  if (!modal) return;
+  const isCurrentlyOpen = !modal.classList.contains("hidden");
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !isCurrentlyOpen;
+
+  if (shouldOpen) {
+    modal.classList.remove("hidden");
+    if (toggleBtn) toggleBtn.classList.add("active");
+  } else {
+    modal.classList.add("hidden");
+    if (toggleBtn) toggleBtn.classList.remove("active");
+  }
+}
+
+export function handleProgressModalBackdrop(e) {
+  if (e.target && e.target.id === "progress-modal-overlay") {
+    toggleProgressModal(false);
+  }
+}
+
 // Expose functions globally to window so HTML inline onclick="..." always resolve
+window.toggleProgressModal = toggleProgressModal;
+window.handleProgressModalBackdrop = handleProgressModalBackdrop;
 window.login = doLogin;
 window.register = doRegister;
 window.showRegister = showRegister;

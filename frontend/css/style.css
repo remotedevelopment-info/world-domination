@@ -94,8 +94,8 @@ body {
     color: #ff6b6b;
     filter: drop-shadow(0 0 3px #ff6b6b);
 }
-.game-main { display: flex; flex: 1; overflow: hidden; }
-.map-container { flex: 1; position: relative; background: #1a4d6e; overflow: hidden; }
+.game-main { display: flex; flex: 1; width: 100%; height: 100%; overflow: hidden; position: relative; }
+.map-container { flex: 1; width: 100%; height: 100%; position: relative; background: #1a4d6e; overflow: hidden; }
 #world-map { display: block; width: 100%; height: 100%; }
 .map-overlay { position: absolute; top: 20px; right: 20px; z-index: 10; }
 .kingdom-info {
@@ -107,6 +107,112 @@ body {
 }
 .kingdom-info h3 { color: #ffd700; margin-bottom: 10px; }
 .kingdom-info p { margin: 5px 0; font-size: 0.9em; }
+
+/* Progress Modal & Header Button */
+.progress-modal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 16px;
+    margin-left: 12px;
+    background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
+    border: 1.5px solid #d4af37;
+    border-radius: 6px;
+    color: #f5d76e;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.88em;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.progress-modal-btn:hover, .progress-modal-btn.active {
+    background: linear-gradient(180deg, #3d566e 0%, #243342 100%);
+    border-color: #ffd700;
+    color: #fff;
+    box-shadow: 0 0 14px rgba(255, 215, 0, 0.45);
+    transform: translateY(-1px);
+}
+.progress-btn-icon { font-size: 1.15em; }
+
+.progress-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 14, 20, 0.75);
+    backdrop-filter: blur(5px);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeInProgress 0.2s ease-out;
+}
+.progress-modal-overlay.hidden { display: none; }
+@keyframes fadeInProgress {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+.progress-modal-dialog {
+    width: 100%;
+    max-width: 620px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #182532 0%, #101922 100%);
+    border: 2px solid #d4af37;
+    border-radius: 8px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(212, 175, 55, 0.25);
+    overflow: hidden;
+}
+.progress-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: rgba(0, 0, 0, 0.35);
+    border-bottom: 1.5px solid rgba(212, 175, 55, 0.35);
+}
+.progress-modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.progress-modal-title-group h2 {
+    margin: 0;
+    color: #f5d76e;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.15em;
+    letter-spacing: 0.08em;
+}
+.progress-crest { font-size: 1.3em; }
+.progress-modal-close-btn {
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    color: #d4af37;
+    font-size: 1.2em;
+    line-height: 1;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.progress-modal-close-btn:hover {
+    background: rgba(212, 175, 55, 0.2);
+    border-color: #ffd700;
+    color: #fff;
+}
+.progress-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
 .game-sidebar {
     width: 320px;
     background: rgba(0, 0, 0, 0.4);
@@ -2322,20 +2428,19 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* --- 3. Steampunk Age of Discovery Sidebar Accents --- */
-.game-sidebar {
+/* --- 3. Steampunk Age of Discovery Sidebar & Progress Modal Accents --- */
+.game-sidebar, .progress-modal-dialog {
     background: linear-gradient(180deg, rgba(22, 18, 14, 0.95) 0%, rgba(14, 12, 10, 0.98) 100%);
-    border-left: 3px solid #8b6508;
     box-shadow: inset 2px 0 10px rgba(0, 0, 0, 0.6);
 }
 
-.game-sidebar .panel {
+.game-sidebar .panel, .progress-modal-dialog .panel {
     background: rgba(30, 24, 18, 0.6);
     border: 1px solid rgba(212, 175, 55, 0.25);
     box-shadow: inset 0 1px 0 rgba(255, 215, 0, 0.1), 0 3px 8px rgba(0, 0, 0, 0.4);
 }
 
-.game-sidebar .panel h3 {
+.game-sidebar .panel h3, .progress-modal-dialog .panel h3 {
     color: #ffd700;
     font-family: Georgia, 'Times New Roman', serif;
     letter-spacing: 1px;
@@ -2345,19 +2450,19 @@ body {
     font-size: 0.95em;
 }
 
-.game-sidebar .kingdom-item {
+.game-sidebar .kingdom-item, .progress-modal-dialog .kingdom-item {
     border: 1px solid rgba(212, 175, 55, 0.2);
     background: rgba(18, 14, 10, 0.5);
     transition: all 0.2s ease;
 }
 
-.game-sidebar .kingdom-item:hover {
+.game-sidebar .kingdom-item:hover, .progress-modal-dialog .kingdom-item:hover {
     background: rgba(212, 175, 55, 0.15);
     border-color: #ffd700;
     transform: translateX(3px);
 }
 
-.game-sidebar .kingdom-item.selected {
+.game-sidebar .kingdom-item.selected, .progress-modal-dialog .kingdom-item.selected {
     border-color: #ffd700;
     background: linear-gradient(90deg, rgba(212, 175, 55, 0.25) 0%, rgba(18, 14, 10, 0.8) 100%);
     box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);

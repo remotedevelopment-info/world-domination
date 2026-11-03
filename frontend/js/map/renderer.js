@@ -52,15 +52,28 @@ export function computeTargetViewport(
   }
 
   // Generous padding around the active theater so coastal margins and labels fit comfortably
-  const rawW = maxX - minX;
-  const rawH = maxY - minY;
-  const padX = Math.max(0.035, rawW * 0.11);
-  const padY = Math.max(0.035, rawH * 0.11);
+  let rawW = maxX - minX;
+  let rawH = maxY - minY;
 
-  const boundedMinX = Math.max(0, minX - padX);
-  const boundedMaxX = Math.min(1, maxX + padX);
-  const boundedMinY = Math.max(0, minY - padY);
-  const boundedMaxY = Math.min(1, maxY + padY);
+  // For early discovery / revolt eras, provide expansive widescreen margins so Europe feels wide and desktop-scale
+  const count = kingdoms.length;
+  if (count <= 15) {
+    // Age of Discovery: expand margins so Europe spans broad horizontal canvas
+    rawW = Math.max(rawW, 0.30);
+    rawH = Math.max(rawH, 0.26);
+  } else if (count <= 30) {
+    // Age of Revolt
+    rawW = Math.max(rawW, 0.35);
+    rawH = Math.max(rawH, 0.28);
+  }
+
+  const padX = Math.max(0.02, rawW * 0.08);
+  const padY = Math.max(0.02, rawH * 0.08);
+
+  const boundedMinX = minX - padX;
+  const boundedMaxX = maxX + padX;
+  const boundedMinY = minY - padY;
+  const boundedMaxY = maxY + padY;
 
   let w = boundedMaxX - boundedMinX;
   let h = boundedMaxY - boundedMinY;
@@ -75,31 +88,10 @@ export function computeTargetViewport(
     h = w / canvasAspect;
   }
 
-  let vMinX = cx - w / 2;
-  let vMaxX = cx + w / 2;
-  let vMinY = cy - h / 2;
-  let vMaxY = cy + h / 2;
-
-  if (w <= 1) {
-    if (vMinX < 0) {
-      vMaxX += -vMinX;
-      vMinX = 0;
-    }
-    if (vMaxX > 1) {
-      vMinX -= vMaxX - 1;
-      vMaxX = 1;
-    }
-  }
-  if (h <= 1) {
-    if (vMinY < 0) {
-      vMaxY += -vMinY;
-      vMinY = 0;
-    }
-    if (vMaxY > 1) {
-      vMinY -= vMaxY - 1;
-      vMaxY = 1;
-    }
-  }
+  const vMinX = cx - w / 2;
+  const vMaxX = cx + w / 2;
+  const vMinY = cy - h / 2;
+  const vMaxY = cy + h / 2;
 
   return { minX: vMinX, maxX: vMaxX, minY: vMinY, maxY: vMaxY, w, h };
 }
@@ -195,13 +187,11 @@ export function initRenderer(canvasElement) {
 
 export function resizeCanvas() {
   if (!canvas) return;
-  const scrollViewport = document.getElementById("map-scroll-viewport");
-  const container = scrollViewport || document.querySelector(".map-container");
+  const container = document.querySelector(".map-container");
   if (!container) return;
 
-  const minW = getEraMinWidth(state.currentSimYear || 1500);
-  canvasWidth = Math.max(container.clientWidth, minW);
-  canvasHeight = container.clientHeight || 600;
+  canvasWidth = container.clientWidth || 1200;
+  canvasHeight = container.clientHeight || 700;
 
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
@@ -210,6 +200,47 @@ export function resizeCanvas() {
 
   syncViewport(true);
   renderMap(true);
+}
+
+export function panCamera(deltaScreenX, deltaScreenY) {
+  if (!currentViewport || canvasWidth <= 0 || canvasHeight <= 0) return;
+  const vpW = currentViewport.maxX - currentViewport.minX;
+  const vpH = currentViewport.maxY - currentViewport.minY;
+  const dxWorld = (deltaScreenX / canvasWidth) * vpW;
+  const dyWorld = (deltaScreenY / canvasHeight) * vpH;
+
+  currentViewport.minX -= dxWorld;
+  currentViewport.maxX -= dxWorld;
+  currentViewport.minY -= dyWorld;
+  currentViewport.maxY -= dyWorld;
+  targetViewport = { ...currentViewport };
+
+  renderMap();
+}
+
+export function zoomCamera(factor, screenX, screenY) {
+  if (!currentViewport || canvasWidth <= 0 || canvasHeight <= 0) return;
+  const vpW = currentViewport.maxX - currentViewport.minX;
+  const vpH = currentViewport.maxY - currentViewport.minY;
+
+  const pivotU = (screenX ?? canvasWidth / 2) / canvasWidth;
+  const pivotV = (screenY ?? canvasHeight / 2) / canvasHeight;
+
+  const newW = vpW * factor;
+  const newH = vpH * factor;
+
+  if (newW < 0.05 || newW > 2.0) return;
+
+  const pivotX = currentViewport.minX + pivotU * vpW;
+  const pivotY = currentViewport.minY + pivotV * vpH;
+
+  currentViewport.minX = pivotX - pivotU * newW;
+  currentViewport.maxX = currentViewport.minX + newW;
+  currentViewport.minY = pivotY - pivotV * newH;
+  currentViewport.maxY = currentViewport.minY + newH;
+  targetViewport = { ...currentViewport };
+
+  renderMap();
 }
 
 export function project(x, y) {
@@ -338,31 +369,31 @@ function drawRhumbLines(ctx) {
 }
 
 /**
- * Draws an elaborate 16-point Nautical Astrolabe Compass Rose in the Atlantic
+ * Draws an authentic Victorian Steampunk Astrolabe Compass Rose fixed neatly in the top-left corner
  */
-function drawCompassRose(ctx, cx, cy, radius) {
+function drawCompassRose(ctx, cx, cy, radius = 22) {
   ctx.save();
 
   // Outer brass astrolabe ring
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(212, 175, 55, 0.55)";
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = "rgba(212, 175, 55, 0.65)";
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   // Secondary inner ring
   ctx.beginPath();
-  ctx.arc(cx, cy, radius * 0.82, 0, Math.PI * 2);
+  ctx.arc(cx, cy, radius * 0.8, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(212, 175, 55, 0.35)";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.8;
   ctx.stroke();
 
-  // Degree graduation ticks along outer ring (every 10 degrees)
-  for (let deg = 0; deg < 360; deg += 10) {
+  // Degree graduation ticks along outer ring (every 15 degrees)
+  for (let deg = 0; deg < 360; deg += 15) {
     const rad = (deg * Math.PI) / 180;
     const isMajor = deg % 90 === 0;
     const isMid = deg % 45 === 0;
-    const tickLen = isMajor ? radius * 0.18 : isMid ? radius * 0.12 : radius * 0.07;
+    const tickLen = isMajor ? radius * 0.22 : isMid ? radius * 0.14 : radius * 0.08;
     const r1 = radius - tickLen;
     const r2 = radius;
 
@@ -375,21 +406,20 @@ function drawCompassRose(ctx, cx, cy, radius) {
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.strokeStyle = isMajor
-      ? "rgba(255, 215, 0, 0.85)"
+      ? "rgba(255, 215, 0, 0.9)"
       : isMid
       ? "rgba(212, 175, 55, 0.6)"
       : "rgba(180, 140, 60, 0.35)";
-    ctx.lineWidth = isMajor ? 1.8 : 1;
+    ctx.lineWidth = isMajor ? 1.4 : 0.8;
     ctx.stroke();
   }
 
   // Draw 16 faceted points of the compass star
-  // 16 points: 4 major cardinals, 4 intercardinals, 8 secondary points
   const points = 16;
-  const rMajor = radius * 0.78;
-  const rInter = radius * 0.58;
-  const rMinor = radius * 0.42;
-  const rBase = radius * 0.18;
+  const rMajor = radius * 0.74;
+  const rInter = radius * 0.52;
+  const rMinor = radius * 0.36;
+  const rBase = radius * 0.16;
 
   for (let i = 0; i < points; i++) {
     const angle = (i * Math.PI * 2) / points - Math.PI / 2;
@@ -428,47 +458,34 @@ function drawCompassRose(ctx, cx, cy, radius) {
     ctx.fill();
   }
 
-  // Ornate Fleur-de-lis / North Arrow Tip
-  const northTipY = cy - rMajor - radius * 0.18;
+  // Small North Arrow Tip
+  const northTipY = cy - rMajor - radius * 0.15;
   ctx.beginPath();
   ctx.moveTo(cx, northTipY);
-  ctx.lineTo(cx - radius * 0.08, cy - rMajor + 2);
-  ctx.lineTo(cx + radius * 0.08, cy - rMajor + 2);
+  ctx.lineTo(cx - radius * 0.09, cy - rMajor + 1);
+  ctx.lineTo(cx + radius * 0.09, cy - rMajor + 1);
   ctx.closePath();
   ctx.fillStyle = "#ffd700";
   ctx.fill();
   ctx.strokeStyle = "#8b6508";
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Central Brass Rivet
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd700";
+  ctx.fill();
+  ctx.strokeStyle = "#5a3a06";
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Central Brass Astrolabe Hub & Rivet
-  const hubGrad = ctx.createRadialGradient(
-    cx - 2,
-    cy - 2,
-    1,
-    cx,
-    cy,
-    radius * 0.16
-  );
-  hubGrad.addColorStop(0, "#fff2a8");
-  hubGrad.addColorStop(0.4, "#d4af37");
-  hubGrad.addColorStop(0.8, "#8b6508");
-  hubGrad.addColorStop(1, "#3e2704");
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius * 0.16, 0, Math.PI * 2);
-  ctx.fillStyle = hubGrad;
-  ctx.fill();
-  ctx.strokeStyle = "#ffd700";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // Cardinal Labels: N, E, S, W
-  ctx.font = `bold ${Math.max(11, Math.round(radius * 0.22))}px Georgia, serif`;
+  // Cardinal Labels: N, E, S, W (crisp, small, centered)
+  ctx.font = `bold ${Math.max(8, Math.round(radius * 0.36))}px Georgia, serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const labelOffset = radius * 0.95;
+  const labelOffset = radius * 0.92;
   const labels = [
     { text: "N", x: cx, y: cy - labelOffset, color: "#ffd700" },
     { text: "E", x: cx + labelOffset, y: cy, color: "#e8c368" },
@@ -477,8 +494,8 @@ function drawCompassRose(ctx, cx, cy, radius) {
   ];
 
   labels.forEach((l) => {
-    ctx.fillStyle = "rgba(10, 15, 20, 0.7)";
-    ctx.fillText(l.text, l.x + 1, l.y + 1);
+    ctx.fillStyle = "rgba(10, 15, 20, 0.85)";
+    ctx.fillText(l.text, l.x + 0.6, l.y + 0.6);
     ctx.fillStyle = l.color;
     ctx.fillText(l.text, l.x, l.y);
   });
@@ -602,30 +619,11 @@ export function renderMap(immediate = false) {
   // 3. Portolan navigational rhumb lines radiating across known seas
   drawRhumbLines(ctx);
 
-  // 4. Nautical Astrolabe Compass Rose in open waters of the known theater
-  let roseWorldX = 0.08;
-  let roseWorldY = 0.72;
-  const isEarlyEra =
-    !state.currentEraId ||
-    state.currentEraId === "discovery" ||
-    state.currentEraId === "revolt";
-
-  if (isEarlyEra) {
-    roseWorldX = 0.36; // North Atlantic off the coast of Europe
-    roseWorldY = 0.23;
-  }
-
-  const [roseX, roseY] = project(roseWorldX, roseWorldY);
-  const roseRadius = Math.min(canvasWidth, canvasHeight) * 0.1;
-  if (
-    roseX > -roseRadius &&
-    roseX < canvasWidth + roseRadius &&
-    roseY > -roseRadius &&
-    roseY < canvasHeight + roseRadius &&
-    roseRadius > 20
-  ) {
-    drawCompassRose(ctx, roseX, roseY, roseRadius);
-  }
+  // 4. Nautical Astrolabe Compass Rose fixed in top-left corner (small, elegant, permanent)
+  const compassX = 46;
+  const compassY = 46;
+  const compassRadius = 22;
+  drawCompassRose(ctx, compassX, compassY, compassRadius);
 
   // Determine badge sizing based on era nation count (discovery=11, modern=200)
   const count = state.kingdoms.length;

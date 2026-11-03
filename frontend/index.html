@@ -134,6 +134,12 @@
                         </div>
                     </div>
                 </nav>
+
+                <!-- Header Control: Imperial Progress Modal Toggle -->
+                <button type="button" class="progress-modal-btn" id="progress-modal-toggle-btn" onclick="toggleProgressModal()" title="View Imperial Progress, Realm Selection, and Chronicle">
+                    <span class="progress-btn-icon">📜</span>
+                    <span class="progress-btn-text">Progress</span>
+                </button>
             </header>
 
             <!-- Development Activated Chrono Regulator Drawer / Modal -->
@@ -290,17 +296,14 @@
 
                     <!-- Steampunk Navigation Tools Bar -->
                     <div class="map-tool-ribbon">
-                        <button id="toggle-loupe-btn" class="map-ribbon-btn" title="Toggle 2.5× Steampunk Brass Loupe (or hold Right-Click anywhere on map)">
+                        <button type="button" id="toggle-loupe-btn" class="map-ribbon-btn" title="Toggle 2.4× Steampunk Brass Loupe (or hold Right-Click anywhere on map)">
                             <span class="btn-icon">🔍</span>
-                            <span class="btn-txt">2.5× Loupe</span>
+                            <span class="btn-txt">2.4× Loupe</span>
                         </button>
-                        <span class="map-nav-tip">Tip: Right-click &amp; hold to magnify · Drag or scroll to pan</span>
+                        <span class="map-nav-tip">Right-click &amp; hold to magnify · Drag to pan</span>
                     </div>
 
-                    <div class="map-scroll-viewport" id="map-scroll-viewport">
-                        <canvas id="world-map"></canvas>
-                    </div>
-
+                    <canvas id="world-map"></canvas>
                     <div id="map-overlay" class="map-overlay">
                         <div id="kingdom-info" class="hidden kingdom-info">
                             <h3 id="kingdom-name"></h3>
@@ -310,50 +313,62 @@
                         </div>
                     </div>
                 </div>
-
-                <aside class="game-sidebar">
-                    <div id="country-selection" class="panel">
-                        <h3>👑 Claim an Imperial Realm</h3>
-                        <p class="panel-desc">Select a sovereign power operating in 1500 on the cartographic chart</p>
-                        <div id="available-kingdoms" class="kingdom-list"></div>
-                        <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Realm</button>
-                    </div>
-
-                    <div id="my-kingdom" class="hidden panel">
-                        <h3>My Imperial Realm</h3>
-                        <div id="kingdom-stats">
-                            <p>Name: <span id="my-kingdom-name"></span></p>
-                            <p>Population: <span id="my-kingdom-pop"></span></p>
-                            <p>Resources: <span id="my-kingdom-res"></span></p>
-                            <p>Last Active: <span id="my-kingdom-active"></span></p>
-                        </div>
-                        <div class="action-buttons">
-                            <button onclick="showAction('diplomacy')">🤝 Diplomacy</button>
-                            <button onclick="showAction('economy')">💰 Economy</button>
-                            <button onclick="showAction('military')">⚔️ Military</button>
-                        </div>
-                    </div>
-
-                    <div id="economy-panel" class="hidden panel">
-                        <h3>Royal Exchequer &amp; Economy</h3>
-                        <div id="economy-stats">
-                            <p>Currency Value: <span id="econ-currency">—</span><span class="econ-unit">ducats</span><span id="econ-currency-trend" class="econ-trend"></span></p>
-                            <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend" class="econ-trend"></span></p>
-                            <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/cycle</span></p>
-                            <p>Military Spending: <span id="econ-military">—</span><span class="econ-unit">/cycle</span></p>
-                            <p>Budget Balance: <span id="econ-balance">—</span><span id="econ-balance-trend" class="econ-trend"></span></p>
-                            <p>Gold Reserve: <span id="econ-reserve">—</span></p>
-                            <p>Tax Rate: <span id="econ-rate">—</span><span class="econ-unit">%</span></p>
-                            <p>Development: <span id="econ-levels">—</span></p>
-                        </div>
-                    </div>
-
-                    <div id="activity-log" class="panel">
-                        <h3>Chronicle of Imperial Deeds</h3>
-                        <div id="log-entries" class="log-container"></div>
-                    </div>
-                </aside>
             </main>
+
+            <!-- Imperial Progress Modal Dialog (Frees 100% full-screen map) -->
+            <div id="progress-modal-overlay" class="progress-modal-overlay hidden" onclick="handleProgressModalBackdrop(event)">
+                <div class="progress-modal-dialog steampunk-panel" role="dialog" aria-modal="true" aria-labelledby="progress-modal-title">
+                    <div class="progress-modal-header">
+                        <div class="progress-modal-title-group">
+                            <span class="progress-crest">📜</span>
+                            <h2 id="progress-modal-title">IMPERIAL PROGRESS &amp; CODEX</h2>
+                        </div>
+                        <button type="button" class="progress-modal-close-btn" onclick="toggleProgressModal(false)" title="Close (Esc)">✕</button>
+                    </div>
+                    <div class="progress-modal-body">
+                        <div id="country-selection" class="panel">
+                            <h3>👑 Claim an Imperial Realm</h3>
+                            <p class="panel-desc">Select a sovereign power operating in the current cartographic chart</p>
+                            <div id="available-kingdoms" class="kingdom-list"></div>
+                            <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Realm</button>
+                        </div>
+
+                        <div id="my-kingdom" class="hidden panel">
+                            <h3>My Imperial Realm</h3>
+                            <div id="kingdom-stats">
+                                <p>Name: <span id="my-kingdom-name"></span></p>
+                                <p>Population: <span id="my-kingdom-pop"></span></p>
+                                <p>Resources: <span id="my-kingdom-res"></span></p>
+                                <p>Last Active: <span id="my-kingdom-active"></span></p>
+                            </div>
+                            <div class="action-buttons">
+                                <button onclick="showAction('diplomacy')">🤝 Diplomacy</button>
+                                <button onclick="showAction('economy')">💰 Economy</button>
+                                <button onclick="showAction('military')">⚔️ Military</button>
+                            </div>
+                        </div>
+
+                        <div id="economy-panel" class="hidden panel">
+                            <h3>Royal Exchequer &amp; Economy</h3>
+                            <div id="economy-stats">
+                                <p>Currency Value: <span id="econ-currency">—</span><span class="econ-unit">ducats</span><span id="econ-currency-trend" class="econ-trend"></span></p>
+                                <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend" class="econ-trend"></span></p>
+                                <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/cycle</span></p>
+                                <p>Military Spending: <span id="econ-military">—</span><span class="econ-unit">/cycle</span></p>
+                                <p>Budget Balance: <span id="econ-balance">—</span><span id="econ-balance-trend" class="econ-trend"></span></p>
+                                <p>Gold Reserve: <span id="econ-reserve">—</span></p>
+                                <p>Tax Rate: <span id="econ-rate">—</span><span class="econ-unit">%</span></p>
+                                <p>Development: <span id="econ-levels">—</span></p>
+                            </div>
+                        </div>
+
+                        <div id="activity-log" class="panel">
+                            <h3>Chronicle of Imperial Deeds</h3>
+                            <div id="log-entries" class="log-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Action Modal -->
             <div id="action-modal" class="hidden modal">
