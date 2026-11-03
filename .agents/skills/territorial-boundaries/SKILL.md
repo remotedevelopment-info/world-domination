@@ -58,8 +58,12 @@ Every country has historical lifecycle metadata:
 ### 3.2 Canonical Dissolutions
 Older macro-empires must be retired when their successors emerge to prevent lingering background geometry:
 1. **Kalmar Union (`KAL`)**: `death_year = 1523`. Retired upon the independence of Sweden (`SWE`), Denmark (`DEN`), and Norway (`NOR`).
-2. **Holy Roman Empire (`HRE`)**: `death_year = 1806`. Retired when Francis II dissolved the empire, giving rise to the Austrian Empire (`AUT`), German Confederation (`PRU`, `BAV`, `SAX`), and Italy (`ITA`).
+2. **Holy Roman Empire (`HRE`)**: `death_year = 1806`. Retired when Francis II dissolved the empire, giving rise to the Austrian Empire, German Confederation (`PRU`, `BAV`, `SAX`), and Italy (`ITA`).
 3. **Ottoman Empire (`OTT`)**: `death_year = 1922`. Retired upon the abolition of the Sultanate, transitioning sovereign authority to the Republic of Turkey (`TUR`) and League of Nations mandates.
+4. **Austro-Hungarian Empire (`AUH`)**: `death_year = 1918`. Retired at the end of World War I (Treaties of Saint-Germain-en-Laye and Trianon), cleanly dissolving into the sovereign Republic of Austria (`AUT`), Republic of Hungary (`HUN`), Czechoslovakia (`CZE_SLO`), and Yugoslavia (`YUG`). In the Modern Era, Austria and Hungary exist side-by-side as two distinct countries sharing the watertight Burgenland/Danube frontier arc (`[0.5486, 0.2552] <-> [0.545, 0.2634] <-> [0.5431, 0.2634]`).
+5. **Pre-Unification Italian States (`VEN`, `GEN`, `NAP`, `PAP`)**: Unified under the House of Savoy into the Kingdom of Italy (`ITA`, `birth_year = 1860`). Predecessor states dissolve cleanly: Venice (`VEN`, `death_year = 1797`), Genoa (`GEN`, `death_year = 1815`), Naples (`NAP`, `death_year = 1860`), and Papal States (`PAP`, `death_year = 1870`), allowing unified Italy to command the full 21-vertex Alpine-to-Calabria peninsula and boot coastline.
+6. **German Electorates (`PRU`, `BAV`, `SAX`)**: `death_year = 1871`. Unified under the German Empire / modern Federal Republic of Germany (`DEU`, `birth_year = 1871`), which snaps directly to Denmark, the Netherlands, Belgium, France, Switzerland, Austria, the Czech Republic, and Poland.
+7. **Poland-Lithuania (`POL`)**: `death_year = 1795`. Partitioned by Prussia, Russia, and Austria, re-emerging at the end of WWI as the sovereign Republic of Poland (`POL_REP`, `birth_year = 1918`).
 
 ### 3.3 Rule of Gameplay Territory Preservation
 When transitioning between historical ages in live gameplay:
@@ -126,3 +130,4 @@ CREATE TABLE IF NOT EXISTS country_geometries (
    ```
 3. **Client Update**:
    The renderer updates `border_arcs[42]`. The next `renderMap()` frame reflects the new frontline immediately.
+

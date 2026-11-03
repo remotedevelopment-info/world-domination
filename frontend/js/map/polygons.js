@@ -685,6 +685,104 @@ export const kingdomPolygons = {
       0.2138
     ]
   ],
+  "DEU": [
+    [
+      0.5283,
+      0.2103
+    ],
+    [
+      0.5319,
+      0.2138
+    ],
+    [
+      0.5389,
+      0.2124
+    ],
+    [
+      0.5458,
+      0.2172
+    ],
+    [
+      0.5517,
+      0.2103
+    ],
+    [
+      0.55,
+      0.2241
+    ],
+    [
+      0.5469,
+      0.2359
+    ],
+    [
+      0.5403,
+      0.2345
+    ],
+    [
+      0.5339,
+      0.2393
+    ],
+    [
+      0.5361,
+      0.2538
+    ],
+    [
+      0.5311,
+      0.2593
+    ],
+    [
+      0.5278,
+      0.2579
+    ],
+    [
+      0.5239,
+      0.2572
+    ],
+    [
+      0.5192,
+      0.2593
+    ],
+    [
+      0.5167,
+      0.2676
+    ],
+    [
+      0.5208,
+      0.2579
+    ],
+    [
+      0.5211,
+      0.2483
+    ],
+    [
+      0.5169,
+      0.2448
+    ],
+    [
+      0.5172,
+      0.2428
+    ],
+    [
+      0.5167,
+      0.2359
+    ],
+    [
+      0.5197,
+      0.2221
+    ],
+    [
+      0.5189,
+      0.2179
+    ],
+    [
+      0.5225,
+      0.2076
+    ],
+    [
+      0.5283,
+      0.2103
+    ]
+  ],
   "SWE": [
     [
       0.5308,
@@ -1073,39 +1171,91 @@ export const kingdomPolygons = {
   ],
   "ITA": [
     [
+      0.5192,
+      0.2855
+    ],
+    [
       0.5194,
       0.2772
     ],
     [
-      0.5222,
-      0.2662
+      0.5167,
+      0.2676
+    ],
+    [
+      0.5264,
+      0.269
     ],
     [
       0.5292,
       0.2648
     ],
     [
-      0.5333,
-      0.2717
+      0.5375,
+      0.2655
     ],
     [
       0.5339,
       0.2793
     ],
     [
-      0.5283,
-      0.2828
+      0.5394,
+      0.2897
     ],
     [
-      0.5217,
-      0.2814
+      0.5422,
+      0.2938
     ],
     [
-      0.5194,
-      0.2772
+      0.5494,
+      0.3021
+    ],
+    [
+      0.5522,
+      0.309
+    ],
+    [
+      0.5478,
+      0.32
+    ],
+    [
+      0.5444,
+      0.3269
+    ],
+    [
+      0.5383,
+      0.331
+    ],
+    [
+      0.5339,
+      0.3255
+    ],
+    [
+      0.5361,
+      0.3138
+    ],
+    [
+      0.5367,
+      0.2986
+    ],
+    [
+      0.5311,
+      0.2972
+    ],
+    [
+      0.5244,
+      0.2883
+    ],
+    [
+      0.52,
+      0.2862
+    ],
+    [
+      0.5192,
+      0.2855
     ]
   ],
-  "AUT": [
+  "AUH": [
     [
       0.5272,
       0.2614
@@ -1149,6 +1299,60 @@ export const kingdomPolygons = {
     [
       0.5272,
       0.2614
+    ]
+  ],
+  "AUT": [
+    [
+      0.5264,
+      0.269
+    ],
+    [
+      0.5239,
+      0.2572
+    ],
+    [
+      0.5278,
+      0.2579
+    ],
+    [
+      0.5311,
+      0.2593
+    ],
+    [
+      0.5361,
+      0.2538
+    ],
+    [
+      0.5397,
+      0.2497
+    ],
+    [
+      0.5472,
+      0.2517
+    ],
+    [
+      0.5486,
+      0.2552
+    ],
+    [
+      0.545,
+      0.2634
+    ],
+    [
+      0.5431,
+      0.2634
+    ],
+    [
+      0.5375,
+      0.2655
+    ],
+    [
+      0.5292,
+      0.2648
+    ],
+    [
+      0.5264,
+      0.269
     ]
   ],
   "ROM": [
@@ -2455,6 +2659,10 @@ export const kingdomPolygons = {
   ],
   "HUN": [
     [
+      0.5431,
+      0.2634
+    ],
+    [
       0.545,
       0.2634
     ],
@@ -2483,7 +2691,11 @@ export const kingdomPolygons = {
       0.2703
     ],
     [
-      0.545,
+      0.5458,
+      0.2655
+    ],
+    [
+      0.5431,
       0.2634
     ]
   ],
@@ -6473,12 +6685,20 @@ export const kingdomLabelPositions = {
     0.3392
   ],
   "ITA": [
-    0.5259,
-    0.2751
+    0.5335,
+    0.2950
   ],
-  "AUT": [
+  "AUH": [
     0.5444,
     0.2601
+  ],
+  "AUT": [
+    0.5360,
+    0.2595
+  ],
+  "DEU": [
+    0.5330,
+    0.2350
   ],
   "ROM": [
     0.5711,
@@ -7314,6 +7534,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 700,
     "is_island": false,
     "birth_year": 1500,
+    "death_year": 1797,
     "unlock_era": "discovery",
     "parent": "",
     "historical_note": "Serene Maritime Republic (c. 1500)",
@@ -7337,6 +7558,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 500,
     "is_island": false,
     "birth_year": 1500,
+    "death_year": 1870,
     "unlock_era": "discovery",
     "parent": "",
     "historical_note": "Patrimony of Saint Peter (c. 1500)",
@@ -7357,6 +7579,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 650,
     "is_island": false,
     "birth_year": 1500,
+    "death_year": 1795,
     "unlock_era": "discovery",
     "parent": "",
     "historical_note": "Jagiellonian Commonwealth (c. 1500)",
@@ -7463,6 +7686,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 700,
     "is_island": false,
     "birth_year": 1750,
+    "death_year": 1871,
     "unlock_era": "revolt",
     "parent": "HRE",
     "historical_note": "Frederick the Great's militarized realm (c. 1750)",
@@ -7565,6 +7789,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 450,
     "is_island": false,
     "birth_year": 1750,
+    "death_year": 1815,
     "unlock_era": "revolt",
     "parent": "HRE",
     "historical_note": "Ligurian maritime merchant republic (c. 1750)",
@@ -7584,6 +7809,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 520,
     "is_island": false,
     "birth_year": 1750,
+    "death_year": 1860,
     "unlock_era": "revolt",
     "parent": "ESP",
     "historical_note": "Bourbon Kingdom of the Two Sicilies (c. 1750)",
@@ -7603,6 +7829,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 460,
     "is_island": false,
     "birth_year": 1750,
+    "death_year": 1871,
     "unlock_era": "revolt",
     "parent": "HRE",
     "historical_note": "Wittelsbach electoral realm in southern Germany (c. 1750)",
@@ -7622,6 +7849,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 440,
     "is_island": false,
     "birth_year": 1750,
+    "death_year": 1871,
     "unlock_era": "revolt",
     "parent": "HRE",
     "historical_note": "Wettin cultural & economic heartland (c. 1750)",
@@ -7714,16 +7942,17 @@ export const HISTORICAL_KINGDOMS = [
   },
   {
     "id": 27,
-    "code": "AUT",
+    "code": "AUH",
     "name": "Austria-Hungary",
     "color": "#B03A2E",
     "population": 36000000,
     "resources": 820,
     "is_island": false,
     "birth_year": 1860,
+    "death_year": 1918,
     "unlock_era": "independence",
     "parent": "HRE",
-    "historical_note": "Habsburg Dual Monarchy in Central Europe (c. 1860)",
+    "historical_note": "Habsburg Dual Monarchy in Central Europe (1867–1918)",
     "borders": [
       "HRE",
       "ITA",
@@ -7734,6 +7963,54 @@ export const HISTORICAL_KINGDOMS = [
       "HUN",
       "CZE",
       "CRO",
+      "SWI"
+    ]
+  },
+  {
+    "id": 201,
+    "code": "AUT",
+    "name": "Republic of Austria",
+    "color": "#C0392B",
+    "population": 6500000,
+    "resources": 680,
+    "is_island": false,
+    "birth_year": 1918,
+    "unlock_era": "decolonisation",
+    "parent": "AUH",
+    "historical_note": "Alpine federal republic established after the dissolution of Austria-Hungary (1918)",
+    "borders": [
+      "DEU",
+      "HRE",
+      "ITA",
+      "SWI",
+      "CZE",
+      "CZE_SLO",
+      "SVK",
+      "HUN",
+      "SVN",
+      "YUG"
+    ]
+  },
+  {
+    "id": 202,
+    "code": "DEU",
+    "name": "Federal Republic of Germany",
+    "color": "#2C3E50",
+    "population": 65000000,
+    "resources": 950,
+    "is_island": false,
+    "birth_year": 1871,
+    "unlock_era": "independence",
+    "parent": "PRU",
+    "historical_note": "Unified German federal state established in Central Europe (1871)",
+    "borders": [
+      "FRA",
+      "BEL",
+      "NED",
+      "DEN",
+      "POL_REP",
+      "CZE",
+      "AUT",
       "SWI"
     ]
   },
@@ -8391,15 +8668,15 @@ export const HISTORICAL_KINGDOMS = [
   {
     "id": 63,
     "code": "HUN",
-    "name": "Kingdom of Hungary",
+    "name": "Republic of Hungary",
     "color": "#1E8449",
     "population": 7900000,
     "resources": 560,
     "is_island": false,
-    "birth_year": 1920,
+    "birth_year": 1918,
     "unlock_era": "decolonisation",
-    "parent": "AUT",
-    "historical_note": "Post-Trianon Hungarian state in the Pannonian basin (c. 1920)",
+    "parent": "AUH",
+    "historical_note": "Post-WWI Hungarian state established in the Pannonian basin (1918)",
     "borders": [
       "AUT",
       "ROM",
@@ -8418,7 +8695,7 @@ export const HISTORICAL_KINGDOMS = [
     "population": 27000000,
     "resources": 780,
     "is_island": false,
-    "birth_year": 1920,
+    "birth_year": 1918,
     "unlock_era": "decolonisation",
     "parent": "RUS",
     "historical_note": "Second Polish Republic restored after 123 years of partition (c. 1920)",
