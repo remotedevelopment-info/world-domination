@@ -76,7 +76,7 @@ docker-compose logs -f
 docker-compose down
 ```
 
-The game will be available at http://localhost:8080
+The game will be available at http://localhost:8060 (configured to avoid ports 8000, 8010, and 8080, which are already in use by other projects on this machine; host port remapped: 5432 is also in use, postgres -> localhost:5433)
 
 ### Manual Setup
 
@@ -106,7 +106,7 @@ export DB_PORT=5432
 export DB_USER=postgres
 export DB_PASSWORD=postgres
 export DB_NAME=kingdom_conquest
-export PORT=8080
+export PORT=8060
 
 # Download dependencies
 go mod download
@@ -117,7 +117,7 @@ go run cmd/server/main.go
 
 #### Frontend
 
-The frontend is served statically by the Go backend. Open http://localhost:8080 in your browser.
+The frontend is served statically by the Go backend. Open http://localhost:8060 in your browser.
 
 ## API Endpoints
 
