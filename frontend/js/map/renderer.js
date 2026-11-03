@@ -268,6 +268,60 @@ export function project(x, y) {
   return [u * canvasWidth, v * canvasHeight];
 }
 
+export function unproject(canvasX, canvasY) {
+  const vp =
+    currentViewport || targetViewport || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+  const vpW = vp.maxX - vp.minX || 1;
+  const vpH = vp.maxY - vp.minY || 1;
+  const u = canvasX / Math.max(1, canvasWidth);
+  const v = canvasY / Math.max(1, canvasHeight);
+  return [vp.minX + u * vpW, vp.minY + v * vpH];
+}
+
+export function getKingdomAtCanvasCoords(canvasX, canvasY, tolerancePx = 6) {
+  const [x, y] = unproject(canvasX, canvasY);
+
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+
+  // 1. Exact point-in-polygon raycasting (newest era kingdoms on top)
+  for (let i = state.kingdoms.length - 1; i >= 0; i--) {
+    const kingdom = state.kingdoms[i];
+    const poly = kingdomPolygons[kingdom.code];
+    if (!poly) continue;
+
+    const b = getPolygonBoundsCached(kingdom.code, poly);
+    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) {
+      continue;
+    }
+
+    if (pointInPolygon(x, y, poly)) {
+      return kingdom;
+    }
+  }
+
+  // 2. Proximity check for small island atolls when cursor is close to their centroid
+  if (tolerancePx > 0) {
+    let closestKingdom = null;
+    let closestDistSq = tolerancePx * tolerancePx;
+    for (let i = state.kingdoms.length - 1; i >= 0; i--) {
+      const kingdom = state.kingdoms[i];
+      const poly = kingdomPolygons[kingdom.code];
+      if (!poly) continue;
+
+      const [cNormX, cNormY] = getCentroid(poly);
+      const [cPxX, cPxY] = project(cNormX, cNormY);
+      const dSq = (canvasX - cPxX) ** 2 + (canvasY - cPxY) ** 2;
+      if (dSq < closestDistSq) {
+        closestDistSq = dSq;
+        closestKingdom = kingdom;
+      }
+    }
+    if (closestKingdom) return closestKingdom;
+  }
+
+  return null;
+}
+
 // -------------------------------------------------------------
 // STEAMPUNK CARTOGRAPHIC ELEMENTS (Age of Discovery c. 1500)
 // -------------------------------------------------------------
@@ -924,6 +978,9 @@ function drawMagnifierLoupe(ctx, mx, my) {
   const radius = magnifierState.radius;
   const zoom = magnifierState.zoom;
 
+  // Identify the exact sovereign state directly beneath the loupe focal point
+  const hoveredKingdom = getKingdomAtCanvasCoords(mx, my);
+
   ctx.save();
 
   // 1. Drop shadow beneath the heavy brass loupe
@@ -952,7 +1009,7 @@ function drawMagnifierLoupe(ctx, mx, my) {
   drawGraticule(ctx);
   drawRhumbLines(ctx);
 
-  // Re-draw kingdoms in magnified space with bold high-legibility badges
+  // Re-draw kingdoms in magnified space (clean territories, no overlapping names!)
   state.kingdoms.forEach((kingdom) => {
     const poly = kingdomPolygons[kingdom.code];
     if (!poly) return;
@@ -969,44 +1026,20 @@ function drawMagnifierLoupe(ctx, mx, my) {
     ctx.fillStyle = kingdom.color || "#4ecdc4";
     ctx.fill();
 
-    ctx.strokeStyle = "#ffe57f";
-    ctx.lineWidth = 1.3;
-    ctx.stroke();
-
-    // Magnified realm label with parchment badge
-    const [lxNorm, lyNorm] = getKingdomLabelPosition(
-      kingdom.code,
-      poly,
-      state.currentSimYear || 1500
-    );
-    const [pxX, pxY] = project(lxNorm, lyNorm);
-
-    ctx.save();
-    ctx.font = "bold 13px 'Cinzel', serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    const labelText = kingdom.name;
-    const txtMetrics = ctx.measureText(labelText);
-    const badgeW = txtMetrics.width + 12;
-    const badgeH = 18;
-
-    ctx.fillStyle = "rgba(10, 15, 22, 0.88)";
-    ctx.strokeStyle = "#d4af37";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(pxX - badgeW / 2, pxY - badgeH / 2, badgeW, badgeH, 3);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(labelText, pxX, pxY);
-
-    if (kingdom.owner_id) {
-      ctx.font = "10px sans-serif";
-      ctx.fillText("👑", pxX, pxY - badgeH / 2 - 7);
+    const isHovered = hoveredKingdom && hoveredKingdom.code === kingdom.code;
+    if (isHovered) {
+      ctx.save();
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 2.8;
+      ctx.shadowColor = "rgba(255, 215, 0, 0.65)";
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = "rgba(212, 175, 55, 0.45)";
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
     }
-    ctx.restore();
 
     renderTroopDots(ctx, kingdom, poly);
   });
@@ -1106,6 +1139,105 @@ function drawMagnifierLoupe(ctx, mx, my) {
   ctx.textBaseline = "middle";
   ctx.fillText("2.4× LOUPE", mx, my - radius - 6);
 
+  // 7. Hovered State Name Plate (Show ONLY the name plate of the state directly hovered over)
+  if (hoveredKingdom) {
+    ctx.save();
+
+    let fontSize = 12;
+    ctx.font = `bold ${fontSize}px 'Cinzel', Georgia, serif`;
+    const label = hoveredKingdom.name;
+    let txtMetrics = ctx.measureText(label);
+    const maxTextW = radius * 1.55;
+    if (txtMetrics.width > maxTextW) {
+      fontSize = 10.5;
+      ctx.font = `bold ${fontSize}px 'Cinzel', Georgia, serif`;
+      txtMetrics = ctx.measureText(label);
+    }
+
+    const badgePadX = 14;
+    const badgeW = Math.min(radius * 1.7, txtMetrics.width + badgePadX * 2);
+    const badgeH = 24;
+
+    const placeAbove = my - 44 >= 20;
+    const plateY = placeAbove ? my - 34 : my + 28;
+    const plateX = mx;
+
+    // Plaque drop shadow
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 3;
+
+    // Plaque background: deep antique cartographic ink with metallic sheen
+    const plaqueGrad = ctx.createLinearGradient(
+      plateX - badgeW / 2,
+      plateY - badgeH / 2,
+      plateX + badgeW / 2,
+      plateY + badgeH / 2
+    );
+    plaqueGrad.addColorStop(0, "rgba(22, 16, 8, 0.95)");
+    plaqueGrad.addColorStop(0.5, "rgba(10, 8, 4, 0.97)");
+    plaqueGrad.addColorStop(1, "rgba(22, 16, 8, 0.95)");
+
+    ctx.fillStyle = plaqueGrad;
+    ctx.beginPath();
+    ctx.roundRect(
+      plateX - badgeW / 2,
+      plateY - badgeH / 2,
+      badgeW,
+      badgeH,
+      4
+    );
+    ctx.fill();
+
+    // Outer & inner brass borders
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = "#d4af37";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 240, 163, 0.45)";
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.roundRect(
+      plateX - badgeW / 2 + 2,
+      plateY - badgeH / 2 + 2,
+      badgeW - 4,
+      badgeH - 4,
+      2
+    );
+    ctx.stroke();
+
+    // Small brass pointer caret pointing toward the focal crosshair
+    ctx.beginPath();
+    if (placeAbove) {
+      ctx.moveTo(mx - 6, plateY + badgeH / 2);
+      ctx.lineTo(mx + 6, plateY + badgeH / 2);
+      ctx.lineTo(mx, plateY + badgeH / 2 + 6);
+    } else {
+      ctx.moveTo(mx - 6, plateY - badgeH / 2);
+      ctx.lineTo(mx + 6, plateY - badgeH / 2);
+      ctx.lineTo(mx, plateY - badgeH / 2 - 6);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "#d4af37";
+    ctx.fill();
+
+    // State name typography
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = hoveredKingdom.owner_id ? "#ffe57f" : "#ffffff";
+    ctx.fillText(label, plateX, plateY);
+
+    // Crown insignia if claimed by a player
+    if (hoveredKingdom.owner_id) {
+      ctx.font = "11px sans-serif";
+      ctx.fillText("👑", plateX, plateY - badgeH / 2 - 7);
+    }
+
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
@@ -1128,35 +1260,7 @@ export function getKingdomAtPosition(clientX, clientY) {
     }
   }
 
-  const u = canvasX / canvasWidth;
-  const v = canvasY / canvasHeight;
-
-  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
-
-  const vp =
-    currentViewport || targetViewport || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
-  const vpW = vp.maxX - vp.minX || 1;
-  const vpH = vp.maxY - vp.minY || 1;
-  const x = vp.minX + u * vpW;
-  const y = vp.minY + v * vpH;
-
-  // Iterate in reverse order (newest era countries on top of older parent empires)
-  for (let i = state.kingdoms.length - 1; i >= 0; i--) {
-    const kingdom = state.kingdoms[i];
-    const poly = kingdomPolygons[kingdom.code];
-    if (!poly) continue;
-
-    // Fast bounding box check before raycasting
-    const b = getPolygonBoundsCached(kingdom.code, poly);
-    if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) {
-      continue;
-    }
-
-    if (pointInPolygon(x, y, poly)) {
-      return kingdom;
-    }
-  }
-  return null;
+  return getKingdomAtCanvasCoords(canvasX, canvasY);
 }
 
 
