@@ -613,7 +613,33 @@ export function togglePolynesiaMetaTheme(forceState) {
   renderMap();
 }
 
+// Toggle Kingdom Name Plate Badges on Base Map
+export function toggleMapLabels(forceState) {
+  if (typeof forceState === "boolean") {
+    state.showMapLabels = forceState;
+  } else {
+    state.showMapLabels = state.showMapLabels === false;
+  }
+  const isShown = Boolean(state.showMapLabels);
+  const btn = document.getElementById("toggle-labels-btn");
+  const label = document.getElementById("labels-btn-label");
+  if (btn) {
+    btn.classList.toggle("active", isShown);
+  }
+  if (label) {
+    label.textContent = isShown ? "Labels: On" : "Labels: Off";
+  }
+  showToast(
+    isShown
+      ? "Cartographic Name Plate Badges Enabled 🏷️"
+      : "Labels Hidden: Pristine Cartography Active (Use Loupe for Names) 🗺️",
+    "info"
+  );
+  renderMap();
+}
+
 // Expose functions globally to window so HTML inline onclick="..." always resolve
+window.toggleMapLabels = toggleMapLabels;
 window.resetCamera = resetCamera;
 window.togglePolynesiaMetaTheme = togglePolynesiaMetaTheme;
 window.toggleProgressModal = toggleProgressModal;

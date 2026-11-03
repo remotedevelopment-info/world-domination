@@ -26,6 +26,7 @@ export const state = {
   metaThemes: {
     polynesiaIsles: false, // Optional advanced oceanic play meta theme
   },
+  showMapLabels: true, // Control switch: show/hide name plate abbreviations on base map
 };
 
 // Initialize session from localStorage if available
@@ -122,6 +123,13 @@ export function syncKingdomsForYear(rawKingdoms, currentYear = state.currentSimY
         ? raw.birth_year
         : meta.birth_year || 1500;
 
+    const deathYear =
+      typeof parsedBorders?.death_year === "number"
+        ? parsedBorders.death_year
+        : typeof raw.death_year === "number"
+        ? raw.death_year
+        : meta.death_year || 9999;
+
     const unlockEra = parsedBorders?.unlock_era || raw.unlock_era || meta.unlock_era || "discovery";
     const parent = parsedBorders?.parent ?? raw.parent ?? meta.parent ?? "";
     const historicalNote = raw.historical_note || meta.historical_note || "";
@@ -133,6 +141,7 @@ export function syncKingdomsForYear(rawKingdoms, currentYear = state.currentSimY
       base_resources: raw.base_resources ?? raw.resources ?? meta.resources ?? 500,
       isIsland: Boolean(raw.isIsland || raw.is_island || meta.is_island),
       birth_year: birthYear,
+      death_year: deathYear,
       unlock_era: unlockEra,
       parent,
       historical_note: historicalNote,
@@ -140,7 +149,7 @@ export function syncKingdomsForYear(rawKingdoms, currentYear = state.currentSimY
     });
   });
 
-  // Ensure all 32 historical kingdoms are represented even if backend DB was seeded earlier
+  // Ensure all historical kingdoms are represented even if backend DB was seeded earlier
   HISTORICAL_KINGDOMS.forEach((meta) => {
     if (!byCode.has(meta.code)) {
       byCode.set(meta.code, {
@@ -150,6 +159,7 @@ export function syncKingdomsForYear(rawKingdoms, currentYear = state.currentSimY
         base_population: meta.population,
         base_resources: meta.resources,
         isIsland: Boolean(meta.is_island),
+        death_year: meta.death_year || 9999,
         borderList: meta.borders || [],
       });
     }
@@ -160,9 +170,13 @@ export function syncKingdomsForYear(rawKingdoms, currentYear = state.currentSimY
   );
   state.allKingdoms = masterList;
 
-  // Filter countries that have emerged by `currentYear`
+  // Filter countries that are active in `currentYear` (emerged and not dissolved/absorbed)
   const active = masterList
-    .filter((k) => (k.birth_year || 1500) <= currentYear)
+    .filter((k) => {
+      const birth = typeof k.birth_year === "number" ? k.birth_year : 1500;
+      const death = typeof k.death_year === "number" ? k.death_year : 9999;
+      return currentYear >= birth && currentYear < death;
+    })
     .map((k) => ({ ...k }));
 
   const activeCodes = new Set(active.map((k) => k.code));

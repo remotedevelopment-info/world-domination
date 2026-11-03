@@ -304,6 +304,10 @@
                             <span class="btn-icon">🔍</span>
                             <span class="btn-txt">2.4× Loupe</span>
                         </button>
+                        <button type="button" id="toggle-labels-btn" class="map-ribbon-btn active" onclick="toggleMapLabels()" title="Toggle Kingdom Name Plate Badges (Map looks pristine without labels)">
+                            <span class="btn-icon">🏷️</span>
+                            <span class="btn-txt" id="labels-btn-label">Labels: On</span>
+                        </button>
                         <button type="button" id="toggle-polynesia-btn" class="map-ribbon-btn" onclick="togglePolynesiaMetaTheme()" title="Toggle Polynesian &amp; Pacific Island Kingdoms (Advanced Play Meta Theme)">
                             <span class="btn-icon">🏝️</span>
                             <span class="btn-txt" id="polynesia-btn-label">Polynesia: Off</span>
@@ -941,7 +945,7 @@
         </div>
         <div id="toast-container" aria-live="polite"></div>
     </div>
-    <script type="module" src="js/main.js?v=2.5"></script>
+    <script type="module" src="js/main.js?v=2.6"></script>
 </body>
 
 </html>

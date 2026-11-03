@@ -763,7 +763,8 @@ export function renderMap(immediate = false) {
     badgeHeight = 16.5;
   }
 
-  // 5. Draw each sovereign kingdom with Steampunk cartography
+  // 5. Draw Sovereign Kingdoms with Steampunk Cartography (Multi-Pass Jigsaw Rendering)
+  // 5a. Pass 1: Fill all kingdom territories with realm colors & subtle coastline contours
   state.kingdoms.forEach((kingdom) => {
     const poly = kingdomPolygons[kingdom.code];
     if (!poly) return;
@@ -778,7 +779,7 @@ export function renderMap(immediate = false) {
     }
     ctx.closePath();
 
-    // Subtle coastline ripple glow (cartographic double contour)
+    // Coastline ripple contour
     ctx.save();
     ctx.strokeStyle = "rgba(212, 175, 55, 0.16)";
     ctx.lineWidth = count > 50 ? 4 : 6;
@@ -798,9 +799,26 @@ export function renderMap(immediate = false) {
       ctx.fillStyle = kingdom.color || "#4ecdc4";
     }
     ctx.fill();
+  });
 
-    // Border calculation
+  // 5b. Pass 2: Draw all sovereign frontier borders on top of fills so boundaries never get clipped
+  state.kingdoms.forEach((kingdom) => {
+    const poly = kingdomPolygons[kingdom.code];
+    if (!poly) return;
+
+    ctx.beginPath();
+    const [startX, startY] = project(poly[0][0], poly[0][1]);
+    ctx.moveTo(startX, startY);
+
+    for (let i = 1; i < poly.length; i++) {
+      const [x, y] = project(poly[i][0], poly[i][1]);
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
     const isIsland = Boolean(kingdom.isIsland || kingdom.is_island);
+    const isPolynesian = POLYNESIAN_ISLES?.has(kingdom.code);
+    const isPolynesiaActive = Boolean(state?.metaThemes?.polynesiaIsles);
     const isMyKingdom =
       state.myKingdom &&
       (kingdom.id === state.myKingdom.country_id ||
@@ -815,7 +833,7 @@ export function renderMap(immediate = false) {
     let borderWidth;
 
     if (isMyKingdom) {
-      borderColor = "#ffd700"; // Gleaming gold for player's own realm
+      borderColor = "#ffd700"; // Gleaming gold for player's realm
       borderWidth = 3.2;
     } else if (isPolynesian && isPolynesiaActive) {
       borderColor = "#00f0ff"; // Vivid luminous turquoise for active Polynesian meta theme
@@ -824,16 +842,16 @@ export function renderMap(immediate = false) {
       borderColor = "rgba(100, 160, 190, 0.4)"; // Soft muted oceanic border when inactive
       borderWidth = 1.0;
     } else if (isNewlyEmergedInEra) {
-      borderColor = "#f5d76e"; // Illuminated brass border for newly emerged nations in this era
+      borderColor = "#f5d76e"; // Illuminated brass border for newly emerged nations
       borderWidth = 2.2;
     } else if (isIsland) {
-      borderColor = "#e67e22"; // Warm brass/amber for maritime island realms
-      borderWidth = 2.2;
+      borderColor = "#e67e22"; // Warm amber/brass for maritime island realms
+      borderWidth = 2.0;
     } else if (kingdom.owner_id) {
       borderColor = "#ffffff"; // Bright silver for player-claimed realms
       borderWidth = 1.8;
     } else {
-      borderColor = "rgba(20, 15, 10, 0.78)"; // Vintage ink pen stroke for neutral realms
+      borderColor = "rgba(20, 15, 10, 0.78)"; // Vintage ink pen stroke for sovereign frontiers
       borderWidth = 1.2;
     }
 
@@ -841,76 +859,96 @@ export function renderMap(immediate = false) {
     ctx.lineWidth = borderWidth;
     ctx.lineJoin = "round";
     ctx.stroke();
+  });
 
-    // Kingdom Code Cartographic Plaque & Typography
-    const [labelX, labelY] = getKingdomLabelPosition(
-      kingdom.code,
-      poly,
-      state.currentSimYear || 1500
-    );
-    const [pxX, pxY] = project(labelX, labelY);
+  // 5c. Pass 3: Kingdom Code Cartographic Plaques (Toggleable via ribbon control switch)
+  if (state.showMapLabels !== false) {
+    state.kingdoms.forEach((kingdom) => {
+      const poly = kingdomPolygons[kingdom.code];
+      if (!poly) return;
 
-    ctx.save();
-    // Parchment badge under label for crisp visibility
-    ctx.font = `bold ${fontSize}px Georgia, 'Times New Roman', serif`;
-    const displayLabel = isPolynesian && isPolynesiaActive
-      ? `🏝️${kingdom.code}`
-      : isPolynesian && !isPolynesiaActive
-        ? `⚓${kingdom.code}`
-        : isNewlyEmergedInEra
-          ? `★${kingdom.code}`
-          : kingdom.code;
-    const textWidth = ctx.measureText(displayLabel).width;
+      const isPolynesian = POLYNESIAN_ISLES?.has(kingdom.code);
+      const isPolynesiaActive = Boolean(state?.metaThemes?.polynesiaIsles);
+      const isMyKingdom =
+        state.myKingdom &&
+        (kingdom.id === state.myKingdom.country_id ||
+          kingdom.code === state.myKingdom.country_code);
+      const isNewlyEmergedInEra =
+        state.currentEraId &&
+        state.currentEraId !== "discovery" &&
+        kingdom.unlock_era === state.currentEraId &&
+        !kingdom.owner_id;
 
-    ctx.fillStyle = isPolynesian && !isPolynesiaActive
-      ? "rgba(15, 23, 30, 0.55)"
-      : isPolynesian && isPolynesiaActive
-        ? "rgba(10, 35, 45, 0.9)"
-        : isNewlyEmergedInEra
-          ? "rgba(38, 28, 12, 0.88)"
-          : "rgba(15, 23, 30, 0.75)";
-    ctx.beginPath();
-    ctx.roundRect(
-      pxX - textWidth / 2 - badgePadX,
-      pxY - badgeHeight / 2 - badgePadY,
-      textWidth + badgePadX * 2,
-      badgeHeight + badgePadY * 2,
-      3
-    );
-    ctx.fill();
-    ctx.strokeStyle = isMyKingdom
-      ? "#ffd700"
-      : isPolynesian && isPolynesiaActive
-        ? "#00f0ff"
-        : isNewlyEmergedInEra
-          ? "#f5d76e"
-          : "rgba(212, 175, 55, 0.4)";
-    ctx.lineWidth = (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
-    ctx.stroke();
+      const [labelX, labelY] = getKingdomLabelPosition(
+        kingdom.code,
+        poly,
+        state.currentSimYear || 1500
+      );
+      const [pxX, pxY] = project(labelX, labelY);
 
-    // Text in antique gold/ivory
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = isMyKingdom
-      ? "#ffe44d"
-      : isPolynesian && isPolynesiaActive
-        ? "#80fcff"
+      ctx.save();
+      ctx.font = `bold ${fontSize}px Georgia, 'Times New Roman', serif`;
+      const displayLabel = isPolynesian && isPolynesiaActive
+        ? `🏝️${kingdom.code}`
         : isPolynesian && !isPolynesiaActive
-          ? "rgba(220, 235, 245, 0.7)"
+          ? `⚓${kingdom.code}`
           : isNewlyEmergedInEra
-            ? "#fff2a8"
-            : "#f5f0db";
-    ctx.fillText(displayLabel, pxX, pxY);
+            ? `★${kingdom.code}`
+            : kingdom.code;
+      const textWidth = ctx.measureText(displayLabel).width;
 
-    // Crown insignia if owned by a player
-    if (kingdom.owner_id || isMyKingdom) {
-      ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
-      ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 6);
-    }
-    ctx.restore();
+      ctx.fillStyle = isPolynesian && !isPolynesiaActive
+        ? "rgba(15, 23, 30, 0.55)"
+        : isPolynesian && isPolynesiaActive
+          ? "rgba(10, 35, 45, 0.9)"
+          : isNewlyEmergedInEra
+            ? "rgba(38, 28, 12, 0.88)"
+            : "rgba(15, 23, 30, 0.75)";
+      ctx.beginPath();
+      ctx.roundRect(
+        pxX - textWidth / 2 - badgePadX,
+        pxY - badgeHeight / 2 - badgePadY,
+        textWidth + badgePadX * 2,
+        badgeHeight + badgePadY * 2,
+        3
+      );
+      ctx.fill();
 
-    // 6. Draw Troop Miniatures (Brass tokens & border rivets)
-    renderTroopDots(ctx, kingdom, poly);
+      ctx.strokeStyle = isMyKingdom
+        ? "#ffd700"
+        : isPolynesian && isPolynesiaActive
+          ? "#00f0ff"
+          : isNewlyEmergedInEra
+            ? "#f5d76e"
+            : "rgba(212, 175, 55, 0.4)";
+      ctx.lineWidth = (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
+      ctx.stroke();
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = isMyKingdom
+        ? "#ffe44d"
+        : isPolynesian && isPolynesiaActive
+          ? "#80fcff"
+          : isPolynesian && !isPolynesiaActive
+            ? "rgba(220, 235, 245, 0.7)"
+            : isNewlyEmergedInEra
+              ? "#fff2a8"
+              : "#f5f0db";
+      ctx.fillText(displayLabel, pxX, pxY);
+
+      if (kingdom.owner_id || isMyKingdom) {
+        ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
+        ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 6);
+      }
+      ctx.restore();
+    });
+  }
+
+  // 5d. Pass 4: Draw Troop Miniatures (Brass tokens & border rivets)
+  state.kingdoms.forEach((kingdom) => {
+    const poly = kingdomPolygons[kingdom.code];
+    if (poly) renderTroopDots(ctx, kingdom, poly);
   });
 
   // 7. Cartographic Latitude/Longitude graduated degree border framing full screen
@@ -1054,7 +1092,8 @@ function drawMagnifierLoupe(ctx, mx, my) {
   drawGraticule(ctx);
   drawRhumbLines(ctx);
 
-  // Re-draw kingdoms in magnified space (clean territories, no overlapping names!)
+  // Re-draw kingdoms in magnified space with clean multi-pass jigsaw rendering
+  // Pass 1: Fill all visible kingdom landmasses
   state.kingdoms.forEach((kingdom) => {
     const poly = kingdomPolygons[kingdom.code];
     if (!poly) return;
@@ -1070,6 +1109,21 @@ function drawMagnifierLoupe(ctx, mx, my) {
 
     ctx.fillStyle = kingdom.color || "#4ecdc4";
     ctx.fill();
+  });
+
+  // Pass 2: Stroke all frontier borders cleanly on top of fills
+  state.kingdoms.forEach((kingdom) => {
+    const poly = kingdomPolygons[kingdom.code];
+    if (!poly) return;
+
+    ctx.beginPath();
+    const [startX, startY] = project(poly[0][0], poly[0][1]);
+    ctx.moveTo(startX, startY);
+    for (let i = 1; i < poly.length; i++) {
+      const [x, y] = project(poly[i][0], poly[i][1]);
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
 
     const isHovered = hoveredKingdom && hoveredKingdom.code === kingdom.code;
     if (isHovered) {
@@ -1085,8 +1139,12 @@ function drawMagnifierLoupe(ctx, mx, my) {
       ctx.lineWidth = 1.0;
       ctx.stroke();
     }
+  });
 
-    renderTroopDots(ctx, kingdom, poly);
+  // Pass 3: Draw troop miniatures
+  state.kingdoms.forEach((kingdom) => {
+    const poly = kingdomPolygons[kingdom.code];
+    if (poly) renderTroopDots(ctx, kingdom, poly);
   });
 
   ctx.restore(); // Exit optical clip
