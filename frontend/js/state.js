@@ -92,7 +92,14 @@ export function setTroops(troops) {
  * countries exist in the master list, and filters `state.kingdoms` to those
  * unlocked up to `currentYear` (with parent empire territorial cost applied).
  */
-export function syncKingdomsForYear(rawKingdoms, currentYear = state.currentSimYear || 1500) {
+export function syncKingdomsForYear(rawKingdoms, currentYear) {
+  if (typeof rawKingdoms === "number") {
+    currentYear = rawKingdoms;
+    rawKingdoms = null;
+  }
+  if (typeof currentYear !== "number") {
+    currentYear = state.currentSimYear || 1500;
+  }
   state.currentSimYear = currentYear;
 
   const sourceList = Array.isArray(rawKingdoms) ? rawKingdoms : state.allKingdoms;

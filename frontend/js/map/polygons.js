@@ -171,7 +171,7 @@ export const kingdomPolygons = {
       0.2869
     ],
     [
-      0.5086,
+      0.5092,
       0.2938
     ],
     [
@@ -179,16 +179,12 @@ export const kingdomPolygons = {
       0.2931
     ],
     [
-      0.4958,
+      0.4944,
+      0.2869
+    ],
+    [
+      0.4833,
       0.2855
-    ],
-    [
-      0.4967,
-      0.269
-    ],
-    [
-      0.4928,
-      0.26
     ],
     [
       0.4869,
@@ -229,12 +225,8 @@ export const kingdomPolygons = {
       0.2069
     ],
     [
-      0.4917,
-      0.2172
-    ],
-    [
       0.4867,
-      0.2221
+      0.2069
     ],
     [
       0.4853,
@@ -627,8 +619,8 @@ export const kingdomPolygons = {
   ],
   "NED": [
     [
-      0.5094,
-      0.2317
+      0.5072,
+      0.2338
     ],
     [
       0.5133,
@@ -644,15 +636,15 @@ export const kingdomPolygons = {
     ],
     [
       0.5167,
-      0.2331
+      0.2359
     ],
     [
       0.5125,
       0.2324
     ],
     [
-      0.5094,
-      0.2317
+      0.5072,
+      0.2338
     ]
   ],
   "PRU": [
@@ -1375,8 +1367,8 @@ export const kingdomPolygons = {
       0.2759
     ],
     [
-      0.3639,
-      0.2793
+      0.3667,
+      0.2759
     ],
     [
       0.3528,
@@ -7297,6 +7289,7 @@ export const HISTORICAL_KINGDOMS = [
     "resources": 1000,
     "is_island": false,
     "birth_year": 1500,
+    "death_year": 1922,
     "unlock_era": "discovery",
     "parent": "",
     "historical_note": "Sublime Porte of Constantinople (c. 1500)",
@@ -8489,7 +8482,7 @@ export const HISTORICAL_KINGDOMS = [
     "population": 13000000,
     "resources": 780,
     "is_island": false,
-    "birth_year": 1920,
+    "birth_year": 1922,
     "unlock_era": "decolonisation",
     "parent": "OTT",
     "historical_note": "Atat\u00fcrk secular republic born from War of Independence (c. 1920)",
