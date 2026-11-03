@@ -182,11 +182,63 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
     .filter((k) => {
       const birth = typeof k.birth_year === "number" ? k.birth_year : 1500;
       const death = typeof k.death_year === "number" ? k.death_year : 9999;
+      // Living realms commanded by players or active claims survive past death_year
+      if (k.owner_id) return currentYear >= birth;
       return currentYear >= birth && currentYear < death;
     })
     .map((k) => ({ ...k }));
 
   const activeCodes = new Set(active.map((k) => k.code));
+
+  // Establish client state, suzerainty, siblinghood, and alliance statuses
+  active.forEach((k) => {
+    const parentCode = k.parent;
+    const parentMeta = parentCode ? byCode.get(parentCode) : null;
+    const parentActive = parentMeta && activeCodes.has(parentCode);
+
+    if (parentMeta) {
+      const parentDeath = typeof parentMeta.death_year === "number" ? parentMeta.death_year : 9999;
+      if (parentActive && currentYear < parentDeath) {
+        // Parent is alive and before death_year -> Client State (pays tribute)
+        k.isClientState = true;
+        k.suzerainCode = parentCode;
+        k.isSibling = false;
+        k.diplomaticStatus = "client";
+        k.tributeRate = 0.20; // 20% economic tribute to parent
+      } else {
+        // Independence achieved (siblinghood with former suzerain)
+        k.isClientState = false;
+        k.suzerainCode = null;
+        k.isSibling = true;
+        k.diplomaticStatus = parentActive ? "sibling_ally" : "sovereign";
+        k.tributeRate = 0.0;
+      }
+    } else {
+      k.isClientState = false;
+      k.suzerainCode = null;
+      k.isSibling = false;
+      k.diplomaticStatus = "sovereign";
+      k.tributeRate = 0.0;
+    }
+  });
+
+  // Calculate Imperial Overstretch & Garrison burdens for parent empires
+  active.forEach((k) => {
+    const clients = active.filter((c) => c.suzerainCode === k.code);
+    k.clientCount = clients.length;
+    if (clients.length > 0) {
+      k.tributeIncome = clients.reduce(
+        (sum, c) => sum + Math.round((c.base_resources || 500) * (c.tributeRate || 0.2)),
+        0
+      );
+      k.garrisonCost = clients.length * 120;
+      k.imperialOverstretch = k.garrisonCost > k.tributeIncome;
+    } else {
+      k.tributeIncome = 0;
+      k.garrisonCost = 0;
+      k.imperialOverstretch = false;
+    }
+  });
 
   // Apply historical secession cost to unowned parent empires when child nations emerge
   active.forEach((k) => {
@@ -196,10 +248,10 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
         const popCost = emergedChildren.reduce((sum, c) => sum + Math.round((c.base_population || 0) * 0.35), 0);
         const resCost = emergedChildren.reduce((sum, c) => sum + Math.round((c.base_resources || 0) * 0.25), 0);
         k.population = Math.max(500000, (k.base_population || k.population) - popCost);
-        k.resources = Math.max(150, (k.base_resources || k.resources) - resCost);
+        k.resources = Math.max(150, (k.base_resources || k.resources) - resCost + (k.tributeIncome || 0));
       } else {
         k.population = k.base_population || k.population;
-        k.resources = k.base_resources || k.resources;
+        k.resources = (k.base_resources || k.resources) + (k.tributeIncome || 0);
       }
     }
   });

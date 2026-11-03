@@ -46,29 +46,100 @@ Because both countries evaluate the identical mathematical sequence, **overlap a
 
 ---
 
-## 3. Era Emergence & Empire Dissolution
+## 3. Dynamic Era Emergence, Client States & Imperial Dissolution
 
-### 3.1 Era Baseline Lifecycle
-Every country has historical lifecycle metadata:
-- `birth_year`: The historical year when the sovereign nation emerges.
-- `death_year`: The historical year when an empire dissolves or unifies into successor states.
-- `unlock_era`: The era (`discovery`, `revolt`, `independence`, `decolonisation`, `modern`) in which it unlocks.
-- `parent`: The predecessor empire from which the territory secedes.
+The turning of a historical era is a dynamic, living simulation event governed by systemic rules of geography, sovereignty, and imperial overstretch.
 
-### 3.2 Canonical Dissolutions
-Older macro-empires must be retired when their successors emerge to prevent lingering background geometry:
-1. **Kalmar Union (`KAL`)**: `death_year = 1523`. Retired upon the independence of Sweden (`SWE`), Denmark (`DEN`), and Norway (`NOR`).
-2. **Holy Roman Empire (`HRE`)**: `death_year = 1806`. Retired when Francis II dissolved the empire, giving rise to the Austrian Empire, German Confederation (`PRU`, `BAV`, `SAX`), and Italy (`ITA`).
-3. **Ottoman Empire (`OTT`)**: `death_year = 1922`. Retired upon the abolition of the Sultanate, transitioning sovereign authority to the Republic of Turkey (`TUR`) and League of Nations mandates.
-4. **Austro-Hungarian Empire (`AUH`)**: `death_year = 1918`. Retired at the end of World War I (Treaties of Saint-Germain-en-Laye and Trianon), cleanly dissolving into the sovereign Republic of Austria (`AUT`), Republic of Hungary (`HUN`), Czechoslovakia (`CZE_SLO`), and Yugoslavia (`YUG`). In the Modern Era, Austria and Hungary exist side-by-side as two distinct countries sharing the watertight Burgenland/Danube frontier arc (`[0.5486, 0.2552] <-> [0.545, 0.2634] <-> [0.5431, 0.2634]`).
-5. **Pre-Unification Italian States (`VEN`, `GEN`, `NAP`, `PAP`)**: Unified under the House of Savoy into the Kingdom of Italy (`ITA`, `birth_year = 1860`). Predecessor states dissolve cleanly: Venice (`VEN`, `death_year = 1797`), Genoa (`GEN`, `death_year = 1815`), Naples (`NAP`, `death_year = 1860`), and Papal States (`PAP`, `death_year = 1870`), allowing unified Italy to command the full 21-vertex Alpine-to-Calabria peninsula and boot coastline.
-6. **German Electorates (`PRU`, `BAV`, `SAX`)**: `death_year = 1871`. Unified under the German Empire / modern Federal Republic of Germany (`DEU`, `birth_year = 1871`), which snaps directly to Denmark, the Netherlands, Belgium, France, Switzerland, Austria, the Czech Republic, and Poland.
-7. **Poland-Lithuania (`POL`)**: `death_year = 1795`. Partitioned by Prussia, Russia, and Austria, re-emerging at the end of WWI as the sovereign Republic of Poland (`POL_REP`, `birth_year = 1918`).
+### 3.1 The Emergence Lifecycle Rules
 
-### 3.3 Rule of Gameplay Territory Preservation
+When a historical milestone / era transition triggers for candidate state $S_{\text{new}}$:
+
+1. **Rule of Spatial Viability ("Is there space for it to exist?")**:
+   - If the proposed territory is completely absorbed, colonized, or defended without ceded ground, $S_{\text{new}}$ **fails to emerge** (suppressed by military reality).
+   - If uncontested land or parent territory exists, $S_{\text{new}}$ instantiates with watertight, non-overlapping borders.
+
+2. **Rule of Parent Sovereignty & Client State Status**:
+   - **Does the parent state exist?**
+     - **If YES**: $S_{\text{new}}$ emerges as a **Client State (Vassal)** of the parent empire. It belongs politically to the parent empire's sphere of influence and pays economic tribute, but it occupies its own distinct territorial polygon.
+     - **If NO**: $S_{\text{new}}$ emerges as a fully independent sovereign realm.
+   - **Separation of Ownership**:
+     - A newly emerged client state is **NOT owned directly by the empire player**.
+     - If unclaimed by a human player, it is governed by an **AI NPC**.
+     - It is open and "ripe for the taking" by any new player joining the server, or can be claimed through conquest or diplomacy.
+
+3. **Reinterpreting "Death Year" — The Sunset of Empire**:
+   - A historical `death_year` is **not an automatic deletion** of a living parent state.
+   - Instead, `death_year` signals the **Imperial Sunset**:
+     1. **Independence Achieved**: Client states cease paying tribute to the parent empire.
+     2. **Transition to Siblinghood**: The parent state transitions from a suzerain overlord into an equal **sibling state** alongside its former clients.
+     3. **Natural Alliance**: Former client states and the parent are established as **natural allies** by default, cooperating in defense and trade until such time as either party breaks the alliance or declares war.
+     4. **Evaporation of Imperial Advantage**: The parent empire loses its pre-death-year combat and diplomatic leverage.
+
+---
+
+### 3.2 Client State Independence Strikes & Border Defense
+
+A client state trapped within an empire does not have to wait for the parent's `death_year`. It can strike for independence at any time:
+
+1. **The Independence Strike**:
+   - The client state halts tribute payments, expels imperial tax collectors, and mobilizes border garrisons.
+   - The parent empire can deploy troops to frontier arcs to crush the rebellion and re-subjugate the territory.
+
+2. **The Asymmetric Combat Advantage**:
+   - **Before `death_year`**: The parent state enjoys an **Imperial Clout Advantage** (higher troop morale, $+25\%$ combat efficacy ratio along shared frontiers, and diplomatic leverage against foreign intervention).
+   - **After `death_year`**: The imperial advantage drops to zero. Frontier combat is evaluated on pure mathematical parity:
+     $$\Delta \mathbf{p}_i = \alpha \cdot \hat{\mathbf{n}}_i \cdot \frac{T_{\text{rebel}} - T_{\text{parent}}}{T_{\text{rebel}} + T_{\text{parent}} + \epsilon}$$
+
+3. **Sovereignty Recognized**:
+   - If the client state successfully defends its frontiers against parent incursions for $N$ consecutive ticks, independence is formally recognized. The client state becomes a fully sovereign nation.
+
+---
+
+### 3.3 The Fragility of Empires (Imperial Overstretch)
+
+A foundational thesis of *Kingdom Conquest* is that **empires are as fragile as they are large**:
+
+> When an empire accumulates too many client states across too vast a geographical span, garrison and logistics maintenance costs outstrip the economic benefits of tribute.
+
+#### The Imperial Balance Sheet:
+$$\text{Net Revenue} = \sum_{c \in \text{Clients}} \text{Tribute}(c) - \sum_{c \in \text{Clients}} \text{GarrisonCost}(c)$$
+
+Where garrison maintenance cost scales with physical frontier exposure and distance from the imperial capital:
+$$\text{GarrisonCost}(c) = \beta \cdot \text{FrontierArcs}(c) \cdot \left(1 + \lambda \cdot \text{Distance}(c, \text{Capital})\right)$$
+
+- $\text{FrontierArcs}(c)$: The count of contested border segments the client shares with hostile neighbors.
+- $\text{Distance}(c, \text{Capital})$: Normalized distance across the world map from the imperial throne.
+- $\beta, \lambda$: Logistics decay coefficients.
+
+#### Dynamic Dissolution Triggers:
+When $\text{GarrisonCost} > \text{Tribute}$, the empire enters **Imperial Overstretch**:
+1. Imperial treasury decays rapidly into deficit.
+2. Unpaid frontier garrisons desert or defect to local client militias.
+3. Client state **Liberty Desire / Unrest** spikes:
+   $$\text{Unrest}_c = \frac{\text{ImperialDebt}}{\text{ImperialPrestige}} + \gamma \cdot \left(T_{\text{client}} - T_{\text{imperial\_garrison}}\right)$$
+4. Coordinated independence strikes trigger across multiple client states simultaneously, dismantling the empire from within **well before the parent's historical `death_year`**.
+
+---
+
+### 3.4 Canonical Reference Dissolutions & Evolutions
+
+| Predecessor Empire | Code | `birth` | `death` | Emergent Client / Sibling States | Historical Context |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Kalmar Union** | `KAL` | 1500 | 1523 | Sweden (`SWE`), Denmark (`DEN`), Norway (`NOR`) | Gustav Vasa's War of Liberation dissolves the union; former clients emerge as sovereign Baltic rivals. |
+| **Holy Roman Empire** | `HRE` | 1500 | 1806 | Prussia (`PRU`), Bavaria (`BAV`), Saxony (`SAX`), Austria (`AUT`) | Confederal umbrella of autonomous electorates; clients strike for independent dominance until formal imperial dissolution in 1806. |
+| **Poland-Lithuania** | `POL` | 1500 | 1795 | Partitioned by Prussia, Russia, and Austria; re-emerges as `POL_REP` (1918) | Imperial overstretch and noble veto lead to triple partition; reborn as independent republic post-WWI. |
+| **Ottoman Empire** | `OTT` | 1500 | 1922 | Turkey (`TUR`), Egypt (`EGY`), Syria (`SYR`), Iraq (`IRQ`), Lebanon (`LBN`) | Centuries of tributary eyalets (Balkans, Levant, North Africa); sultanate abolished in 1922, ceding sovereign siblinghood to Turkey. |
+| **Austro-Hungarian Empire** | `AUH` | 1860 | 1918 | Austria (`AUT`), Hungary (`HUN`), Czechoslovakia (`CZE_SLO`), Yugoslavia (`YUG`) | Habsburg Dual Monarchy collapses post-WWI; Austria and Hungary exist as two distinct sovereign nations sharing the Burgenland frontier. |
+| **Pre-Unification Italy** | `VEN`, `GEN`, `NAP`, `PAP` | 1500 | 1860–1870 | Unified Kingdom of Italy (`ITA`) | Regional city-states and kingdoms unify under Garibaldi and Victor Emmanuel II into a single 21-vertex boot coastline. |
+| **German Electorates** | `PRU`, `BAV`, `SAX` | 1750 | 1871 | Unified German Empire / Federal Republic (`DEU`) | Electorates unify under Bismarck into a single contiguous nation snapping to Denmark, France, Austria, and Poland. |
+
+---
+
+### 3.5 Rule of Gameplay Territory Preservation
 When transitioning between historical ages in live gameplay:
 - **Baseline Emergence**: Unclaimed or AI-held neutral territories transition to the historical successor nation.
 - **Player Overrun Protection**: If a human player has conquered a territory in a prior era (e.g. a player-owned French Empire conquered the Rhineland or Ottoman Egypt), the start of a new age **does not overwrite the player's conquests**. New nations only emerge in territories that are not currently occupied by sovereign player realms.
+- **Player Living Empire Exemption**: If a human player commands an empire that reaches its historical `death_year`, the realm **is never deleted from the map**. It transitions into siblinghood with its clients and faces natural independence challenges, but remains fully playable.
 
 ---
 
