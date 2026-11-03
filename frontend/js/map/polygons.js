@@ -525,6 +525,48 @@ export const kingdomPolygons = {
       0.2207
     ]
   ],
+  "USSR": [
+    [
+      0.5778,
+      0.2034
+    ],
+    [
+      0.5833,
+      0.1724
+    ],
+    [
+      0.5944,
+      0.1414
+    ],
+    [
+      0.6111,
+      0.131
+    ],
+    [
+      0.6444,
+      0.1241
+    ],
+    [
+      0.6667,
+      0.1586
+    ],
+    [
+      0.6556,
+      0.2138
+    ],
+    [
+      0.6333,
+      0.2345
+    ],
+    [
+      0.6056,
+      0.231
+    ],
+    [
+      0.5861,
+      0.2207
+    ]
+  ],
   "KAL": [
     [
       0.5222,
@@ -6624,6 +6666,10 @@ export const kingdomLabelPositions = {
     0.6158,
     0.1831
   ],
+  "USSR": [
+    0.6158,
+    0.1831
+  ],
   "KAL": [
     0.5373,
     0.1702
@@ -8710,6 +8756,36 @@ export const HISTORICAL_KINGDOMS = [
     ]
   },
   {
+    "id": 203,
+    "code": "USSR",
+    "name": "Union of Soviet Socialist Republics",
+    "color": "#C0392B",
+    "population": 180000000,
+    "resources": 1200,
+    "is_island": false,
+    "birth_year": 1922,
+    "death_year": 1991,
+    "unlock_era": "decolonisation",
+    "parent": "RUS",
+    "historical_note": "Union of Soviet Socialist Republics spanning Eurasia (1922-1991)",
+    "borders": [
+      "POL_REP",
+      "FIN",
+      "ROM",
+      "TUR",
+      "PER_EM",
+      "AFG",
+      "CHN",
+      "MNG",
+      "PRK",
+      "NOR",
+      "SWE",
+      "UKR",
+      "BLR",
+      "KAZ"
+    ]
+  },
+  {
     "id": 65,
     "code": "CZE_SLO",
     "name": "Czechoslovakia",
@@ -9981,12 +10057,13 @@ export const HISTORICAL_KINGDOMS = [
     "population": 48000000,
     "resources": 920,
     "is_island": false,
-    "birth_year": 1989,
-    "unlock_era": "modern",
-    "parent": "RUS",
-    "historical_note": "Sovereign breadbasket nation between Carpathians and Black Sea (c. 1989)",
+    "birth_year": 1922,
+    "unlock_era": "decolonisation",
+    "parent": "USSR",
+    "historical_note": "Sovereign breadbasket nation between Carpathians and Black Sea (c. 1922/1991)",
     "borders": [
       "RUS",
+      "USSR",
       "POL_REP",
       "ROM",
       "HUN",
@@ -10003,12 +10080,13 @@ export const HISTORICAL_KINGDOMS = [
     "population": 10000000,
     "resources": 680,
     "is_island": false,
-    "birth_year": 1989,
-    "unlock_era": "modern",
-    "parent": "RUS",
-    "historical_note": "Eastern European woodland republic (c. 1989)",
+    "birth_year": 1922,
+    "unlock_era": "decolonisation",
+    "parent": "USSR",
+    "historical_note": "Eastern European woodland republic (c. 1922/1991)",
     "borders": [
       "RUS",
+      "USSR",
       "POL_REP",
       "UKR",
       "LTU",
@@ -10023,12 +10101,13 @@ export const HISTORICAL_KINGDOMS = [
     "population": 16500000,
     "resources": 950,
     "is_island": false,
-    "birth_year": 1989,
-    "unlock_era": "modern",
-    "parent": "RUS",
-    "historical_note": "Vast transcontinental Eurasian steppe republic (c. 1989)",
+    "birth_year": 1922,
+    "unlock_era": "decolonisation",
+    "parent": "USSR",
+    "historical_note": "Vast transcontinental Eurasian steppe republic (c. 1922/1991)",
     "borders": [
       "RUS",
+      "USSR",
       "CHN",
       "KGZ",
       "UZB",
@@ -10045,7 +10124,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Heart of the Silk Road: Samarkand, Bukhara & Tashkent (c. 1989)",
     "borders": [
       "KAZ",
@@ -10065,7 +10144,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Karakum desert gas-rich Caspian republic (c. 1989)",
     "borders": [
       "KAZ",
@@ -10084,7 +10163,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Tian Shan mountain nation around Issyk-Kul lake (c. 1989)",
     "borders": [
       "KAZ",
@@ -10103,7 +10182,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Pamir high-altitude Persian-speaking nation (c. 1989)",
     "borders": [
       "UZB",
@@ -10122,7 +10201,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Caucasus cradle of viticulture and ancient kingdom (c. 1989)",
     "borders": [
       "RUS",
@@ -10141,7 +10220,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Ancient highland nation around Mount Ararat and Lake Sevan (c. 1989)",
     "borders": [
       "GEO",
@@ -10160,7 +10239,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Land of Fire Caspian oil and gas nation (c. 1989)",
     "borders": [
       "RUS",
@@ -10179,7 +10258,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Bessarabian wine-growing republic between Prut and Dniester (c. 1989)",
     "borders": [
       "ROM",
@@ -10196,7 +10275,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Singing Revolution Baltic maritime nation (c. 1989)",
     "borders": [
       "RUS",
@@ -10214,7 +10293,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "Baltic Amber coast republic around Gulf of Riga (c. 1989)",
     "borders": [
       "EST",
@@ -10233,7 +10312,7 @@ export const HISTORICAL_KINGDOMS = [
     "is_island": false,
     "birth_year": 1989,
     "unlock_era": "modern",
-    "parent": "RUS",
+    "parent": "USSR",
     "historical_note": "S\u0105j\u016bdis movement Baltic reassertion of sovereignty (c. 1989)",
     "borders": [
       "LVA",

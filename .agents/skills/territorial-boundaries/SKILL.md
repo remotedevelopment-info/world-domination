@@ -132,14 +132,18 @@ When $\text{GarrisonCost} > \text{Tribute}$, the empire enters **Imperial Overst
 | **Austro-Hungarian Empire** | `AUH` | 1860 | 1918 | Austria (`AUT`), Hungary (`HUN`), Czechoslovakia (`CZE_SLO`), Yugoslavia (`YUG`) | Habsburg Dual Monarchy collapses post-WWI; Austria and Hungary exist as two distinct sovereign nations sharing the Burgenland frontier. |
 | **Pre-Unification Italy** | `VEN`, `GEN`, `NAP`, `PAP` | 1500 | 1860–1870 | Unified Kingdom of Italy (`ITA`) | Regional city-states and kingdoms unify under Garibaldi and Victor Emmanuel II into a single 21-vertex boot coastline. |
 | **German Electorates** | `PRU`, `BAV`, `SAX` | 1750 | 1871 | Unified German Empire / Federal Republic (`DEU`) | Electorates unify under Bismarck into a single contiguous nation snapping to Denmark, France, Austria, and Poland. |
+| **Union of Soviet Socialist Republics** | `USSR` | 1922 | 1991 | Russian Federation (`RUS`), Ukraine (`UKR`), Belarus (`BLR`), Kazakhstan (`KAZ`), Central Asian & Caucasian republics (`UZB`, `TKM`, `KGZ`, `TJK`, `GEO`, `ARM`, `AZE`), Baltic states (`EST`, `LVA`, `LTU`), Moldova (`MDA`) | Emerges in the Decolonisation era (1922) from the Russian Eurasian core, suzerain to Soviet socialist republics. Dissolves in 1991; owner inherits the Russian Federation (`RUS`) while all 14 republics gain sovereign independence. |
 
 ---
 
-### 3.5 Rule of Gameplay Territory Preservation
-When transitioning between historical ages in live gameplay:
+### 3.5 Core Landmass Inheritance Rule upon Imperial Dissolution
+
+When an empire reaches its historical `death_year`:
+- **Core Landmass Inheritance**: The owner of the dying empire inherits **only the largest successor landmass** (`successorCode`, e.g., `USSR` $\rightarrow$ `RUS`, `AUH` $\rightarrow$ `AUT`, `OTT` $\rightarrow$ `TUR`, `HRE` $\rightarrow$ `AUT`, `KAL` $\rightarrow$ `DEN`). Player command (`state.myKingdom`) transfers automatically to this core realm.
+- **Client State Independence**: All connected client states gain full sovereignty and independence, becoming independent sovereign nations (no longer paying tribute, no longer suzerain-bound).
+- **Imperial Dissolution**: The predecessor imperial entity dissolves and retires from the map.
 - **Baseline Emergence**: Unclaimed or AI-held neutral territories transition to the historical successor nation.
-- **Player Overrun Protection**: If a human player has conquered a territory in a prior era (e.g. a player-owned French Empire conquered the Rhineland or Ottoman Egypt), the start of a new age **does not overwrite the player's conquests**. New nations only emerge in territories that are not currently occupied by sovereign player realms.
-- **Player Living Empire Exemption**: If a human player commands an empire that reaches its historical `death_year`, the realm **is never deleted from the map**. It transitions into siblinghood with its clients and faces natural independence challenges, but remains fully playable.
+- **Player Overrun Protection**: If a human player has conquered a territory in a prior era, the start of a new age does not overwrite player conquests. New nations emerge only in territories not currently occupied by sovereign player realms.
 
 ---
 
