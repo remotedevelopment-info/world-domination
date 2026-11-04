@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"kingdom-conquest/backend/internal/database"
 	"kingdom-conquest/backend/internal/game"
@@ -873,5 +874,141 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		"gdp":            detail.GDP,
 		"currency_value": detail.CurrencyValue,
 		"inflation_rate": detail.InflationRate,
+	})
+}
+
+// GetTimelineHandler returns the current authoritative game timeline telemetry.
+func GetTimelineHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	engine := game.GetEngine()
+	simYear, yearInt, era, scale, isPaused := engine.GetTimeline()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"sim_year":     simYear,
+		"year_int":     yearInt,
+		"era_id":       era.ID,
+		"era_name":     era.Name,
+		"chrono_scale": scale,
+		"is_paused":    isPaused,
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// JumpTimelineHandler sets the global authoritative game year and broadcasts immediately.
+func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var targetYear float64
+	yearStr := r.URL.Query().Get("year")
+	if yearStr != "" {
+		if y, err := strconv.ParseFloat(yearStr, 64); err == nil {
+			targetYear = y
+		}
+	}
+	if targetYear == 0 {
+		var req struct {
+			Year float64 `json:"year"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Year > 0 {
+			targetYear = req.Year
+		}
+	}
+
+	if targetYear < 1500 || targetYear > 9999 {
+		http.Error(w, "Year must be between 1500 and 9999", http.StatusBadRequest)
+		return
+	}
+
+	engine := game.GetEngine()
+	state := engine.SetSimYear(targetYear)
+	log.Printf("Timeline jumped to year %.2f (%s)", state.SimYear, state.EraName)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":      "Timeline year updated successfully",
+		"sim_year":     state.SimYear,
+		"year_int":     state.YearInt,
+		"era_id":       state.EraID,
+		"era_name":     state.EraName,
+		"chrono_scale": state.ChronoScale,
+		"is_paused":    state.IsPaused,
+	})
+}
+
+// SetTimelineScaleHandler updates the global chrono scale and broadcasts immediately.
+func SetTimelineScaleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	scaleStr := r.URL.Query().Get("scale")
+	if scaleStr == "" {
+		var req struct {
+			Scale string `json:"scale"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Scale != "" {
+			scaleStr = req.Scale
+		}
+	}
+
+	if scaleStr == "" {
+		http.Error(w, "Scale is required", http.StatusBadRequest)
+		return
+	}
+
+	engine := game.GetEngine()
+	state := engine.SetChronoScale(scaleStr)
+	log.Printf("Timeline scale set to %s", state.ChronoScale)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":      "Chrono scale updated successfully",
+		"chrono_scale": state.ChronoScale,
+		"sim_year":     state.SimYear,
+		"year_int":     state.YearInt,
+		"era_id":       state.EraID,
+	})
+}
+
+// SetTimelinePauseHandler pauses or resumes the global timeline ticker.
+func SetTimelinePauseHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var paused bool
+	pausedStr := r.URL.Query().Get("paused")
+	if pausedStr != "" {
+		if p, err := strconv.ParseBool(pausedStr); err == nil {
+			paused = p
+		}
+	} else {
+		var req struct {
+			Paused bool `json:"paused"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			paused = req.Paused
+		}
+	}
+
+	engine := game.GetEngine()
+	state := engine.SetTimelinePaused(paused)
+	log.Printf("Timeline pause state set to %v", state.IsPaused)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":   "Timeline pause state updated",
+		"is_paused": state.IsPaused,
+		"sim_year":  state.SimYear,
+		"year_int":  state.YearInt,
 	})
 }

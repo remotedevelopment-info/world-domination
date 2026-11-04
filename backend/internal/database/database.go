@@ -492,6 +492,16 @@ func SaveGameState(gameDate time.Time, data string) error {
 	return err
 }
 
+func GetLatestGameState() (string, int64, error) {
+	var data string
+	var tick int64
+	err := DB.QueryRow("SELECT data, tick FROM game_states ORDER BY id DESC LIMIT 1").Scan(&data, &tick)
+	if err == sql.ErrNoRows {
+		return "", 0, nil
+	}
+	return data, tick, err
+}
+
 func GetUserByUsername(username string) (*struct {
 	ID, Population            int64
 	Username, Password, Email string

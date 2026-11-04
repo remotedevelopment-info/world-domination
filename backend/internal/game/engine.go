@@ -3,6 +3,7 @@ package game
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -13,12 +14,18 @@ import (
 // It is rebuilt on every state mutation and pushed to connected clients in
 // real time — there is no 90-second polling tick.
 type GameState struct {
-	Tick      int64          `json:"tick"`
-	GameDate  time.Time      `json:"game_date"`
-	Timestamp time.Time      `json:"timestamp"`
-	Countries []CountryState `json:"countries"`
-	Players   []PlayerState  `json:"players"`
-	Actions   []ActionRecord `json:"actions"`
+	Tick        int64          `json:"tick"`
+	SimYear     float64        `json:"sim_year"`
+	YearInt     int64          `json:"year_int"`
+	EraID       string         `json:"era_id"`
+	EraName     string         `json:"era_name"`
+	ChronoScale string         `json:"chrono_scale"`
+	IsPaused    bool           `json:"is_paused"`
+	GameDate    time.Time      `json:"game_date"`
+	Timestamp   time.Time      `json:"timestamp"`
+	Countries   []CountryState `json:"countries"`
+	Players     []PlayerState  `json:"players"`
+	Actions     []ActionRecord `json:"actions"`
 }
 
 type CountryState struct {
@@ -51,10 +58,14 @@ type ActionRecord struct {
 }
 
 type GameEngine struct {
-	mu          sync.RWMutex
-	currentTick int64
-	subscribers map[chan GameState]struct{}
-	isRunning   bool
+	mu                 sync.RWMutex
+	currentTick        int64
+	subscribers        map[chan GameState]struct{}
+	isRunning          bool
+	simYear            float64
+	chronoScale        string
+	isPaused           bool
+	lastTimelineUpdate time.Time
 }
 
 var engine *GameEngine
@@ -63,7 +74,11 @@ var once sync.Once
 func GetEngine() *GameEngine {
 	once.Do(func() {
 		engine = &GameEngine{
-			subscribers: make(map[chan GameState]struct{}),
+			subscribers:        make(map[chan GameState]struct{}),
+			simYear:            1500.0,
+			chronoScale:        "1d",
+			isPaused:           false,
+			lastTimelineUpdate: time.Now(),
 		}
 	})
 	return engine
@@ -76,7 +91,8 @@ func (g *GameEngine) Start() {
 		return
 	}
 	g.isRunning = true
-	log.Println("Game engine started (real-time, event-driven)")
+	g.lastTimelineUpdate = time.Now()
+	log.Println("Game engine started (real-time, event-driven with authoritative timeline)")
 }
 
 func (g *GameEngine) Stop() {
@@ -92,6 +108,108 @@ func (g *GameEngine) Resume(tick int64) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.currentTick = tick
+}
+
+// ResumeState restores tick and timeline state from a persisted snapshot.
+func (g *GameEngine) ResumeState(tick int64, simYear float64, chronoScale string, isPaused bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if tick > 0 {
+		g.currentTick = tick
+	}
+	if simYear >= 1500 {
+		g.simYear = simYear
+	}
+	if chronoScale != "" {
+		g.chronoScale = NormalizeChronoScale(chronoScale)
+	}
+	g.isPaused = isPaused
+	g.lastTimelineUpdate = time.Now()
+}
+
+// SetSimYear explicitly sets the authoritative game year, advances tick,
+// and immediately broadcasts the updated world state to all connected clients.
+func (g *GameEngine) SetSimYear(year float64) GameState {
+	g.mu.Lock()
+	g.simYear = year
+	g.lastTimelineUpdate = time.Now()
+	g.currentTick++
+	g.mu.Unlock()
+
+	state := g.BuildState()
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving game state snapshot on year set: %v", err)
+	}
+	g.Notify(state)
+	return state
+}
+
+// SetChronoScale updates the real-time speed of the global game clock.
+func (g *GameEngine) SetChronoScale(scale string) GameState {
+	normScale := NormalizeChronoScale(scale)
+	g.mu.Lock()
+	g.chronoScale = normScale
+	g.lastTimelineUpdate = time.Now()
+	g.mu.Unlock()
+
+	state := g.BuildState()
+	g.Notify(state)
+	return state
+}
+
+// SetTimelinePaused pauses or resumes the auto-advancement of the game clock.
+func (g *GameEngine) SetTimelinePaused(paused bool) GameState {
+	g.mu.Lock()
+	g.isPaused = paused
+	g.lastTimelineUpdate = time.Now()
+	g.mu.Unlock()
+
+	state := g.BuildState()
+	g.Notify(state)
+	return state
+}
+
+// GetTimeline returns current authoritative timeline parameters.
+func (g *GameEngine) GetTimeline() (float64, int64, Era, string, bool) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	yearInt := int64(math.Floor(g.simYear))
+	return g.simYear, yearInt, GetEraForYear(yearInt), g.chronoScale, g.isPaused
+}
+
+// TickTimeline advances the continuous timeline based on elapsed real-world time
+// and the current ChronoScale. Returns true if integer year or era changed.
+func (g *GameEngine) TickTimeline() bool {
+	g.mu.Lock()
+	if !g.isRunning || g.isPaused {
+		g.lastTimelineUpdate = time.Now()
+		g.mu.Unlock()
+		return false
+	}
+	now := time.Now()
+	elapsed := now.Sub(g.lastTimelineUpdate).Seconds()
+	g.lastTimelineUpdate = now
+
+	scaleSec, ok := ChronoScales[g.chronoScale]
+	if !ok || scaleSec <= 0 {
+		scaleSec = 86400.0
+	}
+
+	deltaYears := elapsed / scaleSec
+	prevYearInt := int64(math.Floor(g.simYear))
+	prevEra := GetEraForYear(prevYearInt)
+
+	g.simYear += deltaYears
+	newYearInt := int64(math.Floor(g.simYear))
+	newEra := GetEraForYear(newYearInt)
+	g.mu.Unlock()
+
+	if newYearInt != prevYearInt || newEra.ID != prevEra.ID {
+		state := g.BuildState()
+		g.Notify(state)
+		return true
+	}
+	return false
 }
 
 // Advance performs one world mutation: it advances the action sequence
@@ -221,15 +339,27 @@ func (g *GameEngine) BuildState() GameState {
 
 	g.mu.RLock()
 	tick := g.currentTick
+	simYear := g.simYear
+	chronoScale := g.chronoScale
+	isPaused := g.isPaused
 	g.mu.RUnlock()
 
+	yearInt := int64(math.Floor(simYear))
+	era := GetEraForYear(yearInt)
+
 	return GameState{
-		Tick:      tick,
-		GameDate:  time.Now(),
-		Timestamp: time.Now(),
-		Countries: countryStates,
-		Players:   playerStates,
-		Actions:   actionRecords,
+		Tick:        tick,
+		SimYear:     simYear,
+		YearInt:     yearInt,
+		EraID:       era.ID,
+		EraName:     era.Name,
+		ChronoScale: chronoScale,
+		IsPaused:    isPaused,
+		GameDate:    time.Now(),
+		Timestamp:   time.Now(),
+		Countries:   countryStates,
+		Players:     playerStates,
+		Actions:     actionRecords,
 	}
 }
 
