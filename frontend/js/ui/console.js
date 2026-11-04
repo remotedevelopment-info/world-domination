@@ -157,10 +157,77 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   modal.classList.remove("hidden");
 }
 
-export async function refreshKingdomCommandCenter() {
+export function applyLiveCommandCenterUpdate(kingdom) {
+  const modal = document.getElementById("kingdom-command-center");
+  if (!modal || modal.classList.contains("hidden")) return;
+  if (!kingdom) return;
+
+  const pop = kingdom.population ?? 1000;
+  const resAmt = kingdom.resources ?? 500;
+  const central = kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
+  const borders = state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  if (typeof kingdom.markets === "number") marketsLevel = kingdom.markets;
+  if (typeof kingdom.infrastructure === "number") infraLevel = kingdom.infrastructure;
+
+  renderMeters();
+  setMeter("cc-meter-population", pop, 5000);
+  setMeter("cc-meter-resources", resAmt, 3000);
+  setMeter("cc-meter-troops", central, 200);
+
+  const popVal = document.getElementById("cc-meter-pop-val");
+  if (popVal) popVal.textContent = pop.toLocaleString();
+  const resVal = document.getElementById("cc-meter-res-val");
+  if (resVal) resVal.textContent = resAmt.toLocaleString();
+  const troopVal = document.getElementById("cc-meter-troop-val");
+  if (troopVal) troopVal.textContent = central.toLocaleString();
+
+  const tierBadge = document.getElementById("cc-army-tier");
+  if (tierBadge) {
+    let tier = "LEVY";
+    if (central >= 5000) tier = "HORDE";
+    else if (central >= 1000) tier = "LEGION";
+    else if (central >= 500) tier = "BATTALION";
+    else if (central >= 100) tier = "COMPANY";
+    tierBadge.textContent = tier;
+  }
+
+  if (kingdom.economy) {
+    updateDerivedEconomyUI(
+      kingdom.economy.gdp,
+      kingdom.economy.currency_value,
+      kingdom.economy.inflation_rate,
+      kingdom.economy.budget_balance
+    );
+    const balEl = document.getElementById("cc-budget-balance");
+    if (balEl && typeof kingdom.economy.budget_balance === "number") {
+      const b = kingdom.economy.budget_balance;
+      balEl.textContent = `${b >= 0 ? "+" : ""}${b.toLocaleString()}/tick`;
+      balEl.classList.toggle("negative", b < 0);
+    }
+  }
+
+  updateStepperDisplay();
+  updateBorderGarrisonPods(borders);
+  updateEconomyHintsLive();
+
+  const minimap = document.getElementById("cc-minimap");
+  if (minimap) {
+    const ctx = minimap.getContext("2d");
+    ctx.clearRect(0, 0, minimap.width, minimap.height);
+    renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
+  }
+}
+
+export async function refreshKingdomCommandCenter(liveKingdom = null) {
   const modal = document.getElementById("kingdom-command-center");
   if (!modal || modal.classList.contains("hidden")) return;
   if (!state.myKingdom) return;
+
+  const kingdom = liveKingdom || state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
+  // Apply immediate real-time update from authoritative state/WebSocket broadcast
+  if (kingdom) {
+    applyLiveCommandCenterUpdate(kingdom);
+  }
 
   try {
     const res = await apiGetKingdomDetail();
@@ -168,7 +235,6 @@ export async function refreshKingdomCommandCenter() {
     const detail = await res.json();
     commandCenterDetail = detail;
 
-    const kingdom = state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
     const pop = detail.population ?? kingdom.population ?? 1000;
     const resAmt = detail.resources ?? kingdom.resources ?? 500;
     const central = detail.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
@@ -424,7 +490,7 @@ export function updateEconomyHintsLive() {
     {};
   const pop = commandCenterDetail?.population ?? kingdom.population ?? 1000;
   const res = commandCenterDetail?.resources ?? kingdom.resources ?? 500;
-  const tr = commandCenterDetail?.central_troops ?? 0;
+  const tr = commandCenterDetail?.central_troops ?? kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
 
   const baseProductivity = 0.08;
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
@@ -432,7 +498,9 @@ export function updateEconomyHintsLive() {
   const invBonus = 1.0 + (investmentRate || 0) * 0.002;
   const laffer = lafferJs(taxRate);
 
-  const gdp = pop * baseProductivity * infraBonus * mktBonus * invBonus * laffer;
+  // Mobilized troops reduce productive civilian workforce, directly reducing GDP and tax revenue
+  const civilianWorkforce = Math.max(0, pop - tr);
+  const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * invBonus * laffer;
   const revenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
   const expenditure = Math.round(tr * 0.5 + (socialCostsRate + investmentRate) * 0.2 + 0.5);
   const balance = revenue - expenditure;

@@ -29,18 +29,24 @@ type GameState struct {
 }
 
 type CountryState struct {
-	ID            int64        `json:"id"`
-	Name          string       `json:"name"`
-	Code          string       `json:"code"`
-	Color         string       `json:"color"`
-	OwnerID       *int64       `json:"owner_id"`
-	OwnerName     *string      `json:"owner_name"` // Username of the player who owns it, if any
-	Population    int64        `json:"population"`
-	Resources     int64        `json:"resources"`
-	TerritoryType string       `json:"territory_type"`
-	Borders       string       `json:"borders"`
-	IsIsland      bool         `json:"is_island"`
-	Economy       EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
+	ID             int64        `json:"id"`
+	Name           string       `json:"name"`
+	Code           string       `json:"code"`
+	Color          string       `json:"color"`
+	OwnerID        *int64       `json:"owner_id"`
+	OwnerName      *string      `json:"owner_name"` // Username of the player who owns it, if any
+	Population     int64        `json:"population"`
+	Resources      int64        `json:"resources"`
+	Troops         int64        `json:"troops"`
+	EconomyRate    int64        `json:"economy_rate"`
+	Investment     int64        `json:"investment"`
+	SocialCosts    int64        `json:"social_costs"`
+	Markets        int64        `json:"markets"`
+	Infrastructure int64        `json:"infrastructure"`
+	TerritoryType  string       `json:"territory_type"`
+	Borders        string       `json:"borders"`
+	IsIsland       bool         `json:"is_island"`
+	Economy        EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
 type PlayerState struct {
@@ -289,16 +295,22 @@ func (g *GameEngine) BuildState() GameState {
 	var countryStates []CountryState
 	for _, c := range countries {
 		cs := CountryState{
-			ID:            c.ID,
-			Name:          c.Name,
-			Code:          c.Code,
-			Color:         c.Color,
-			Population:    c.Population,
-			Resources:     c.Resources,
-			TerritoryType: c.TerritoryType,
-			Borders:       c.Borders,
-			IsIsland:      c.IsIsland,
-			Economy:       ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts),
+			ID:             c.ID,
+			Name:           c.Name,
+			Code:           c.Code,
+			Color:          c.Color,
+			Population:     c.Population,
+			Resources:      c.Resources,
+			Troops:         c.Troops,
+			EconomyRate:    c.EconomyRate,
+			Investment:     c.Investment,
+			SocialCosts:    c.SocialCosts,
+			Markets:        c.Markets,
+			Infrastructure: c.Infrastructure,
+			TerritoryType:  c.TerritoryType,
+			Borders:        c.Borders,
+			IsIsland:       c.IsIsland,
+			Economy:        ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts),
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID

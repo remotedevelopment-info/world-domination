@@ -87,3 +87,24 @@ func TestPopulationGrowth(t *testing.T) {
 		t.Errorf("expected higher growth with development (got %d vs %d)", developed, base)
 	}
 }
+
+func TestTroopsReduceTaxRevenueAndTreasury(t *testing.T) {
+	civilian := ComputeEconomy(10000, 5000, 0, 50, 2, 2, 0, 0)
+	militarised := ComputeEconomy(10000, 5000, 2000, 50, 2, 2, 0, 0)
+
+	// Recruiting troops pulls civilians into the military, reducing productive GDP and taxation income
+	if militarised.TaxRevenue >= civilian.TaxRevenue {
+		t.Errorf("expected recruiting troops to reduce taxation income (got %d vs %d)",
+			militarised.TaxRevenue, civilian.TaxRevenue)
+	}
+
+	// Troop upkeep increases military expenditure, draining the budget balance
+	if militarised.MilitaryExpenditure <= civilian.MilitaryExpenditure {
+		t.Errorf("expected higher military expenditure with standing troops")
+	}
+
+	if militarised.BudgetBalance >= civilian.BudgetBalance {
+		t.Errorf("expected military troops to lower budget balance (got %d vs %d)",
+			militarised.BudgetBalance, civilian.BudgetBalance)
+	}
+}

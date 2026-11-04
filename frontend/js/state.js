@@ -160,6 +160,14 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
     const parent = parsedBorders?.parent ?? raw.parent ?? meta.parent ?? "";
     const historicalNote = raw.historical_note || meta.historical_note || "";
 
+    if (raw.id && typeof raw.troops === "number") {
+      if (!state.troops[raw.id]) {
+        state.troops[raw.id] = { central: raw.troops, borders: { N: 0, S: 0, E: 0, W: 0 } };
+      } else {
+        state.troops[raw.id].central = raw.troops;
+      }
+    }
+
     byCode.set(raw.code, {
       ...meta,
       ...raw,
@@ -215,6 +223,16 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
         state.myKingdom.code = mk.code;
         state.myKingdom.country_code = mk.code;
       }
+      // Live sync state.myKingdom properties from latest authoritative server payload
+      if (typeof mk.population === "number") state.myKingdom.population = mk.population;
+      if (typeof mk.resources === "number") state.myKingdom.resources = mk.resources;
+      if (typeof mk.troops === "number") state.myKingdom.troops = mk.troops;
+      if (mk.economy) state.myKingdom.economy = mk.economy;
+      if (mk.economy_rate !== undefined) state.myKingdom.economy_rate = mk.economy_rate;
+      if (mk.investment !== undefined) state.myKingdom.investment = mk.investment;
+      if (mk.social_costs !== undefined) state.myKingdom.social_costs = mk.social_costs;
+      if (mk.markets !== undefined) state.myKingdom.markets = mk.markets;
+      if (mk.infrastructure !== undefined) state.myKingdom.infrastructure = mk.infrastructure;
     }
   }
 

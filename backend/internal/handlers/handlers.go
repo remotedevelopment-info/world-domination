@@ -606,33 +606,31 @@ func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionReq
 	if err != nil {
 		return err
 	}
-	var population, resources, troops int64
+	var resources, troops int64
 	for _, c := range countries {
 		if c.ID == pc.CountryID {
-			population, resources, troops = c.Population, c.Resources, c.Troops
+			resources, troops = c.Resources, c.Troops
 			break
 		}
 	}
-	cost := population / 100
-	if cost < 1 {
-		cost = 1
+	// Recruitment cost: enlistment bounty, arms, armor, and provisioning (10 gold per soldier, minimum 50 gold)
+	const recruitBatch = int64(10)
+	cost := recruitBatch * 10
+	if cost < 50 {
+		cost = 50
 	}
 	if resources < cost {
-		return errors.New("insufficient resources to recruit")
+		return fmt.Errorf("insufficient resources in treasury: recruitment requires %d gold, treasury holds %d", cost, resources)
 	}
-	population += 10
 	resources -= cost
-	troops += 10 // Recruited troops accumulate at central location
+	troops += recruitBatch // Recruited troops accumulate in kingdom's armada
 	if err := database.UpdateCountryResources(pc.CountryID, resources); err != nil {
-		return err
-	}
-	if err := database.UpdateCountryPopulation(pc.CountryID, population); err != nil {
 		return err
 	}
 	if err := database.UpdateCountryTroops(pc.CountryID, troops); err != nil {
 		return err
 	}
-	return database.LogAction(userID, pc.CountryID, "military", "recruited troops ("+strconv.FormatInt(cost, 10)+" resources, +10 population)",
+	return database.LogAction(userID, pc.CountryID, "military", "recruited "+strconv.FormatInt(recruitBatch, 10)+" troops (-"+strconv.FormatInt(cost, 10)+" gold from treasury)",
 		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
 

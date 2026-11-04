@@ -100,14 +100,24 @@ registerActionCallbacks({
   checkMyKingdom,
 });
 
-// React to live WebSocket broadcasts
-onSocketStateChange(() => {
+// React to live WebSocket broadcasts across every open browser session
+onSocketStateChange((payload) => {
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
   if (state.myKingdom && state.myKingdom.country_id) {
-    updateEconomyPanel(state.kingdoms.find((k) => k.id === state.myKingdom.country_id));
-    refreshKingdomCommandCenter();
+    const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
+    updateEconomyPanel(mk);
+    refreshKingdomCommandCenter(mk);
+  }
+  if (state.shownKingdomId) {
+    const shown = state.kingdoms.find((k) => k.id === state.shownKingdomId);
+    if (shown) {
+      const popEl = document.getElementById("kingdom-population");
+      const resEl = document.getElementById("kingdom-resources");
+      if (popEl) popEl.textContent = (shown.population || 0).toLocaleString();
+      if (resEl) resEl.textContent = (shown.resources !== undefined ? shown.resources : 0).toLocaleString();
+    }
   }
 });
 
@@ -391,10 +401,12 @@ export function refreshMyKingdomStats() {
   if (!state.myKingdom || !state.myKingdom.country_id) return;
   const country = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
   if (!country) return;
+  const nameEl = document.getElementById("my-kingdom-name");
   const popEl = document.getElementById("my-kingdom-pop");
   const resEl = document.getElementById("my-kingdom-res");
-  if (popEl) popEl.textContent = country.population ? country.population.toLocaleString() : "0";
-  if (resEl) resEl.textContent = country.resources ? country.resources.toLocaleString() : "0";
+  if (nameEl) nameEl.textContent = country.name || state.myKingdom.country_name || "";
+  if (popEl) popEl.textContent = country.population !== undefined ? country.population.toLocaleString() : "0";
+  if (resEl) resEl.textContent = country.resources !== undefined ? country.resources.toLocaleString() : "0";
 }
 
 export function updateEconomyPanel(country) {

@@ -58,15 +58,22 @@ func laffer(rate int64) float64 {
 }
 
 // gdpValue computes gross domestic product per 90-second cycle.
-func gdpValue(population, taxRate, markets, infrastructure int64) float64 {
-	return float64(population) * baseProductivity * laffer(taxRate) *
+// Productive civilian workforce: troops in barracks and standing armies do not
+// produce civilian agricultural or commercial output, so expanding the military
+// directly reduces GDP and taxation revenue.
+func gdpValue(population, troops, taxRate, markets, infrastructure int64) float64 {
+	workforce := population - troops
+	if workforce < 0 {
+		workforce = 0
+	}
+	return float64(workforce) * baseProductivity * laffer(taxRate) *
 		(1 + marketBoost*float64(markets)) * (1 + infraBoost*float64(infrastructure))
 }
 
 // ComputeEconomy derives all dashboard indicators from persisted state.
 // Revenue, expenditure and balance are per 90-second cycle.
 func ComputeEconomy(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64) EconomyState {
-	gdp := gdpValue(population, taxRate, markets, infrastructure)
+	gdp := gdpValue(population, troops, taxRate, markets, infrastructure)
 	// Investment compounds GDP in future periods (a perennial productivity lever).
 	gdp *= 1.0 + investmentBoost*float64(investment)
 	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
@@ -129,7 +136,7 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	if population >= carryingCapacity {
 		return 0
 	}
-	perCapita := gdpValue(population, taxRate, markets, infrastructure) / float64(population)
+	perCapita := gdpValue(population, 0, taxRate, markets, infrastructure) / float64(population)
 	growth := float64(population) * 0.005 * (perCapita / baseProductivity)
 	growth += float64(investment+socialCosts) * 0.0005
 	// Logistic damping: the closer the kingdom is to its carrying capacity, the
