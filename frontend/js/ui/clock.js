@@ -219,7 +219,8 @@ export function tickClock() {
   // 2. Synchronize Era Chronometer Bar Plaques
   updateHistoricalEraBar(time.currentEra, time.yearInt);
 
-  // 3. Update Dev Drawer Telemetry (Month, Day, Next Tick, Offsets)
+  // 3. Update Dev Drawer Telemetry & Restrict Rate Button to Admin Only
+  updateChronoControlVisibility();
   updateDevDrawerTelemetry(time);
 
   // 4. Notify listeners when the Historical Era changes (spawning new era nations)
@@ -408,7 +409,30 @@ export async function initServerTimelineSync() {
 // DEVELOPMENT & PLAYER TIMELINE CONTROL ACTIONS
 // -------------------------------------------------------------
 
+export function updateChronoControlVisibility() {
+  const btn = document.getElementById("dev-chrono-toggle-btn");
+  const drawer = document.getElementById("dev-chrono-drawer");
+  const isAdmin = isTimelineAdmin();
+  if (btn) {
+    btn.classList.toggle("hidden", !isAdmin);
+  }
+  if (!isAdmin && drawer) {
+    devDrawerOpen = false;
+    drawer.classList.add("hidden");
+    drawer.classList.remove("open");
+  }
+}
+
 export function toggleDevChronoControl() {
+  if (!isTimelineAdmin()) {
+    devDrawerOpen = false;
+    const drawer = document.getElementById("dev-chrono-drawer");
+    if (drawer) {
+      drawer.classList.add("hidden");
+      drawer.classList.remove("open");
+    }
+    return;
+  }
   devDrawerOpen = !devDrawerOpen;
   const drawer = document.getElementById("dev-chrono-drawer");
   if (drawer) {

@@ -195,6 +195,9 @@ export function showAuthScreen(message = "") {
   closeModal();
   stopClock();
   disconnectWebSocket();
+  document.getElementById("admin-console-btn")?.classList.add("hidden");
+  document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
+  document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
   document.getElementById("game-screen")?.classList.remove("active");
   document.getElementById("auth-screen")?.classList.add("active");
   showLogin();
@@ -249,12 +252,15 @@ export async function checkMyKingdom() {
       playerKingdom.className = "admin-badge";
     }
     document.getElementById("admin-console-btn")?.classList.remove("hidden");
+    document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
     document.getElementById("country-selection")?.classList.add("hidden");
     document.getElementById("my-kingdom")?.classList.add("hidden");
     state.myKingdom = null;
     return true;
   } else {
     document.getElementById("admin-console-btn")?.classList.add("hidden");
+    document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
+    document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
   }
 
   try {
@@ -275,6 +281,7 @@ export async function checkMyKingdom() {
           playerKingdom.className = "admin-badge";
         }
         document.getElementById("admin-console-btn")?.classList.remove("hidden");
+        document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
         document.getElementById("country-selection")?.classList.add("hidden");
         document.getElementById("my-kingdom")?.classList.add("hidden");
         state.myKingdom = null;
