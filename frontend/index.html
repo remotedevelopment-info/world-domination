@@ -18,8 +18,8 @@
 
                 <div id="login-form" class="auth-form">
                     <h2>Login</h2>
-                    <input type="text" id="login-username" placeholder="Username" required>
-                    <input type="password" id="login-password" placeholder="Password" required>
+                    <input type="text" id="login-username" placeholder="Username" required autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-password')?.focus()">
+                    <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
                     <button onclick="login()">Login</button>
                     <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister(event)">Register</a>
                     </p>
@@ -945,7 +945,7 @@
         </div>
         <div id="toast-container" aria-live="polite"></div>
     </div>
-    <script type="module" src="js/main.js?v=3.0"></script>
+    <script type="module" src="js/main.js?v=3.1"></script>
 </body>
 
 </html>

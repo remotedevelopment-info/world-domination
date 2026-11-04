@@ -23,6 +23,12 @@ export async function readErrorMessage(res, fallback) {
   return fallback;
 }
 
+let unauthorizedHandler = null;
+
+export function onUnauthorized(handler) {
+  unauthorizedHandler = handler;
+}
+
 export async function apiFetch(endpoint, options = {}) {
   const headers = { ...options.headers };
   if (state.token && !headers["Authorization"]) {
@@ -36,6 +42,13 @@ export async function apiFetch(endpoint, options = {}) {
     ...options,
     headers,
   });
+
+  // Automatically recognize expired or invalid sessions on protected routes
+  if (res.status === 401 && endpoint !== "/login" && endpoint !== "/register") {
+    if (typeof unauthorizedHandler === "function") {
+      unauthorizedHandler(endpoint, res);
+    }
+  }
 
   return res;
 }

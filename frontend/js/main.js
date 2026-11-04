@@ -10,6 +10,7 @@ import {
   apiGetMyCountry,
   apiAssignCountry,
   readErrorMessage,
+  onUnauthorized,
 } from "./api.js";
 import {
   showRegister,
@@ -17,6 +18,7 @@ import {
   register as authRegister,
   login as authLogin,
   logout as authLogout,
+  setAuthMessage,
 } from "./auth.js";
 import {
   connectWebSocket,
@@ -138,6 +140,40 @@ onEraChange((newEra, yearInt, prevEraId) => {
 });
 
 // Screen transitions & lifecycle
+let isSessionExpiring = false;
+
+export function handleSessionExpired(
+  reason = "Your session has expired. Please log in again to command your kingdom."
+) {
+  if (isSessionExpiring) return;
+  isSessionExpiring = true;
+  setTimeout(() => {
+    isSessionExpiring = false;
+  }, 1000);
+
+  const previousUsername = state.currentUser?.username || "";
+  clearSession();
+  showAuthScreen(reason);
+
+  const usernameInput = document.getElementById("login-username");
+  const passwordInput = document.getElementById("login-password");
+  if (usernameInput && previousUsername) {
+    usernameInput.value = previousUsername;
+  }
+  if (passwordInput) {
+    passwordInput.value = "";
+    passwordInput.focus();
+  }
+
+  logMessage("Session expired. Please log in again.");
+  showToast("Login session expired — please log in again", "warning");
+}
+
+// Automatically catch 401 Unauthorized responses across all protected endpoints
+onUnauthorized((endpoint, res) => {
+  handleSessionExpired();
+});
+
 export function showGameScreen() {
   closeModal();
   document.getElementById("auth-screen")?.classList.remove("active");
@@ -153,13 +189,16 @@ export function showGameScreen() {
   checkMyKingdom();
 }
 
-export function showAuthScreen() {
+export function showAuthScreen(message = "") {
   closeModal();
   stopClock();
   disconnectWebSocket();
   document.getElementById("game-screen")?.classList.remove("active");
   document.getElementById("auth-screen")?.classList.add("active");
   showLogin();
+  if (message) {
+    setAuthMessage(message, "error");
+  }
 }
 
 export async function loadKingdoms() {
@@ -195,9 +234,19 @@ export async function loadAllTroops() {
 }
 
 export async function checkMyKingdom() {
+  if (!state.token) {
+    handleSessionExpired("Please log in to claim or command your kingdom.");
+    return false;
+  }
+
   try {
     const res = await apiGetMyCountry();
-    if (!res.ok) return;
+    if (res.status === 401) {
+      handleSessionExpired("Your session has expired. Please log in again to command your kingdom.");
+      return false;
+    }
+    if (!res.ok) return false;
+
     const data = await res.json();
     if (data.has_country) {
       state.myKingdom = data;
@@ -223,8 +272,10 @@ export async function checkMyKingdom() {
       document.getElementById("my-kingdom")?.classList.add("hidden");
       closeModal();
     }
+    return true;
   } catch (err) {
     console.error("Error checking kingdom:", err);
+    return false;
   }
 }
 
@@ -690,7 +741,7 @@ window.resetYearOffset = resetYearOffset;
 window.getCurrentGameYear = getCurrentGameYear;
 
 // Initialize when DOM is ready
-function initApp() {
+async function initApp() {
   const canvas = document.getElementById("world-map");
   if (canvas) {
     initRenderer(canvas);
@@ -702,7 +753,13 @@ function initApp() {
   initServerTimelineSync();
 
   if (state.token && state.currentUser) {
-    showGameScreen();
+    // Validate session with server before entering game screen
+    const authenticated = await checkMyKingdom();
+    if (authenticated) {
+      showGameScreen();
+    }
+  } else {
+    showAuthScreen();
   }
 }
 
