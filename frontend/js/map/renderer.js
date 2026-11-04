@@ -903,8 +903,8 @@ export function renderMap(immediate = false) {
 
   // 5b-2. Pass 2b: Dedicated Sovereign Gold Outline Pass for all territories owned by the current user
   // Re-strokes all territories owned by the current user (single realm or collection of countries)
-  // on top of all other frontier borders with a glorious radiant gold border, ensuring no adjacent
-  // country border ever clips or dims the player's imperial gold frontiers.
+  // on top of all other frontier borders with an ultra-bold, radiant imperial gold border and obsidian casing,
+  // ensuring the user's sovereign dominion is unmistakably obvious across any terrain or zoom level.
   state.kingdoms.forEach((kingdom) => {
     if (!isCountryOwnedByCurrentUser(kingdom)) return;
     const poly = kingdomPolygons[kingdom.code];
@@ -921,24 +921,36 @@ export function renderMap(immediate = false) {
     }
     ctx.closePath();
 
-    // Layer 1: Ambient golden radiance / glow
-    ctx.shadowColor = "#ffd700";
-    ctx.shadowBlur = 10;
-    ctx.strokeStyle = "rgba(255, 215, 0, 0.85)";
-    ctx.lineWidth = 4.2;
+    // Layer 0: Warm imperial gold interior wash to give the user's dominion instant visual prominence
+    ctx.fillStyle = "rgba(255, 215, 0, 0.14)";
+    ctx.fill();
+
+    // Layer 1: Dark Obsidian Contrast Casing (guarantees maximum edge contrast on all oceans & terrains)
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(20, 14, 4, 0.95)";
+    ctx.lineWidth = 10.0;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // Layer 2: Radiant Golden Aura & Glow (high-luminance amber/gold bloom)
+    ctx.shadowColor = "#ffaa00";
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.95)";
+    ctx.lineWidth = 7.5;
     ctx.lineJoin = "round";
     ctx.stroke();
 
-    // Layer 2: Core high-contrast imperial gold boundary
+    // Layer 3: Solid Bold Imperial Gold Band (primary vivid metallic ribbon)
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#ffd700";
-    ctx.lineWidth = 3.0;
+    ctx.lineWidth = 5.2;
     ctx.lineJoin = "round";
     ctx.stroke();
 
-    // Layer 3: Crisp inner gilded specular highlight
-    ctx.strokeStyle = "#fffbe0";
-    ctx.lineWidth = 1.2;
+    // Layer 4: Brilliant Specular White-Gold Core (gleaming gilded spine)
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.0;
     ctx.lineJoin = "round";
     ctx.stroke();
 
@@ -968,7 +980,8 @@ export function renderMap(immediate = false) {
       const [pxX, pxY] = project(labelX, labelY);
 
       ctx.save();
-      ctx.font = `bold ${fontSize}px Georgia, 'Times New Roman', serif`;
+      const currentFontSize = isMyKingdom ? fontSize + 1.5 : fontSize;
+      ctx.font = `bold ${currentFontSize}px Georgia, 'Times New Roman', serif`;
       const displayLabel = isPolynesian && isPolynesiaActive
         ? `🏝️${kingdom.code}`
         : isPolynesian && !isPolynesiaActive
@@ -978,8 +991,11 @@ export function renderMap(immediate = false) {
             : kingdom.code;
       const textWidth = ctx.measureText(displayLabel).width;
 
+      const effectivePadX = isMyKingdom ? badgePadX + 3 : badgePadX;
+      const effectivePadY = isMyKingdom ? badgePadY + 1.5 : badgePadY;
+
       ctx.fillStyle = isMyKingdom
-        ? "rgba(42, 32, 10, 0.92)"
+        ? "rgba(28, 20, 4, 0.96)"
         : isPolynesian && !isPolynesiaActive
         ? "rgba(15, 23, 30, 0.55)"
         : isPolynesian && isPolynesiaActive
@@ -989,14 +1005,18 @@ export function renderMap(immediate = false) {
             : "rgba(15, 23, 30, 0.75)";
       ctx.beginPath();
       ctx.roundRect(
-        pxX - textWidth / 2 - badgePadX,
-        pxY - badgeHeight / 2 - badgePadY,
-        textWidth + badgePadX * 2,
-        badgeHeight + badgePadY * 2,
-        3
+        pxX - textWidth / 2 - effectivePadX,
+        pxY - badgeHeight / 2 - effectivePadY,
+        textWidth + effectivePadX * 2,
+        badgeHeight + effectivePadY * 2,
+        isMyKingdom ? 4 : 3
       );
       ctx.fill();
 
+      if (isMyKingdom) {
+        ctx.shadowColor = "#ffb700";
+        ctx.shadowBlur = 10;
+      }
       ctx.strokeStyle = isMyKingdom
         ? "#ffd700"
         : isPolynesian && isPolynesiaActive
@@ -1004,13 +1024,14 @@ export function renderMap(immediate = false) {
           : isNewlyEmergedInEra
             ? "#f5d76e"
             : "rgba(212, 175, 55, 0.4)";
-      ctx.lineWidth = isMyKingdom ? 1.8 : (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
+      ctx.lineWidth = isMyKingdom ? 2.4 : (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = isMyKingdom
-        ? "#ffe44d"
+        ? "#fff580"
         : isPolynesian && isPolynesiaActive
           ? "#80fcff"
           : isPolynesian && !isPolynesiaActive
@@ -1020,14 +1041,15 @@ export function renderMap(immediate = false) {
               : "#f5f0db";
       ctx.fillText(displayLabel, pxX, pxY);
 
-      if (kingdom.owner_id || isMyKingdom) {
-        ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
-        if (isMyKingdom) {
-          ctx.shadowColor = "#ffd700";
-          ctx.shadowBlur = 6;
-        }
-        ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 6);
+      if (isMyKingdom) {
+        ctx.font = `${Math.max(12, fontSize + 3)}px sans-serif`;
+        ctx.shadowColor = "#ffb700";
+        ctx.shadowBlur = 8;
+        ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 9);
         ctx.shadowBlur = 0;
+      } else if (kingdom.owner_id) {
+        ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
+        ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 6);
       }
       ctx.restore();
     });
