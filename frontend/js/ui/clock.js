@@ -32,15 +32,24 @@ export const HISTORICAL_ERAS = [
   { id: "modern", name: "THE MODERN AGE", startYear: 1989, endYear: 9999 },
 ];
 
-export const DEFAULT_TIMELINE_ADMIN = "nalex@sfsw.net";
+export const DEFAULT_TIMELINE_ADMIN = "admin@sfsw.net";
 let timelineAdminEmail = DEFAULT_TIMELINE_ADMIN;
 
-export function isTimelineAdmin() {
-  if (!state.currentUser) return false;
-  if (state.currentUser.role === "admin") return true;
-  const currentEmail = state.currentUser.email?.toLowerCase();
-  const currentUsername = state.currentUser.username?.toLowerCase();
-  const adminTarget = (timelineAdminEmail || DEFAULT_TIMELINE_ADMIN).toLowerCase();
+export const ADMIN_IDENTIFIERS = new Set([
+  "admin@sfsw.net",
+  "admin",
+  "nalex@sfsw.net",
+  "nalex",
+]);
+
+export function isTimelineAdmin(user = state.currentUser) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const currentEmail = user.email?.toLowerCase().trim();
+  const currentUsername = user.username?.toLowerCase().trim();
+  if (currentEmail && ADMIN_IDENTIFIERS.has(currentEmail)) return true;
+  if (currentUsername && ADMIN_IDENTIFIERS.has(currentUsername)) return true;
+  const adminTarget = (timelineAdminEmail || DEFAULT_TIMELINE_ADMIN).toLowerCase().trim();
   return currentEmail === adminTarget || currentUsername === adminTarget;
 }
 

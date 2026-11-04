@@ -94,8 +94,8 @@ When the client receives a WebSocket update:
 In a multi-user environment, arbitrary players cannot mutate the server timeline or jump historical eras for other players:
 1. **Nominated Timeline Administrator & Role Hierarchy**:
    - The PostgreSQL `users` table includes a `role VARCHAR(32) DEFAULT 'player'` column.
-   - Users with `role = 'admin'` or designated email `nalex@sfsw.net` are granted imperial overseer authority.
-   - Server endpoints (`/api/timeline/jump`, `/api/timeline/scale`, `/api/timeline/pause`, `/api/admin/dashboard`) require authentication and verify that `user.Role == "admin"` or `user.Email == "nalex@sfsw.net"`.
+   - Users with `role = 'admin'` or designated accounts `admin@sfsw.net` (username `admin`) and `nalex@sfsw.net` (username `nalex`) are granted imperial overseer authority.
+   - Server endpoints (`/api/timeline/jump`, `/api/timeline/scale`, `/api/timeline/pause`, `/api/admin/dashboard`) require authentication and verify that `user.Role == "admin"` or `database.IsAdminIdentifier(user.Email/Username)`.
    - Requests from unauthenticated users return `401 Unauthorized`; non-admin users receive `403 Forbidden`.
 2. **Silent Failure for Non-Admin Timeline Interaction**:
    - In the frontend chronometer UI, attempts by regular players to click historical era plaques or modify the chronometer scale fail silently (no email-quoting toasts or warning dialogs are shown to users).

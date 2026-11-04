@@ -199,13 +199,34 @@ func TestTimelineHandlers(t *testing.T) {
 		t.Errorf("Expected timeline map in dashboard response")
 	}
 
-	// 10. GET /api/admin/dashboard with nalex@sfsw.net -> 200
+	// 10. GET /api/admin/dashboard with nalex -> 200
+	nalexToken := &auth.Token{UserID: 1, Username: "nalex", Email: "nalex@sfsw.net"}
 	req = httptest.NewRequest(http.MethodGet, "/api/admin/dashboard", nil)
-	req = req.WithContext(context.WithValue(req.Context(), "user", adminToken))
+	req = req.WithContext(context.WithValue(req.Context(), "user", nalexToken))
 	rr = httptest.NewRecorder()
 	GetAdminDashboardHandler(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("GetAdminDashboardHandler nalex status = %d, expected 200", rr.Code)
+	}
+
+	// 11. GET /api/admin/dashboard with dedicated admin@sfsw.net -> 200
+	newAdminToken := &auth.Token{UserID: 3, Username: "admin", Email: "admin@sfsw.net"}
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/dashboard", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "user", newAdminToken))
+	rr = httptest.NewRecorder()
+	GetAdminDashboardHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GetAdminDashboardHandler admin@sfsw.net status = %d, expected 200", rr.Code)
+	}
+
+	// 12. POST /api/timeline/jump with admin@sfsw.net -> 200
+	jumpPayload, _ = json.Marshal(map[string]interface{}{"year": 1750})
+	req = httptest.NewRequest(http.MethodPost, "/api/timeline/jump", bytes.NewReader(jumpPayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", newAdminToken))
+	rr = httptest.NewRecorder()
+	JumpTimelineHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("JumpTimelineHandler admin@sfsw.net status = %d, expected 200", rr.Code)
 	}
 }
 

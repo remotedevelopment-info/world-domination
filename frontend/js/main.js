@@ -893,7 +893,7 @@ export async function refreshAdminDashboard() {
       } else {
         data.users.forEach((u) => {
           const tr = document.createElement("tr");
-          const isUserAdmin = u.role === "admin" || u.email?.toLowerCase() === "nalex@sfsw.net" || u.username?.toLowerCase() === "nalex@sfsw.net";
+          const isUserAdmin = isTimelineAdmin(u);
           const roleBadgeClass = isUserAdmin ? "role-admin" : "role-player";
           const roleLabel = isUserAdmin ? "👑 Admin / Overseer" : "Player";
 

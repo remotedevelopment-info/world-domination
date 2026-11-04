@@ -13,9 +13,16 @@ import (
 	"github.com/lib/pq"
 
 	"kingdom-conquest/backend/internal/models"
+	"kingdom-conquest/backend/pkg/auth"
 )
 
 var DB *sql.DB
+
+// IsAdminIdentifier returns true if the email or username matches recognized administrative identities.
+func IsAdminIdentifier(identifier string) bool {
+	id := strings.ToLower(strings.TrimSpace(identifier))
+	return id == "admin@sfsw.net" || id == "admin" || id == "nalex@sfsw.net" || id == "nalex"
+}
 
 // ErrUserExists is returned by CreateUser when the username or email is
 // already taken (Postgres unique-constraint violation 23505).
@@ -226,7 +233,28 @@ func InitSchema() error {
 		return fmt.Errorf("error creating schema: %v", err)
 	}
 
-	_, _ = DB.Exec("UPDATE users SET role = 'admin' WHERE LOWER(email) = 'nalex@sfsw.net' OR LOWER(username) = 'nalex@sfsw.net'")
+	// Promote any existing admin or nalex accounts to admin role
+	_, _ = DB.Exec(`
+		UPDATE users 
+		SET role = 'admin' 
+		WHERE LOWER(email) IN ('admin@sfsw.net', 'nalex@sfsw.net')
+		   OR LOWER(username) IN ('admin', 'admin@sfsw.net', 'nalex', 'nalex@sfsw.net')
+	`)
+
+	// Ensure dedicated admin user exists with login admin@sfsw.net (password: password123)
+	var adminExists bool
+	_ = DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(email) = 'admin@sfsw.net' OR LOWER(username) = 'admin')").Scan(&adminExists)
+	if !adminExists {
+		hashed, err := auth.HashPassword("password123")
+		if err == nil {
+			_, _ = DB.Exec(`
+				INSERT INTO users (username, password, email, base_color, role) 
+				VALUES ($1, $2, $3, $4, $5) 
+				ON CONFLICT DO NOTHING`,
+				"admin", hashed, "admin@sfsw.net", "#D4AF37", "admin")
+			log.Println("Seeded default admin user: admin@sfsw.net / password123")
+		}
+	}
 
 	log.Println("Database schema initialized successfully")
 	return nil
@@ -535,8 +563,13 @@ func GetUserByUsername(loginIdentifier string) (*UserRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.EqualFold(user.Email, "nalex@sfsw.net") || strings.EqualFold(user.Username, "nalex@sfsw.net") {
+	if IsAdminIdentifier(user.Email) || IsAdminIdentifier(user.Username) {
 		user.Role = "admin"
+		go func(uid int64) {
+			if DB != nil {
+				_, _ = DB.Exec("UPDATE users SET role = 'admin' WHERE id = $1", uid)
+			}
+		}(user.ID)
 	}
 	return user, nil
 }
@@ -546,7 +579,7 @@ func CreateUser(username, password, email, baseColor string) (int64, error) {
 		return 0, nil
 	}
 	role := "player"
-	if strings.EqualFold(email, "nalex@sfsw.net") || strings.EqualFold(username, "nalex@sfsw.net") {
+	if IsAdminIdentifier(email) || IsAdminIdentifier(username) {
 		role = "admin"
 	}
 	var id int64
@@ -1129,7 +1162,7 @@ func GetAdminDashboardUsers() ([]AdminUserOverview, error) {
 		if ccolor.Valid {
 			u.CountryColor = &ccolor.String
 		}
-		if strings.EqualFold(u.Email, "nalex@sfsw.net") || strings.EqualFold(u.Username, "nalex@sfsw.net") {
+		if IsAdminIdentifier(u.Email) || IsAdminIdentifier(u.Username) {
 			u.Role = "admin"
 		}
 		result = append(result, u)

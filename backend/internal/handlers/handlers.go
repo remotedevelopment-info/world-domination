@@ -883,7 +883,7 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-const NominatedTimelineAdminEmail = "nalex@sfsw.net"
+const NominatedTimelineAdminEmail = "admin@sfsw.net"
 
 // checkTimelineAdmin ensures the caller is authenticated as the designated administrator.
 func checkTimelineAdmin(r *http.Request) (*auth.Token, error) {
@@ -891,10 +891,10 @@ func checkTimelineAdmin(r *http.Request) (*auth.Token, error) {
 	if user == nil {
 		return nil, errors.New("authentication required: please log in")
 	}
-	if user.Role != "admin" && !strings.EqualFold(user.Email, NominatedTimelineAdminEmail) && !strings.EqualFold(user.Username, NominatedTimelineAdminEmail) {
-		return nil, errors.New("forbidden: administrator privileges required")
+	if user.Role == "admin" || database.IsAdminIdentifier(user.Email) || database.IsAdminIdentifier(user.Username) {
+		return user, nil
 	}
-	return user, nil
+	return nil, errors.New("forbidden: administrator privileges required")
 }
 
 // GetAdminDashboardHandler returns telemetry for all users, claimed realms, resources, and live timeline.
