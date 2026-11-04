@@ -1,7 +1,13 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"kingdom-conquest/backend/internal/game"
 )
 
 func TestValidateRegistration(t *testing.T) {
@@ -64,6 +70,69 @@ func TestValidateRegistration(t *testing.T) {
 				t.Errorf("validateRegistration() = %q, expected %q", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestTimelineHandlers(t *testing.T) {
+	engine := game.GetEngine()
+	engine.Start()
+
+	// 1. GET /api/timeline
+	req := httptest.NewRequest(http.MethodGet, "/api/timeline", nil)
+	rr := httptest.NewRecorder()
+	GetTimelineHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GetTimelineHandler status = %d, expected 200", rr.Code)
+	}
+
+	var res map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
+		t.Fatalf("Failed to parse GET /api/timeline response: %v", err)
+	}
+	if _, ok := res["sim_year"]; !ok {
+		t.Fatalf("Expected sim_year in timeline response")
+	}
+
+	// 2. POST /api/timeline/jump
+	jumpPayload, _ := json.Marshal(map[string]interface{}{"year": 1920})
+	req = httptest.NewRequest(http.MethodPost, "/api/timeline/jump", bytes.NewReader(jumpPayload))
+	rr = httptest.NewRecorder()
+	JumpTimelineHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("JumpTimelineHandler status = %d, expected 200", rr.Code)
+	}
+	res = nil
+	json.Unmarshal(rr.Body.Bytes(), &res)
+	if res["era_id"] != "decolonisation" {
+		t.Errorf("Expected era_id decolonisation, got %v", res["era_id"])
+	}
+
+	// 3. POST /api/timeline/scale
+	scalePayload, _ := json.Marshal(map[string]interface{}{"scale": "5s"})
+	req = httptest.NewRequest(http.MethodPost, "/api/timeline/scale", bytes.NewReader(scalePayload))
+	rr = httptest.NewRecorder()
+	SetTimelineScaleHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SetTimelineScaleHandler status = %d, expected 200", rr.Code)
+	}
+	res = nil
+	json.Unmarshal(rr.Body.Bytes(), &res)
+	if res["chrono_scale"] != "5s" {
+		t.Errorf("Expected chrono_scale 5s, got %v", res["chrono_scale"])
+	}
+
+	// 4. POST /api/timeline/pause
+	pausePayload, _ := json.Marshal(map[string]interface{}{"paused": true})
+	req = httptest.NewRequest(http.MethodPost, "/api/timeline/pause", bytes.NewReader(pausePayload))
+	rr = httptest.NewRecorder()
+	SetTimelinePauseHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SetTimelinePauseHandler status = %d, expected 200", rr.Code)
+	}
+	res = nil
+	json.Unmarshal(rr.Body.Bytes(), &res)
+	if res["is_paused"] != true {
+		t.Errorf("Expected is_paused true, got %v", res["is_paused"])
 	}
 }
 

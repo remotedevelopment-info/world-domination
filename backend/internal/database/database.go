@@ -488,11 +488,17 @@ func GetNextGameDate() (time.Time, error) {
 }
 
 func SaveGameState(gameDate time.Time, data string) error {
+	if DB == nil {
+		return nil
+	}
 	_, err := DB.Exec("INSERT INTO game_states (game_date, data) VALUES ($1, $2)", gameDate, data)
 	return err
 }
 
 func GetLatestGameState() (string, int64, error) {
+	if DB == nil {
+		return "", 0, errors.New("database not connected")
+	}
 	var data string
 	var tick int64
 	err := DB.QueryRow("SELECT data, tick FROM game_states ORDER BY id DESC LIMIT 1").Scan(&data, &tick)
@@ -538,6 +544,9 @@ func CreateUser(username, password, email, baseColor string) (int64, error) {
 }
 
 func GetCountries(era string) ([]models.Country, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	if era == "" || era == "discovery" || era == "1500" {
 		era = "medieval"
 	}
@@ -978,6 +987,9 @@ type ActivePlayerRow struct {
 
 // GetActivePlayers returns every player with an active kingdom.
 func GetActivePlayers() ([]ActivePlayerRow, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	rows, err := DB.Query(
 		`SELECT pc.user_id, u.username, pc.country_id, pc.last_active
 		 FROM player_countries pc
@@ -1014,6 +1026,9 @@ type ActionRow struct {
 
 // GetRecentActions returns the most recent actions, newest first.
 func GetRecentActions(limit int) ([]ActionRow, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	rows, err := DB.Query(
 		`SELECT user_id, country_id, action_type, description,
 		       target_country_id, direction, speed, movement_type

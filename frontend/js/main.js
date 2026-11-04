@@ -48,9 +48,12 @@ import {
   applyStartYearInput,
   resetToDefaultStartYear,
   jumpToYear,
+  setTimelinePause,
   stepYearOffset,
   resetYearOffset,
   getCurrentGameYear,
+  syncTimelineFromServer,
+  initServerTimelineSync,
 } from "./ui/clock.js";
 import {
   showAction,
@@ -679,6 +682,9 @@ window.setStartYear = setStartYear;
 window.applyStartYearInput = applyStartYearInput;
 window.resetToDefaultStartYear = resetToDefaultStartYear;
 window.jumpToYear = jumpToYear;
+window.setTimelinePause = setTimelinePause;
+window.syncTimelineFromServer = syncTimelineFromServer;
+window.initServerTimelineSync = initServerTimelineSync;
 window.stepYearOffset = stepYearOffset;
 window.resetYearOffset = resetYearOffset;
 window.getCurrentGameYear = getCurrentGameYear;
@@ -693,6 +699,7 @@ function initApp() {
 
   window.addEventListener("resize", resizeCanvas);
   tickClock();
+  initServerTimelineSync();
 
   if (state.token && state.currentUser) {
     showGameScreen();

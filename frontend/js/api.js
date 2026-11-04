@@ -116,3 +116,28 @@ export async function apiSetEconomySettings(economyRate, investment, socialCosts
     }),
   });
 }
+
+export async function apiGetTimeline() {
+  return apiFetch("/timeline");
+}
+
+export async function apiJumpTimeline(year) {
+  return apiFetch("/timeline/jump", {
+    method: "POST",
+    body: JSON.stringify({ year: parseFloat(year) }),
+  });
+}
+
+export async function apiSetChronoScale(scale) {
+  return apiFetch("/timeline/scale", {
+    method: "POST",
+    body: JSON.stringify({ scale }),
+  });
+}
+
+export async function apiSetTimelinePause(paused) {
+  return apiFetch("/timeline/pause", {
+    method: "POST",
+    body: JSON.stringify({ paused: Boolean(paused) }),
+  });
+}

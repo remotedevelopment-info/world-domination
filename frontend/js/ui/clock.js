@@ -2,6 +2,12 @@
 
 import { TICK_INTERVAL_S } from "../config.js";
 import { state } from "../state.js";
+import {
+  apiGetTimeline,
+  apiJumpTimeline,
+  apiSetChronoScale,
+  apiSetTimelinePause,
+} from "../api.js";
 
 export const CHRONO_SCALES = {
   "1s": { id: "1s", seconds: 1, label: "1s = 1 yr", name: "1 Second = 1 Year (Warp Speed)" },
@@ -34,6 +40,12 @@ let clockTimer = null;
 let persistCounter = 0;
 let lastSyncedEraId = null;
 let eraChangeCallback = null;
+
+// Authoritative server timeline state
+let serverSimYear = BASE_YEAR;
+let serverReceivedWallTime = null;
+let serverIsPaused = false;
+let hasReceivedServerTimeline = false;
 
 export function onEraChange(callback) {
   eraChangeCallback = callback;
@@ -85,30 +97,38 @@ export function stopClock() {
 
 /**
  * Computes current game year continuously and monotonically.
- * Uses positive delta-time integration so it NEVER resets on WebSocket packets or server ticks.
+ * If authoritative server timeline has been received, extrapolates from serverSimYear
+ * using the real elapsed wall-clock time so all clients stay synchronized in lockstep.
  */
 export function computeGameTime() {
   const scale = CHRONO_SCALES[currentScaleKey] || CHRONO_SCALES["1d"];
   const now = Date.now();
 
-  if (lastTickWallTime === null) {
-    lastTickWallTime = now;
-  }
-  const deltaMs = Math.max(0, now - lastTickWallTime);
-  lastTickWallTime = now;
-
-  // Monotonically accumulate elapsed game years
-  if (deltaMs > 0 && scale.seconds > 0) {
-    accumulatedYears += (deltaMs / 1000) / scale.seconds;
-    // Persist to localStorage every 10 ticks
-    persistCounter++;
-    if (persistCounter >= 10 && typeof localStorage !== "undefined") {
-      persistCounter = 0;
-      localStorage.setItem("world_domination_accum_years", String(accumulatedYears));
+  let currentYearFrac;
+  if (hasReceivedServerTimeline && serverReceivedWallTime !== null) {
+    const elapsedSec = serverIsPaused ? 0 : Math.max(0, (now - serverReceivedWallTime) / 1000);
+    const progression = scale.seconds > 0 ? (elapsedSec / scale.seconds) : 0;
+    currentYearFrac = serverSimYear + manualYearOffset + progression;
+  } else {
+    if (lastTickWallTime === null) {
+      lastTickWallTime = now;
     }
+    const deltaMs = Math.max(0, now - lastTickWallTime);
+    lastTickWallTime = now;
+
+    // Monotonically accumulate elapsed game years
+    if (deltaMs > 0 && scale.seconds > 0) {
+      accumulatedYears += (deltaMs / 1000) / scale.seconds;
+      // Persist to localStorage every 10 ticks
+      persistCounter++;
+      if (persistCounter >= 10 && typeof localStorage !== "undefined") {
+        persistCounter = 0;
+        localStorage.setItem("world_domination_accum_years", String(accumulatedYears));
+      }
+    }
+    currentYearFrac = startYear + manualYearOffset + accumulatedYears;
   }
 
-  const currentYearFrac = startYear + manualYearOffset + accumulatedYears;
   const yearInt = Math.floor(currentYearFrac);
   const yearFrac = Math.max(0, Math.min(1, currentYearFrac - yearInt));
 
@@ -328,7 +348,75 @@ function syncRadioCardUI() {
 }
 
 // -------------------------------------------------------------
-// DEVELOPMENT CONTROL ACTIONS
+// AUTHORITATIVE SERVER TIMELINE SYNCHRONIZATION
+// -------------------------------------------------------------
+
+/**
+ * Synchronizes client chronometer and era with authoritative server timeline.
+ * Called automatically on WebSocket messages, after timeline mutations, and on initial page load.
+ */
+export function syncTimelineFromServer(data) {
+  if (!data) return;
+
+  const rawYear =
+    typeof data.sim_year === "number"
+      ? data.sim_year
+      : typeof data.year === "number"
+      ? data.year
+      : null;
+
+  if (rawYear === null || isNaN(rawYear)) return;
+
+  const now = Date.now();
+  serverSimYear = rawYear;
+  serverReceivedWallTime = now;
+  hasReceivedServerTimeline = true;
+
+  if (typeof data.is_paused === "boolean") {
+    serverIsPaused = data.is_paused;
+  }
+
+  // Synchronize chrono scale if provided
+  if (data.chrono_scale && CHRONO_SCALES[data.chrono_scale]) {
+    if (currentScaleKey !== data.chrono_scale) {
+      currentScaleKey = data.chrono_scale;
+      syncRadioCardUI();
+      if (clockTimer) {
+        clearInterval(clockTimer);
+        clockTimer = setInterval(tickClock, getTimerInterval());
+      }
+    }
+  }
+
+  // Update cached baseline in localStorage for offline resilience
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("world_domination_start_year", String(Math.floor(serverSimYear)));
+    if (data.chrono_scale) {
+      localStorage.setItem("world_domination_chrono_scale", data.chrono_scale);
+    }
+  }
+
+  tickClock();
+}
+
+/**
+ * Initial fetch of authoritative timeline over REST so the clock is accurate immediately
+ * on page load before the first WebSocket packet arrives.
+ */
+export async function initServerTimelineSync() {
+  try {
+    const res = await apiGetTimeline();
+    if (res && res.ok) {
+      const data = await res.json();
+      syncTimelineFromServer(data);
+    }
+  } catch (err) {
+    console.warn("Initial timeline sync deferred to WebSocket:", err);
+  }
+}
+
+// -------------------------------------------------------------
+// DEVELOPMENT & PLAYER TIMELINE CONTROL ACTIONS
 // -------------------------------------------------------------
 
 export function toggleDevChronoControl() {
@@ -341,7 +429,7 @@ export function toggleDevChronoControl() {
   if (devDrawerOpen) {
     syncRadioCardUI();
     const startInput = document.getElementById("dev-start-year-input");
-    if (startInput) startInput.value = startYear;
+    if (startInput) startInput.value = Math.floor(serverSimYear);
     tickClock();
   }
 }
@@ -354,23 +442,17 @@ export function setChronoScale(scaleKey) {
   }
   syncRadioCardUI();
   startClock(); // Adapts timer interval dynamically (100ms for 1s, 200ms for 5s, etc.)
+
+  // Dispatch authoritative update to server (broadcasts to all other players)
+  apiSetChronoScale(scaleKey).catch((err) => {
+    console.warn("Failed to synchronize chrono scale with server:", err);
+  });
 }
 
 export function setStartYear(year) {
   const parsed = parseInt(year, 10);
   if (isNaN(parsed)) return;
-  startYear = parsed;
-  accumulatedYears = 0;
-  manualYearOffset = 0;
-  lastTickWallTime = Date.now();
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("world_domination_start_year", String(startYear));
-    localStorage.removeItem("world_domination_accum_years");
-    localStorage.removeItem("world_domination_year_offset");
-  }
-  const input = document.getElementById("dev-start-year-input");
-  if (input) input.value = startYear;
-  tickClock();
+  jumpToYear(parsed);
 }
 
 export function applyStartYearInput() {
@@ -380,11 +462,36 @@ export function applyStartYearInput() {
 }
 
 export function resetToDefaultStartYear() {
-  setStartYear(BASE_YEAR);
+  jumpToYear(BASE_YEAR);
 }
 
 export function jumpToYear(targetYear) {
-  setStartYear(targetYear);
+  const parsed = parseFloat(targetYear);
+  if (isNaN(parsed)) return;
+
+  // Optimistic local update for instantaneous responsiveness
+  serverSimYear = parsed;
+  startYear = Math.floor(parsed);
+  accumulatedYears = 0;
+  manualYearOffset = 0;
+  serverReceivedWallTime = Date.now();
+  hasReceivedServerTimeline = true;
+  tickClock();
+
+  // Dispatch authoritative update to server (broadcasts to all other players)
+  apiJumpTimeline(parsed).catch((err) => {
+    console.warn("Failed to synchronize timeline jump with server:", err);
+  });
+}
+
+export function setTimelinePause(paused) {
+  serverIsPaused = Boolean(paused);
+  serverReceivedWallTime = Date.now();
+  tickClock();
+
+  apiSetTimelinePause(paused).catch((err) => {
+    console.warn("Failed to synchronize timeline pause with server:", err);
+  });
 }
 
 export function stepYearOffset(delta) {
