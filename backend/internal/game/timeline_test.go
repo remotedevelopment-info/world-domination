@@ -74,3 +74,4 @@ func TestTimelineMutations(t *testing.T) {
 		t.Fatalf("Expected IsPaused false, got true")
 	}
 }
+

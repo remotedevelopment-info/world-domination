@@ -54,3 +54,4 @@ func NormalizeChronoScale(scale string) string {
 	}
 	return "1d"
 }
+

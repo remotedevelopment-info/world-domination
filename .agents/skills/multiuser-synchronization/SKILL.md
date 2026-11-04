@@ -109,3 +109,4 @@ When a user with permissions clicks an era plaque (e.g. `jumpToYear(1920)`) or c
 2. **Inactive Player Reclamation**:
    - The server engine checks for players who have been inactive for $> 7$ days.
    - Abandoned kingdoms have their ownership reset to `null` and are returned to unclaimed status across all players' screens.
+
