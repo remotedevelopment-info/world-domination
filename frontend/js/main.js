@@ -46,6 +46,7 @@ import {
   tickClock,
   onEraChange,
   isTimelineAdmin,
+  isPureOverseer,
   toggleDevChronoControl,
   setChronoScale,
   setStartYear,
@@ -244,23 +245,28 @@ export async function checkMyKingdom() {
     return false;
   }
 
-  // The admin user is NOT a player: show "👑 Overseer", hide country claiming, show admin console button
-  if (isTimelineAdmin()) {
+  const isAdmin = isTimelineAdmin();
+  if (isAdmin) {
+    document.getElementById("admin-console-btn")?.classList.remove("hidden");
+    document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
+  } else {
+    document.getElementById("admin-console-btn")?.classList.add("hidden");
+    document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
+    document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
+  }
+
+  // Pure Overseer (admin@sfsw.net / admin): neutral game monitor without property
+  if (isPureOverseer()) {
+    state.myKingdom = null;
     const playerKingdom = document.getElementById("player-kingdom");
     if (playerKingdom) {
       playerKingdom.textContent = "👑 Overseer";
       playerKingdom.className = "admin-badge";
     }
-    document.getElementById("admin-console-btn")?.classList.remove("hidden");
-    document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
     document.getElementById("country-selection")?.classList.add("hidden");
     document.getElementById("my-kingdom")?.classList.add("hidden");
-    state.myKingdom = null;
+    closeModal();
     return true;
-  } else {
-    document.getElementById("admin-console-btn")?.classList.add("hidden");
-    document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
-    document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
   }
 
   try {
@@ -274,26 +280,19 @@ export async function checkMyKingdom() {
     const data = await res.json();
     if (data.email && state.currentUser) {
       state.currentUser.email = data.email;
-      if (isTimelineAdmin()) {
-        const playerKingdom = document.getElementById("player-kingdom");
-        if (playerKingdom) {
-          playerKingdom.textContent = "👑 Overseer";
-          playerKingdom.className = "admin-badge";
-        }
-        document.getElementById("admin-console-btn")?.classList.remove("hidden");
-        document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
-        document.getElementById("country-selection")?.classList.add("hidden");
-        document.getElementById("my-kingdom")?.classList.add("hidden");
-        state.myKingdom = null;
-        return true;
-      }
     }
+
     if (data.has_country) {
       state.myKingdom = data;
       const playerKingdom = document.getElementById("player-kingdom");
       if (playerKingdom) {
-        playerKingdom.textContent = data.country_name;
-        playerKingdom.className = "kingdom-badge";
+        if (isAdmin) {
+          playerKingdom.innerHTML = `${escapeHTML(data.country_name)} <span class="admin-crown-tag" title="Imperial Admin Authority">👑</span>`;
+          playerKingdom.className = "kingdom-badge player-admin-badge";
+        } else {
+          playerKingdom.textContent = data.country_name;
+          playerKingdom.className = "kingdom-badge";
+        }
       }
 
       document.getElementById("country-selection")?.classList.add("hidden");
@@ -310,8 +309,13 @@ export async function checkMyKingdom() {
       state.myKingdom = null;
       const playerKingdom = document.getElementById("player-kingdom");
       if (playerKingdom) {
-        playerKingdom.textContent = "No Kingdom";
-        playerKingdom.className = "kingdom-badge";
+        if (isAdmin) {
+          playerKingdom.textContent = "No Kingdom 👑";
+          playerKingdom.className = "kingdom-badge player-admin-badge";
+        } else {
+          playerKingdom.textContent = "No Kingdom";
+          playerKingdom.className = "kingdom-badge";
+        }
       }
 
       document.getElementById("country-selection")?.classList.remove("hidden");
@@ -901,8 +905,11 @@ export async function refreshAdminDashboard() {
         data.users.forEach((u) => {
           const tr = document.createElement("tr");
           const isUserAdmin = isTimelineAdmin(u);
+          const isOverseer = isPureOverseer(u);
           const roleBadgeClass = isUserAdmin ? "role-admin" : "role-player";
-          const roleLabel = isUserAdmin ? "👑 Admin / Overseer" : "Player";
+          const roleLabel = isOverseer
+            ? "👑 Pure Overseer"
+            : (isUserAdmin ? "👑 Player-Admin" : "Player");
 
           const hasCountry = u.country_id && u.country_name;
           const realmDisplay = hasCountry
@@ -910,7 +917,7 @@ export async function refreshAdminDashboard() {
                  <span class="admin-realm-swatch" style="background-color: ${u.country_color || '#d4af37'}"></span>
                  <span>${escapeHTML(u.country_name)} (${escapeHTML(u.country_code || '---')})</span>
                </span>`
-            : (isUserAdmin ? `<span class="admin-spectator-tag">👑 Non-Player Overseer</span>` : `<span class="admin-spectator-tag">Spectator / Unclaimed</span>`);
+            : (isOverseer ? `<span class="admin-spectator-tag">👑 Overseer (Monitor)</span>` : `<span class="admin-spectator-tag">Spectator / Unclaimed</span>`);
 
           const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
           const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";

@@ -3168,6 +3168,21 @@ body {
     box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
 }
 
+.kingdom-badge.player-admin-badge {
+    border-color: #ffd700;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #2c1a0e 0%, #150d07 100%);
+    color: #fce79a;
+}
+
+.admin-crown-tag {
+    font-size: 0.9em;
+    vertical-align: middle;
+}
+
 .progress-modal-dialog.admin-dialog {
     max-width: 1040px;
     width: 95vw;

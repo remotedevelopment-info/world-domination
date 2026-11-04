@@ -99,9 +99,9 @@ In a multi-user environment, arbitrary players cannot mutate the server timeline
    - Requests from unauthenticated users return `401 Unauthorized`; non-admin users receive `403 Forbidden`.
 2. **Silent Failure for Non-Admin Timeline Interaction**:
    - In the frontend chronometer UI, attempts by regular players to click historical era plaques or modify the chronometer scale fail silently (no email-quoting toasts or warning dialogs are shown to users).
-3. **Admin Is Not a Player**:
-   - The admin is an Overseer and game master, not an in-game sovereign player.
-   - The admin interface displays "👑 Overseer" instead of "No Kingdom", suppresses the realm-claiming modal dialog, and exposes the "👑 Admin Console" button.
+3. **Overseer vs. Player-Admin Separation**:
+   - **Pure Overseer (`admin@sfsw.net` / `admin`)**: Neutral game monitor and observer with no claimed kingdom. Header badge displays `👑 Overseer`, territory claiming is suppressed, and no player prompts are shown.
+   - **Player-Admin (`nalex@sfsw.net` / `nalex`)**: Active participant ruling a sovereign empire (e.g. *Kingdom of England*) with complete access to gameplay, economy, troops, and diplomacy, while retaining developer timeline controls (`👑 Admin Console` and Chronometer Regulator). Header badge displays `<Kingdom Name> 👑`.
 4. **Admin Dashboard Telemetry (`/api/admin/dashboard`)**:
    - Real-time endpoint returning complete overseer telemetry:
      - Authoritative timeline state: current simulation year, era ID and name, chrono scale, ticker running/paused status, and server tick index.

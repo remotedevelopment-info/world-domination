@@ -53,6 +53,13 @@ export function isTimelineAdmin(user = state.currentUser) {
   return currentEmail === adminTarget || currentUsername === adminTarget;
 }
 
+export function isPureOverseer(user = state.currentUser) {
+  if (!user) return false;
+  const currentEmail = user.email?.toLowerCase().trim();
+  const currentUsername = user.username?.toLowerCase().trim();
+  return currentEmail === "admin@sfsw.net" || currentUsername === "admin";
+}
+
 let currentScaleKey = "1d";
 let devDrawerOpen = false;
 let clockTimer = null;
