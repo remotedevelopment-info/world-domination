@@ -56,6 +56,7 @@ type PlayerCountry struct {
 	UserID     int64     `json:"user_id"`
 	CountryID  int64     `json:"country_id"`
 	Name       string    `json:"name"`
+	Code       string    `json:"code"`
 	AssignedAt time.Time `json:"assigned_at"`
 	IsActive   bool      `json:"is_active"`
 	LastActive time.Time `json:"last_active"`

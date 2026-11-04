@@ -246,6 +246,8 @@ func GetPlayerCountryHandler(w http.ResponseWriter, r *http.Request) {
 		"has_country":  true,
 		"country_id":   country.CountryID,
 		"country_name": country.Name,
+		"country_code": country.Code,
+		"owner_id":     user.UserID,
 		"last_active":  country.LastActive,
 		"email":        user.Email,
 	}

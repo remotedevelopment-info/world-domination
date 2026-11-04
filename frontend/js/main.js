@@ -38,6 +38,7 @@ import {
   panCamera,
   zoomCamera,
   resetCamera,
+  isCountryOwnedByCurrentUser,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
 import {
@@ -630,8 +631,8 @@ function setupCanvasInteractions(canvas) {
           "info"
         );
       }
-      // If clicking your own country, open the command center view
-      if (state.myKingdom && kingdom.id === state.myKingdom.country_id) {
+      // If clicking any country you own, open the command center view
+      if (isCountryOwnedByCurrentUser(kingdom)) {
         openKingdomCommandCenter(kingdom);
         return;
       }
@@ -645,7 +646,10 @@ function setupCanvasInteractions(canvas) {
       if (popEl) popEl.textContent = (kingdom.population || 0).toLocaleString();
       if (resEl) resEl.textContent = (kingdom.resources || 0).toLocaleString();
 
-      const ownerLabel = kingdom.owner_name
+      const isOwnedByMe = isCountryOwnedByCurrentUser(kingdom);
+      const ownerLabel = isOwnedByMe
+        ? "Owner: " + (state.currentUser?.username || "You") + " (Your Dominion)"
+        : kingdom.owner_name
         ? "Owner: " + kingdom.owner_name
         : kingdom.owner_id
         ? "Owned"

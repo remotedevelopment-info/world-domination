@@ -679,9 +679,9 @@ func ClaimCountry(userID, countryID int64) error {
 
 func GetPlayerCountry(userID int64) (*models.PlayerCountry, error) {
 	var pc models.PlayerCountry
-	err := DB.QueryRow(`SELECT pc.id, pc.user_id, pc.country_id, c.name, pc.assigned_at, pc.is_active, pc.last_active FROM player_countries pc
+	err := DB.QueryRow(`SELECT pc.id, pc.user_id, pc.country_id, c.name, c.code, pc.assigned_at, pc.is_active, pc.last_active FROM player_countries pc
 		JOIN countries c ON pc.country_id = c.id
-		WHERE pc.user_id = $1 AND pc.is_active = true`, userID).Scan(&pc.ID, &pc.UserID, &pc.CountryID, &pc.Name, &pc.AssignedAt, &pc.IsActive, &pc.LastActive)
+		WHERE pc.user_id = $1 AND pc.is_active = true`, userID).Scan(&pc.ID, &pc.UserID, &pc.CountryID, &pc.Name, &pc.Code, &pc.AssignedAt, &pc.IsActive, &pc.LastActive)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

@@ -192,11 +192,29 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
   });
 
   // Preserve state.myKingdom ownership if client has an active claim
-  if (state.myKingdom && byCode.has(state.myKingdom.code)) {
-    const mk = byCode.get(state.myKingdom.code);
-    if (!mk.owner_id && state.myKingdom.owner_id) {
-      mk.owner_id = state.myKingdom.owner_id;
-      mk.owner_name = state.myKingdom.owner_name;
+  if (state.myKingdom) {
+    const myCode = state.myKingdom.code || state.myKingdom.country_code;
+    const myId = state.myKingdom.country_id || state.myKingdom.id;
+    let mk = myCode ? byCode.get(myCode) : null;
+    if (!mk && myId) {
+      for (const item of byCode.values()) {
+        if (item.id === myId) {
+          mk = item;
+          break;
+        }
+      }
+    }
+    if (mk) {
+      if (!mk.owner_id && (state.myKingdom.owner_id || state.currentUser?.id)) {
+        mk.owner_id = state.myKingdom.owner_id || state.currentUser?.id;
+      }
+      if (!mk.owner_name && (state.myKingdom.owner_name || state.currentUser?.username)) {
+        mk.owner_name = state.myKingdom.owner_name || state.currentUser?.username;
+      }
+      if (!state.myKingdom.code && mk.code) {
+        state.myKingdom.code = mk.code;
+        state.myKingdom.country_code = mk.code;
+      }
     }
   }
 

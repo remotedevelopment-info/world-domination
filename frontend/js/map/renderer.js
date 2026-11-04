@@ -4,6 +4,7 @@
 import { state } from "../state.js";
 import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
 import { getCentroid, pointInPolygon, getPolygonBounds } from "./geometry.js";
+import { isPureOverseer } from "../ui/clock.js";
 
 // Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
 const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
@@ -707,6 +708,48 @@ function drawCartographicBorder(ctx, width, height) {
 // -------------------------------------------------------------
 // MAIN MAP RENDER LOOP
 // -------------------------------------------------------------
+// CARTOGRAPHIC SOVEREIGN REALM OWNERSHIP
+// -------------------------------------------------------------
+
+/**
+ * Determines whether a kingdom is owned by the currently logged-in user.
+ * Supports single realm ownership as well as a collection of territories.
+ */
+export function isCountryOwnedByCurrentUser(kingdom) {
+  if (!kingdom) return false;
+
+  // Pure Overseer (admin@sfsw.net / admin) never owns property
+  if (typeof isPureOverseer === "function" && isPureOverseer()) {
+    return false;
+  }
+
+  const currentUserId = state.currentUser?.id != null ? Number(state.currentUser.id) : null;
+  const currentUsername = state.currentUser?.username ? state.currentUser.username.trim().toLowerCase() : null;
+
+  // 1. Direct match by owner_id (numeric comparison)
+  if (currentUserId !== null && kingdom.owner_id != null && Number(kingdom.owner_id) === currentUserId) {
+    return true;
+  }
+
+  // 2. Direct match by owner_name (case-insensitive username)
+  if (currentUsername && kingdom.owner_name && kingdom.owner_name.trim().toLowerCase() === currentUsername) {
+    return true;
+  }
+
+  // 3. Active session claim check via state.myKingdom (both ID and code)
+  if (state.myKingdom) {
+    const myId = state.myKingdom.country_id ?? state.myKingdom.id;
+    const myCode = state.myKingdom.country_code ?? state.myKingdom.code;
+    if (myId != null && (kingdom.id === myId || kingdom.country_id === myId)) {
+      return true;
+    }
+    if (myCode && kingdom.code === myCode) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export function renderMap(immediate = false) {
   if (!ctx || !canvas) return;
@@ -819,10 +862,7 @@ export function renderMap(immediate = false) {
     const isIsland = Boolean(kingdom.isIsland || kingdom.is_island);
     const isPolynesian = POLYNESIAN_ISLES?.has(kingdom.code);
     const isPolynesiaActive = Boolean(state?.metaThemes?.polynesiaIsles);
-    const isMyKingdom =
-      state.myKingdom &&
-      (kingdom.id === state.myKingdom.country_id ||
-        kingdom.code === state.myKingdom.country_code);
+    const isMyKingdom = isCountryOwnedByCurrentUser(kingdom);
     const isNewlyEmergedInEra =
       state.currentEraId &&
       state.currentEraId !== "discovery" &&
@@ -861,6 +901,50 @@ export function renderMap(immediate = false) {
     ctx.stroke();
   });
 
+  // 5b-2. Pass 2b: Dedicated Sovereign Gold Outline Pass for all territories owned by the current user
+  // Re-strokes all territories owned by the current user (single realm or collection of countries)
+  // on top of all other frontier borders with a glorious radiant gold border, ensuring no adjacent
+  // country border ever clips or dims the player's imperial gold frontiers.
+  state.kingdoms.forEach((kingdom) => {
+    if (!isCountryOwnedByCurrentUser(kingdom)) return;
+    const poly = kingdomPolygons[kingdom.code];
+    if (!poly || poly.length < 3) return;
+
+    ctx.save();
+    ctx.beginPath();
+    const [startX, startY] = project(poly[0][0], poly[0][1]);
+    ctx.moveTo(startX, startY);
+
+    for (let i = 1; i < poly.length; i++) {
+      const [x, y] = project(poly[i][0], poly[i][1]);
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
+    // Layer 1: Ambient golden radiance / glow
+    ctx.shadowColor = "#ffd700";
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = "rgba(255, 215, 0, 0.85)";
+    ctx.lineWidth = 4.2;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    // Layer 2: Core high-contrast imperial gold boundary
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ffd700";
+    ctx.lineWidth = 3.0;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    // Layer 3: Crisp inner gilded specular highlight
+    ctx.strokeStyle = "#fffbe0";
+    ctx.lineWidth = 1.2;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+
+    ctx.restore();
+  });
+
   // 5c. Pass 3: Kingdom Code Cartographic Plaques (Toggleable via ribbon control switch)
   if (state.showMapLabels !== false) {
     state.kingdoms.forEach((kingdom) => {
@@ -869,10 +953,7 @@ export function renderMap(immediate = false) {
 
       const isPolynesian = POLYNESIAN_ISLES?.has(kingdom.code);
       const isPolynesiaActive = Boolean(state?.metaThemes?.polynesiaIsles);
-      const isMyKingdom =
-        state.myKingdom &&
-        (kingdom.id === state.myKingdom.country_id ||
-          kingdom.code === state.myKingdom.country_code);
+      const isMyKingdom = isCountryOwnedByCurrentUser(kingdom);
       const isNewlyEmergedInEra =
         state.currentEraId &&
         state.currentEraId !== "discovery" &&
@@ -897,7 +978,9 @@ export function renderMap(immediate = false) {
             : kingdom.code;
       const textWidth = ctx.measureText(displayLabel).width;
 
-      ctx.fillStyle = isPolynesian && !isPolynesiaActive
+      ctx.fillStyle = isMyKingdom
+        ? "rgba(42, 32, 10, 0.92)"
+        : isPolynesian && !isPolynesiaActive
         ? "rgba(15, 23, 30, 0.55)"
         : isPolynesian && isPolynesiaActive
           ? "rgba(10, 35, 45, 0.9)"
@@ -921,7 +1004,7 @@ export function renderMap(immediate = false) {
           : isNewlyEmergedInEra
             ? "#f5d76e"
             : "rgba(212, 175, 55, 0.4)";
-      ctx.lineWidth = (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
+      ctx.lineWidth = isMyKingdom ? 1.8 : (isNewlyEmergedInEra || (isPolynesian && isPolynesiaActive)) ? 1.2 : 0.8;
       ctx.stroke();
 
       ctx.textAlign = "center";
@@ -939,7 +1022,12 @@ export function renderMap(immediate = false) {
 
       if (kingdom.owner_id || isMyKingdom) {
         ctx.font = `${Math.max(8, fontSize - 2)}px sans-serif`;
+        if (isMyKingdom) {
+          ctx.shadowColor = "#ffd700";
+          ctx.shadowBlur = 6;
+        }
         ctx.fillText("👑", pxX, pxY - badgeHeight / 2 - 6);
+        ctx.shadowBlur = 0;
       }
       ctx.restore();
     });
