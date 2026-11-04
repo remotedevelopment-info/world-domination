@@ -874,6 +874,7 @@ export async function performActionDirect(actionType, description, extraParams =
   }
 
   const payload = {
+    action_type: actionType,
     type: actionType,
     description: description,
     ...extraParams,

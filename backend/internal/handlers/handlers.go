@@ -361,12 +361,13 @@ func GetDiplomacyHandler(w http.ResponseWriter, r *http.Request) {
 
 // ActionRequest carries one real-time action.
 type ActionRequest struct {
-	ActionType    string `json:"action_type"`    // diplomacy, economy, military
-	Description   string `json:"description"`    // human-readable action label
+	ActionType      string `json:"action_type"`    // diplomacy, economy, military
+	Type            string `json:"type,omitempty"` // alias for action_type
+	Description     string `json:"description"`    // human-readable action label
 	TargetCountryID *int64 `json:"target_country_id,omitempty"` // required for target-state actions
-	Direction     string `json:"direction,omitempty"`   // N, S, E, W, or 0-360 (interior movement)
-	Speed         string `json:"speed,omitempty"`       // Slow, Fast (interior movement)
-	MovementType  string `json:"movement_type,omitempty"` // interior, target
+	Direction       string `json:"direction,omitempty"`   // N, S, E, W, or 0-360 (interior movement)
+	Speed           string `json:"speed,omitempty"`       // Slow, Fast (interior movement)
+	MovementType    string `json:"movement_type,omitempty"` // interior, target
 }
 
 // ActionHandler handles diplomacy / economy / military actions. Each action
@@ -390,16 +391,21 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actionType := strings.ToLower(req.ActionType)
+	actionType := strings.ToLower(strings.TrimSpace(req.ActionType))
+	if actionType == "" {
+		actionType = strings.ToLower(strings.TrimSpace(req.Type))
+	}
 	engine := game.GetEngine()
 
 	switch actionType {
-	case "economy":
+	case "economy", "economic":
+		actionType = "economy"
 		if err := handleEconomy(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-	case "diplomacy":
+	case "diplomacy", "diplomatic":
+		actionType = "diplomacy"
 		if err := handleDiplomacy(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

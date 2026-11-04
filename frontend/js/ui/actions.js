@@ -187,7 +187,7 @@ export async function performAction(type, description) {
   });
 
   try {
-    const payload = { action_type: type, description };
+    const payload = { action_type: type, type: type, description };
     const meta = ACTION_META[description] || {};
 
     if (meta.targetRequired) {
