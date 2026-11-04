@@ -336,7 +336,7 @@ func SeedInitialData() error {
 		{"Commonwealth of Australia", "AUS", "#117864", 5400000, 850, true, "{\"borders\": [\"NZL\", \"PNG\", \"IDN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
 		{"Dominion of New Zealand", "NZL", "#1ABC9C", 1250000, 580, true, "{\"borders\": [\"AUS\", \"FJI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
 		{"Territory of Papua", "PNG", "#7D6608", 1100000, 420, true, "{\"borders\": [\"IDN\", \"AUS\", \"SLB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"AUS\"}"},
-		{"Irish Free State", "IRL", "#2ECC71", 3000000, 480, true, "{\"borders\": [\"ENG\", \"SCO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+		{"Kingdom of Ireland", "IRL", "#2ECC71", 3000000, 480, true, "{\"borders\": [\"ENG\", \"SCO\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 		{"Republic of Finland", "FIN", "#5DADE2", 3150000, 520, false, "{\"borders\": [\"SWE\", \"NOR\", \"RUS\", \"BLT\", \"EST\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
 		{"Republic of Hungary", "HUN", "#1E8449", 7900000, 560, false, "{\"borders\": [\"AUT\", \"ROM\", \"SRB\", \"CRO\", \"CZE\", \"UKR\", \"SVK\"], \"birth_year\": 1918, \"unlock_era\": \"decolonisation\", \"parent\": \"AUH\"}"},
 		{"Republic of Poland", "POL_REP", "#8E44AD", 27000000, 780, false, "{\"borders\": [\"PRU\", \"CZE\", \"ROM\", \"RUS\", \"BLR\", \"UKR\", \"LTU\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},

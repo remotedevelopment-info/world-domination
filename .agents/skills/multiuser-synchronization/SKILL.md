@@ -56,7 +56,7 @@ Historical eras are synchronized between the backend engine and frontend chronom
 
 | Era ID | Name | Start Year | End Year | Historical Keynotes |
 | :--- | :--- | :--- | :--- | :--- |
-| `discovery` | THE AGE OF DISCOVERY | 1500 | 1749 | Independent Stuart Kingdom of Scotland; Founding Sovereign Realms; Kalmar Union spans Scandinavia & Finland |
+| `discovery` | THE AGE OF DISCOVERY | 1500 | 1749 | Independent Scotland & Ireland sovereign realms; Founding Realms; Kalmar Union spans Scandinavia & Finland |
 | `revolt` | THE AGE OF REVOLT | 1750 | 1859 | Prussia, Sweden, Denmark, Dutch Republic emerge |
 | `independence` | THE AGE OF INDEPENDENCE | 1860 | 1919 | Unified Italy, Austria-Hungary, Romania, Serbia, USA |
 | `decolonisation` | AGE OF DECOLONISATION | 1920 | 1988 | Unified USSR spanning Eurasia; Post-WWI European republics |

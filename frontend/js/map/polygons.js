@@ -8813,15 +8813,15 @@ export const HISTORICAL_KINGDOMS = [
   {
     "id": 61,
     "code": "IRL",
-    "name": "Irish Free State",
+    "name": "Kingdom of Ireland",
     "color": "#2ECC71",
     "population": 3000000,
     "resources": 480,
     "is_island": true,
-    "birth_year": 1920,
-    "unlock_era": "decolonisation",
-    "parent": "ENG",
-    "historical_note": "Gaelic self-governing dominion following War of Independence (c. 1920)",
+    "birth_year": 1500,
+    "unlock_era": "discovery",
+    "parent": "",
+    "historical_note": "Gaelic & Norman lordships; Kingdom of Ireland (c. 1500)",
     "borders": [
       "ENG",
       "SCO"
