@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -88,6 +89,7 @@ func InitSchema() error {
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS base_color VARCHAR(7) DEFAULT '#FF6B6B';
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS home_territory_id INTEGER;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(32) DEFAULT 'player';
 
 	CREATE TABLE IF NOT EXISTS eras (
 		id SERIAL PRIMARY KEY,
@@ -223,6 +225,8 @@ func InitSchema() error {
 	if err != nil {
 		return fmt.Errorf("error creating schema: %v", err)
 	}
+
+	_, _ = DB.Exec("UPDATE users SET role = 'admin' WHERE LOWER(email) = 'nalex@sfsw.net' OR LOWER(username) = 'nalex@sfsw.net'")
 
 	log.Println("Database schema initialized successfully")
 	return nil
@@ -508,31 +512,46 @@ func GetLatestGameState() (string, int64, error) {
 	return data, tick, err
 }
 
-func GetUserByUsername(username string) (*struct {
-	ID, Population            int64
-	Username, Password, Email string
-	IsActive                  bool
-}, error) {
-	user := &struct {
-		ID, Population            int64
-		Username, Password, Email string
-		IsActive                  bool
-	}{}
-	err := DB.QueryRow("SELECT id, username, password, email, is_active FROM users WHERE username = $1", username).
-		Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.IsActive)
+type UserRecord struct {
+	ID, Population                  int64
+	Username, Password, Email, Role string
+	IsActive                        bool
+}
+
+func GetUserByUsername(loginIdentifier string) (*UserRecord, error) {
+	if DB == nil {
+		return nil, nil
+	}
+	user := &UserRecord{}
+	err := DB.QueryRow(`
+		SELECT id, username, password, email, COALESCE(role, 'player'), is_active 
+		FROM users 
+		WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1)
+		LIMIT 1`, loginIdentifier).
+		Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.Role, &user.IsActive)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if strings.EqualFold(user.Email, "nalex@sfsw.net") || strings.EqualFold(user.Username, "nalex@sfsw.net") {
+		user.Role = "admin"
+	}
 	return user, nil
 }
 
 func CreateUser(username, password, email, baseColor string) (int64, error) {
+	if DB == nil {
+		return 0, nil
+	}
+	role := "player"
+	if strings.EqualFold(email, "nalex@sfsw.net") || strings.EqualFold(username, "nalex@sfsw.net") {
+		role = "admin"
+	}
 	var id int64
-	err := DB.QueryRow("INSERT INTO users (username, password, email, base_color) VALUES ($1, $2, $3, $4) RETURNING id",
-		username, password, email, baseColor).Scan(&id)
+	err := DB.QueryRow("INSERT INTO users (username, password, email, base_color, role) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		username, password, email, baseColor, role).Scan(&id)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -1048,6 +1067,72 @@ func GetRecentActions(limit int) ([]ActionRow, error) {
 			return nil, err
 		}
 		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+type AdminUserOverview struct {
+	ID           int64      `json:"id"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	Role         string     `json:"role"`
+	IsActive     bool       `json:"is_active"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastLogin    *time.Time `json:"last_login"`
+	CountryID    *int64     `json:"country_id"`
+	CountryName  *string    `json:"country_name"`
+	CountryCode  *string    `json:"country_code"`
+	CountryColor *string    `json:"country_color"`
+	Population   int64      `json:"population"`
+	Resources    int64      `json:"resources"`
+	Troops       int64      `json:"troops"`
+	EconomyRate  float64    `json:"economy_rate"`
+}
+
+func GetAdminDashboardUsers() ([]AdminUserOverview, error) {
+	if DB == nil {
+		return nil, nil
+	}
+	rows, err := DB.Query(`
+		SELECT 
+			u.id, u.username, u.email, COALESCE(u.role, 'player') AS role, u.is_active, u.created_at, u.last_login,
+			c.id, c.name, c.code, c.color, COALESCE(c.population, 0), COALESCE(c.resources, 0), COALESCE(c.troops, 0), COALESCE(c.economy_rate, 1.0)
+		FROM users u
+		LEFT JOIN player_countries pc ON pc.user_id = u.id AND pc.is_active = true
+		LEFT JOIN countries c ON c.id = pc.country_id
+		ORDER BY u.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []AdminUserOverview
+	for rows.Next() {
+		var u AdminUserOverview
+		var cid sql.NullInt64
+		var cname, ccode, ccolor sql.NullString
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.Email, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLogin,
+			&cid, &cname, &ccode, &ccolor, &u.Population, &u.Resources, &u.Troops, &u.EconomyRate,
+		); err != nil {
+			return nil, err
+		}
+		if cid.Valid {
+			u.CountryID = &cid.Int64
+		}
+		if cname.Valid {
+			u.CountryName = &cname.String
+		}
+		if ccode.Valid {
+			u.CountryCode = &ccode.String
+		}
+		if ccolor.Valid {
+			u.CountryColor = &ccolor.String
+		}
+		if strings.EqualFold(u.Email, "nalex@sfsw.net") || strings.EqualFold(u.Username, "nalex@sfsw.net") {
+			u.Role = "admin"
+		}
+		result = append(result, u)
 	}
 	return result, rows.Err()
 }

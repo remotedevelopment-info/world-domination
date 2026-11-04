@@ -92,14 +92,25 @@ When the client receives a WebSocket update:
 
 ### 3.2 User-Triggered Timeline Changes & Administrator Permissions
 In a multi-user environment, arbitrary players cannot mutate the server timeline or jump historical eras for other players:
-1. **Nominated Timeline Administrator**:
-   - Only the designated administrator account (`nalex@sfsw.net`) is authorized to jump eras or modify time progression scales on the server.
-   - Server endpoints (`/api/timeline/jump`, `/api/timeline/scale`, `/api/timeline/pause`) require authentication and verify the caller's email against `NominatedTimelineAdminEmail`.
-   - Requests from unauthenticated or non-admin users return `401 Unauthorized` or `403 Forbidden`.
-2. **Authoritative Broadcast**:
+1. **Nominated Timeline Administrator & Role Hierarchy**:
+   - The PostgreSQL `users` table includes a `role VARCHAR(32) DEFAULT 'player'` column.
+   - Users with `role = 'admin'` or designated email `nalex@sfsw.net` are granted imperial overseer authority.
+   - Server endpoints (`/api/timeline/jump`, `/api/timeline/scale`, `/api/timeline/pause`, `/api/admin/dashboard`) require authentication and verify that `user.Role == "admin"` or `user.Email == "nalex@sfsw.net"`.
+   - Requests from unauthenticated users return `401 Unauthorized`; non-admin users receive `403 Forbidden`.
+2. **Silent Failure for Non-Admin Timeline Interaction**:
+   - In the frontend chronometer UI, attempts by regular players to click historical era plaques or modify the chronometer scale fail silently (no email-quoting toasts or warning dialogs are shown to users).
+3. **Admin Is Not a Player**:
+   - The admin is an Overseer and game master, not an in-game sovereign player.
+   - The admin interface displays "👑 Overseer" instead of "No Kingdom", suppresses the realm-claiming modal dialog, and exposes the "👑 Admin Console" button.
+4. **Admin Dashboard Telemetry (`/api/admin/dashboard`)**:
+   - Real-time endpoint returning complete overseer telemetry:
+     - Authoritative timeline state: current simulation year, era ID and name, chrono scale, ticker running/paused status, and server tick index.
+     - Complete user roster: user IDs, usernames, emails, roles, claimed realms, realm code/color, populations, resources/treasury reserves, troop counts, tax/economy rates, and last login timestamps.
+   - Embedded admin controls allow instant era warps (1500, 1750, 1860, 1920, 1989), global chrono speed changes (1s to 4d), and ticker pause/resume toggle with automatic broadcast to all players.
+5. **Authoritative Broadcast**:
    - When the administrator jumps the timeline or updates the chrono scale, the server updates its internal `GameEngine` timeline, persists the snapshot in `game_states`, and immediately broadcasts the updated `GameState` to **all** connected players.
    - All open browser tabs and remote player screens transition simultaneously into the target era in lockstep.
-3. **No Client-Side LocalStorage Override**:
+6. **No Client-Side LocalStorage Override**:
    - Clients must never persist timeline years, scales, or manual offsets to browser `localStorage`.
    - Upon page load, clients immediately fetch `GET /api/timeline` and align their local chronometer to the server before rendering the map, ensuring the server is the sole source of truth across all sessions.
 

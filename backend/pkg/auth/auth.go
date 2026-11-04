@@ -16,6 +16,7 @@ type Token struct {
 	UserID   int64     `json:"user_id"`
 	Username string    `json:"username"`
 	Email    string    `json:"email"`
+	Role     string    `json:"role"`
 	Expiry   time.Time `json:"expiry"`
 }
 
@@ -44,7 +45,7 @@ func GenerateToken() string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-func CreateToken(userID int64, username, email string) string {
+func CreateToken(userID int64, username, email, role string) string {
 	token := GenerateToken()
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -52,6 +53,7 @@ func CreateToken(userID int64, username, email string) string {
 		UserID:   userID,
 		Username: username,
 		Email:    email,
+		Role:     role,
 		Expiry:   time.Now().Add(tokenExpiry),
 	}
 	return token

@@ -36,8 +36,12 @@ export const DEFAULT_TIMELINE_ADMIN = "nalex@sfsw.net";
 let timelineAdminEmail = DEFAULT_TIMELINE_ADMIN;
 
 export function isTimelineAdmin() {
-  const currentEmail = state.currentUser?.email?.toLowerCase();
-  return currentEmail === timelineAdminEmail.toLowerCase();
+  if (!state.currentUser) return false;
+  if (state.currentUser.role === "admin") return true;
+  const currentEmail = state.currentUser.email?.toLowerCase();
+  const currentUsername = state.currentUser.username?.toLowerCase();
+  const adminTarget = (timelineAdminEmail || DEFAULT_TIMELINE_ADMIN).toLowerCase();
+  return currentEmail === adminTarget || currentUsername === adminTarget;
 }
 
 let currentScaleKey = "1d";
@@ -300,8 +304,8 @@ function updateDevDrawerTelemetry(time) {
   if (offsetDisp) {
     const isAdmin = isTimelineAdmin();
     offsetDisp.textContent = isAdmin
-      ? `👑 Admin Active (${timelineAdminEmail})`
-      : `🔒 Server-Controlled (Admin: ${timelineAdminEmail})`;
+      ? `👑 Admin Active`
+      : `🔒 Server-Controlled Timeline`;
   }
 
   const startInput = document.getElementById("dev-start-year-input");
@@ -412,10 +416,6 @@ export function toggleDevChronoControl() {
 
 export function setChronoScale(scaleKey) {
   if (!isTimelineAdmin()) {
-    showToast(
-      `Timeline speed is locked to server setting. Only administrator (${timelineAdminEmail}) can change speed.`,
-      "info"
-    );
     syncRadioCardUI();
     return;
   }
@@ -457,10 +457,6 @@ export function resetToDefaultStartYear() {
 
 export function jumpToYear(targetYear) {
   if (!isTimelineAdmin()) {
-    showToast(
-      `Timeline era is locked to server setting. Only administrator (${timelineAdminEmail}) can jump eras.`,
-      "info"
-    );
     return;
   }
 
@@ -491,10 +487,6 @@ export function jumpToYear(targetYear) {
 
 export function setTimelinePause(paused) {
   if (!isTimelineAdmin()) {
-    showToast(
-      `Only timeline administrator (${timelineAdminEmail}) can pause or resume the timeline.`,
-      "info"
-    );
     return;
   }
   serverIsPaused = Boolean(paused);
@@ -518,7 +510,6 @@ export function setTimelinePause(paused) {
 export function stepYearOffset(delta) {
   // Client-side year offset stepping is deprecated to ensure server is single source of truth
   if (!isTimelineAdmin()) {
-    showToast(`Timeline is locked to server setting.`, "info");
     return;
   }
   jumpToYear(serverSimYear + delta);

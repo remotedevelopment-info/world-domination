@@ -101,6 +101,7 @@ func setupRouter() *mux.Router {
 	api.HandleFunc("/timeline/jump", handlers.JumpTimelineHandler).Methods("POST")
 	api.HandleFunc("/timeline/scale", handlers.SetTimelineScaleHandler).Methods("POST")
 	api.HandleFunc("/timeline/pause", handlers.SetTimelinePauseHandler).Methods("POST")
+	api.HandleFunc("/admin/dashboard", handlers.GetAdminDashboardHandler).Methods("GET")
 	api.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 	api.HandleFunc("/assign-country", handlers.AssignCountryHandler).Methods("POST")
 	api.HandleFunc("/my-country", handlers.GetPlayerCountryHandler).Methods("GET")

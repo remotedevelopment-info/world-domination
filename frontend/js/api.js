@@ -154,3 +154,7 @@ export async function apiSetTimelinePause(paused) {
     body: JSON.stringify({ paused: Boolean(paused) }),
   });
 }
+
+export async function apiGetAdminDashboard() {
+  return apiFetch("/admin/dashboard");
+}

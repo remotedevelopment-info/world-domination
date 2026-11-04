@@ -34,6 +34,7 @@ type LoginResponse struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+	Role     string `json:"role"`
 }
 
 // writeJSONError sends a consistent JSON error payload so the frontend can
@@ -144,7 +145,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	database.UpdateUserLastLogin(user.ID)
 
-	token := auth.CreateToken(user.ID, user.Username, user.Email)
+	token := auth.CreateToken(user.ID, user.Username, user.Email, user.Role)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(LoginResponse{
@@ -152,6 +153,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		UserID:   user.ID,
 		Username: user.Username,
 		Email:    user.Email,
+		Role:     user.Role,
 	})
 }
 
@@ -889,10 +891,57 @@ func checkTimelineAdmin(r *http.Request) (*auth.Token, error) {
 	if user == nil {
 		return nil, errors.New("authentication required: please log in")
 	}
-	if !strings.EqualFold(user.Email, NominatedTimelineAdminEmail) {
-		return nil, fmt.Errorf("forbidden: only timeline administrator (%s) can alter timeline", NominatedTimelineAdminEmail)
+	if user.Role != "admin" && !strings.EqualFold(user.Email, NominatedTimelineAdminEmail) && !strings.EqualFold(user.Username, NominatedTimelineAdminEmail) {
+		return nil, errors.New("forbidden: administrator privileges required")
 	}
 	return user, nil
+}
+
+// GetAdminDashboardHandler returns telemetry for all users, claimed realms, resources, and live timeline.
+func GetAdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	admin, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	users, err := database.GetAdminDashboardUsers()
+	if err != nil {
+		log.Printf("Error fetching admin dashboard users: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "Failed to load dashboard telemetry")
+		return
+	}
+
+	engine := game.GetEngine()
+	simYear, yearInt, era, scale, isPaused := engine.GetTimeline()
+	state := engine.BuildState()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"admin_user":  admin.Username,
+		"admin_email": admin.Email,
+		"admin_role":  admin.Role,
+		"timeline": map[string]interface{}{
+			"sim_year":     simYear,
+			"year_int":     yearInt,
+			"era_id":       era.ID,
+			"era_name":     era.Name,
+			"chrono_scale": scale,
+			"is_paused":    isPaused,
+			"tick":         state.Tick,
+		},
+		"users":           users,
+		"total_countries": len(state.Countries),
+	})
 }
 
 // GetTimelineHandler returns the current authoritative game timeline telemetry.

@@ -163,5 +163,49 @@ func TestTimelineHandlers(t *testing.T) {
 	if res["is_paused"] != true {
 		t.Errorf("Expected is_paused true, got %v", res["is_paused"])
 	}
+
+	// 7. GET /api/admin/dashboard without auth -> 401
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/dashboard", nil)
+	rr = httptest.NewRecorder()
+	GetAdminDashboardHandler(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("GetAdminDashboardHandler no auth status = %d, expected 401", rr.Code)
+	}
+
+	// 8. GET /api/admin/dashboard with regular player -> 403
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/dashboard", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "user", nonAdminToken))
+	rr = httptest.NewRecorder()
+	GetAdminDashboardHandler(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("GetAdminDashboardHandler player status = %d, expected 403", rr.Code)
+	}
+
+	// 9. GET /api/admin/dashboard with admin role -> 200
+	roleAdminToken := &auth.Token{UserID: 2, Username: "customadmin", Email: "admin@test.com", Role: "admin"}
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/dashboard", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "user", roleAdminToken))
+	rr = httptest.NewRecorder()
+	GetAdminDashboardHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GetAdminDashboardHandler role admin status = %d, expected 200", rr.Code)
+	}
+	var dashRes map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &dashRes)
+	if dashRes["admin_role"] != "admin" {
+		t.Errorf("Expected admin_role admin, got %v", dashRes["admin_role"])
+	}
+	if dashRes["timeline"] == nil {
+		t.Errorf("Expected timeline map in dashboard response")
+	}
+
+	// 10. GET /api/admin/dashboard with nalex@sfsw.net -> 200
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/dashboard", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "user", adminToken))
+	rr = httptest.NewRecorder()
+	GetAdminDashboardHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GetAdminDashboardHandler nalex status = %d, expected 200", rr.Code)
+	}
 }
 
