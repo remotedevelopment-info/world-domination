@@ -285,7 +285,7 @@ func SeedInitialData() error {
 		{"Poland-Lithuania", "POL", "#8E44AD", 6500000, 650, false, "{\"borders\": [\"HRE\", \"OTT\", \"RUS\", \"PRU\", \"AUT\", \"ROM\", \"HUN\", \"UKR\", \"BLT\", \"CZE\"], \"birth_year\": 1500, \"death_year\": 1795, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 		{"Tsardom of Muscovy", "RUS", "#795548", 5000000, 500, false, "{\"borders\": [\"POL\", \"KAL\", \"SWE\", \"ROM\", \"FIN\", \"UKR\", \"BLT\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 		{"Kalmar Union", "KAL", "#34495E", 2000000, 400, false, "{\"borders\": [\"HRE\", \"RUS\", \"SWE\", \"PRU\", \"NOR\", \"DEN\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Kingdom of Scotland", "SCO", "#2E86C1", 1300000, 350, true, "{\"borders\": [\"ENG\", \"IRL\", \"NOR\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"ENG\"}"},
+		{"Kingdom of Scotland", "SCO", "#2E86C1", 1300000, 350, true, "{\"borders\": [\"ENG\", \"IRL\", \"NOR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 		{"Dutch Republic", "NED", "#E67E22", 2100000, 650, false, "{\"borders\": [\"FRA\", \"HRE\", \"ENG\", \"BEL\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
 		{"Kingdom of Prussia", "PRU", "#2C3E50", 5400000, 700, false, "{\"borders\": [\"HRE\", \"POL\", \"KAL\", \"SWE\", \"BLT\", \"CZE\", \"SAX\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
 		{"Kingdom of Sweden", "SWE", "#F1C40F", 2400000, 520, false, "{\"borders\": [\"KAL\", \"NOR\", \"RUS\", \"PRU\", \"FIN\", \"BLT\", \"DEN\"], \"birth_year\": 1523, \"unlock_era\": \"discovery\", \"parent\": \"KAL\"}"},
