@@ -90,12 +90,18 @@ When the client receives a WebSocket update:
    - Fires `onEraChange(newEra, yearInt, prevEraId)`.
    - Re-evaluates active territorial boundaries and re-renders the canvas map.
 
-### 3.2 User-Triggered Timeline Changes
-When a user with permissions clicks an era plaque (e.g. `jumpToYear(1920)`) or changes the speed in the Dev Drawer:
-1. The client sends an HTTP `POST` to `/api/timeline/jump` or `/api/timeline/scale`.
-2. The server updates its internal `GameEngine` timeline state.
-3. The server immediately calls `Advance()`, broadcasting the new timeline and world state to **all** connected players.
-4. All open browser tabs transition simultaneously into the target era.
+### 3.2 User-Triggered Timeline Changes & Administrator Permissions
+In a multi-user environment, arbitrary players cannot mutate the server timeline or jump historical eras for other players:
+1. **Nominated Timeline Administrator**:
+   - Only the designated administrator account (`nalex@sfsw.net`) is authorized to jump eras or modify time progression scales on the server.
+   - Server endpoints (`/api/timeline/jump`, `/api/timeline/scale`, `/api/timeline/pause`) require authentication and verify the caller's email against `NominatedTimelineAdminEmail`.
+   - Requests from unauthenticated or non-admin users return `401 Unauthorized` or `403 Forbidden`.
+2. **Authoritative Broadcast**:
+   - When the administrator jumps the timeline or updates the chrono scale, the server updates its internal `GameEngine` timeline, persists the snapshot in `game_states`, and immediately broadcasts the updated `GameState` to **all** connected players.
+   - All open browser tabs and remote player screens transition simultaneously into the target era in lockstep.
+3. **No Client-Side LocalStorage Override**:
+   - Clients must never persist timeline years, scales, or manual offsets to browser `localStorage`.
+   - Upon page load, clients immediately fetch `GET /api/timeline` and align their local chronometer to the server before rendering the map, ensuring the server is the sole source of truth across all sessions.
 
 ---
 

@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"kingdom-conquest/backend/internal/game"
+	"kingdom-conquest/backend/pkg/auth"
 )
 
 func TestValidateRegistration(t *testing.T) {
@@ -77,7 +79,7 @@ func TestTimelineHandlers(t *testing.T) {
 	engine := game.GetEngine()
 	engine.Start()
 
-	// 1. GET /api/timeline
+	// 1. GET /api/timeline (Public)
 	req := httptest.NewRequest(http.MethodGet, "/api/timeline", nil)
 	rr := httptest.NewRecorder()
 	GetTimelineHandler(rr, req)
@@ -92,14 +94,39 @@ func TestTimelineHandlers(t *testing.T) {
 	if _, ok := res["sim_year"]; !ok {
 		t.Fatalf("Expected sim_year in timeline response")
 	}
+	if res["admin_email"] != NominatedTimelineAdminEmail {
+		t.Errorf("Expected admin_email %s, got %v", NominatedTimelineAdminEmail, res["admin_email"])
+	}
 
-	// 2. POST /api/timeline/jump
+	// 2. POST /api/timeline/jump without auth -> Unauthorized
 	jumpPayload, _ := json.Marshal(map[string]interface{}{"year": 1920})
 	req = httptest.NewRequest(http.MethodPost, "/api/timeline/jump", bytes.NewReader(jumpPayload))
 	rr = httptest.NewRecorder()
 	JumpTimelineHandler(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected status 401 for unauthenticated jump, got %d", rr.Code)
+	}
+
+	// 3. POST /api/timeline/jump with non-admin user -> Forbidden
+	nonAdminToken := &auth.Token{UserID: 2, Username: "regularUser", Email: "regular@example.com"}
+	ctx := req.Context()
+	ctx = context.WithValue(ctx, "user", nonAdminToken)
+	req = req.WithContext(ctx)
+	rr = httptest.NewRecorder()
+	JumpTimelineHandler(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("Expected status 403 for non-admin jump, got %d", rr.Code)
+	}
+
+	// 4. POST /api/timeline/jump with admin nalex@sfsw.net -> Success
+	adminToken := &auth.Token{UserID: 1, Username: "nalex", Email: NominatedTimelineAdminEmail}
+	jumpPayload, _ = json.Marshal(map[string]interface{}{"year": 1920})
+	req = httptest.NewRequest(http.MethodPost, "/api/timeline/jump", bytes.NewReader(jumpPayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", adminToken))
+	rr = httptest.NewRecorder()
+	JumpTimelineHandler(rr, req)
 	if rr.Code != http.StatusOK {
-		t.Fatalf("JumpTimelineHandler status = %d, expected 200", rr.Code)
+		t.Fatalf("JumpTimelineHandler admin status = %d, expected 200", rr.Code)
 	}
 	res = nil
 	json.Unmarshal(rr.Body.Bytes(), &res)
@@ -107,9 +134,10 @@ func TestTimelineHandlers(t *testing.T) {
 		t.Errorf("Expected era_id decolonisation, got %v", res["era_id"])
 	}
 
-	// 3. POST /api/timeline/scale
+	// 5. POST /api/timeline/scale with admin
 	scalePayload, _ := json.Marshal(map[string]interface{}{"scale": "5s"})
 	req = httptest.NewRequest(http.MethodPost, "/api/timeline/scale", bytes.NewReader(scalePayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", adminToken))
 	rr = httptest.NewRecorder()
 	SetTimelineScaleHandler(rr, req)
 	if rr.Code != http.StatusOK {
@@ -121,9 +149,10 @@ func TestTimelineHandlers(t *testing.T) {
 		t.Errorf("Expected chrono_scale 5s, got %v", res["chrono_scale"])
 	}
 
-	// 4. POST /api/timeline/pause
+	// 6. POST /api/timeline/pause with admin
 	pausePayload, _ := json.Marshal(map[string]interface{}{"paused": true})
 	req = httptest.NewRequest(http.MethodPost, "/api/timeline/pause", bytes.NewReader(pausePayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", adminToken))
 	rr = httptest.NewRecorder()
 	SetTimelinePauseHandler(rr, req)
 	if rr.Code != http.StatusOK {

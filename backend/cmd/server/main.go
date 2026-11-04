@@ -92,15 +92,15 @@ func setupRouter() *mux.Router {
 	r.HandleFunc("/api/login", handlers.LoginHandler).Methods("POST")
 	r.HandleFunc("/api/countries", handlers.GetCountriesHandler).Methods("GET")
 
-	// Global timeline endpoints (authoritative server clock)
+	// Global timeline read endpoint (authoritative server clock, public)
 	r.HandleFunc("/api/timeline", handlers.GetTimelineHandler).Methods("GET")
-	r.HandleFunc("/api/timeline/jump", handlers.JumpTimelineHandler).Methods("POST")
-	r.HandleFunc("/api/timeline/scale", handlers.SetTimelineScaleHandler).Methods("POST")
-	r.HandleFunc("/api/timeline/pause", handlers.SetTimelinePauseHandler).Methods("POST")
 
 	// Protected routes
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(auth.AuthMiddleware)
+	api.HandleFunc("/timeline/jump", handlers.JumpTimelineHandler).Methods("POST")
+	api.HandleFunc("/timeline/scale", handlers.SetTimelineScaleHandler).Methods("POST")
+	api.HandleFunc("/timeline/pause", handlers.SetTimelinePauseHandler).Methods("POST")
 	api.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 	api.HandleFunc("/assign-country", handlers.AssignCountryHandler).Methods("POST")
 	api.HandleFunc("/my-country", handlers.GetPlayerCountryHandler).Methods("GET")

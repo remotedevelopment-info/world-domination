@@ -33,6 +33,7 @@ type LoginResponse struct {
 	Token    string `json:"token"`
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
+	Email    string `json:"email"`
 }
 
 // writeJSONError sends a consistent JSON error payload so the frontend can
@@ -143,13 +144,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	database.UpdateUserLastLogin(user.ID)
 
-	token := auth.CreateToken(user.ID, user.Username)
+	token := auth.CreateToken(user.ID, user.Username, user.Email)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(LoginResponse{
 		Token:    token,
 		UserID:   user.ID,
 		Username: user.Username,
+		Email:    user.Email,
 	})
 }
 
@@ -233,6 +235,7 @@ func GetPlayerCountryHandler(w http.ResponseWriter, r *http.Request) {
 	if country == nil {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"has_country": false,
+			"email":       user.Email,
 		})
 		return
 	}
@@ -242,6 +245,7 @@ func GetPlayerCountryHandler(w http.ResponseWriter, r *http.Request) {
 		"country_id":   country.CountryID,
 		"country_name": country.Name,
 		"last_active":  country.LastActive,
+		"email":        user.Email,
 	}
 	json.NewEncoder(w).Encode(resp)
 }
@@ -877,6 +881,20 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+const NominatedTimelineAdminEmail = "nalex@sfsw.net"
+
+// checkTimelineAdmin ensures the caller is authenticated as the designated administrator.
+func checkTimelineAdmin(r *http.Request) (*auth.Token, error) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		return nil, errors.New("authentication required: please log in")
+	}
+	if !strings.EqualFold(user.Email, NominatedTimelineAdminEmail) {
+		return nil, fmt.Errorf("forbidden: only timeline administrator (%s) can alter timeline", NominatedTimelineAdminEmail)
+	}
+	return user, nil
+}
+
 // GetTimelineHandler returns the current authoritative game timeline telemetry.
 func GetTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -888,20 +906,33 @@ func GetTimelineHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"sim_year":     simYear,
-		"year_int":     yearInt,
-		"era_id":       era.ID,
-		"era_name":     era.Name,
-		"chrono_scale": scale,
-		"is_paused":    isPaused,
-		"timestamp":    time.Now().UTC().Format(time.RFC3339),
+		"sim_year":       simYear,
+		"year_int":       yearInt,
+		"era_id":         era.ID,
+		"era_name":       era.Name,
+		"chrono_scale":   scale,
+		"is_paused":      isPaused,
+		"timestamp":      time.Now().UTC().Format(time.RFC3339),
+		"server_time_ms": time.Now().UnixMilli(),
+		"admin_email":    NominatedTimelineAdminEmail,
 	})
 }
 
 // JumpTimelineHandler sets the global authoritative game year and broadcasts immediately.
+// Restricted to the designated timeline administrator (nalex@sfsw.net).
 func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
 		return
 	}
 
@@ -928,7 +959,10 @@ func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
 
 	engine := game.GetEngine()
 	state := engine.SetSimYear(targetYear)
-	log.Printf("Timeline jumped to year %.2f (%s)", state.SimYear, state.EraName)
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving jumped game state snapshot: %v", err)
+	}
+	log.Printf("Timeline jumped to year %.2f (%s) by admin %s", state.SimYear, state.EraName, user.Email)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -943,9 +977,20 @@ func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetTimelineScaleHandler updates the global chrono scale and broadcasts immediately.
+// Restricted to the designated timeline administrator (nalex@sfsw.net).
 func SetTimelineScaleHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
 		return
 	}
 
@@ -966,7 +1011,10 @@ func SetTimelineScaleHandler(w http.ResponseWriter, r *http.Request) {
 
 	engine := game.GetEngine()
 	state := engine.SetChronoScale(scaleStr)
-	log.Printf("Timeline scale set to %s", state.ChronoScale)
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving scaled game state snapshot: %v", err)
+	}
+	log.Printf("Timeline scale set to %s by admin %s", state.ChronoScale, user.Email)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -979,9 +1027,20 @@ func SetTimelineScaleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetTimelinePauseHandler pauses or resumes the global timeline ticker.
+// Restricted to the designated timeline administrator (nalex@sfsw.net).
 func SetTimelinePauseHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
 		return
 	}
 
@@ -1002,11 +1061,14 @@ func SetTimelinePauseHandler(w http.ResponseWriter, r *http.Request) {
 
 	engine := game.GetEngine()
 	state := engine.SetTimelinePaused(paused)
-	log.Printf("Timeline pause state set to %v", state.IsPaused)
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving paused game state snapshot: %v", err)
+	}
+	log.Printf("Timeline pause state set to %v by admin %s", state.IsPaused, user.Email)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":   "Timeline pause state updated",
+		"message":   "Timeline pause state updated successfully",
 		"is_paused": state.IsPaused,
 		"sim_year":  state.SimYear,
 		"year_int":  state.YearInt,

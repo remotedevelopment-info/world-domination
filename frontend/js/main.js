@@ -248,6 +248,9 @@ export async function checkMyKingdom() {
     if (!res.ok) return false;
 
     const data = await res.json();
+    if (data.email && state.currentUser) {
+      state.currentUser.email = data.email;
+    }
     if (data.has_country) {
       state.myKingdom = data;
       const playerKingdom = document.getElementById("player-kingdom");
@@ -749,8 +752,10 @@ async function initApp() {
   }
 
   window.addEventListener("resize", resizeCanvas);
-  tickClock();
-  initServerTimelineSync();
+
+  // 1. Authoritative Server Timeline is the Single Source of Truth: sync before starting clock
+  await initServerTimelineSync();
+  startClock();
 
   if (state.token && state.currentUser) {
     // Validate session with server before entering game screen
