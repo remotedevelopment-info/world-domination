@@ -72,6 +72,7 @@ type GameEngine struct {
 	chronoScale        string
 	isPaused           bool
 	lastTimelineUpdate time.Time
+	econDebtYears      float64
 }
 
 var engine *GameEngine
@@ -184,7 +185,10 @@ func (g *GameEngine) GetTimeline() (float64, int64, Era, string, bool) {
 }
 
 // TickTimeline advances the continuous timeline based on elapsed real-world time
-// and the current ChronoScale. Returns true if integer year or era changed.
+// and the current ChronoScale. When time passes (especially under accelerated ChronoScales
+// such as 1s = 1 yr or 5s = 1 yr), economic expenses (troop upkeep, taxes, social costs,
+// investments), market trade revenues/risk, and wartime continuous conscription are
+// simulated in proportion to elapsed time and broadcast live to all clients.
 func (g *GameEngine) TickTimeline() bool {
 	g.mu.Lock()
 	if !g.isRunning || g.isPaused {
@@ -208,14 +212,26 @@ func (g *GameEngine) TickTimeline() bool {
 	g.simYear += deltaYears
 	newYearInt := int64(math.Floor(g.simYear))
 	newEra := GetEraForYear(newYearInt)
+
+	g.econDebtYears += deltaYears
+	var stepYears float64
+	if g.econDebtYears >= 0.05 {
+		stepYears = g.econDebtYears
+		g.econDebtYears = 0
+	}
 	g.mu.Unlock()
 
-	if newYearInt != prevYearInt || newEra.ID != prevEra.ID {
+	econChanged := false
+	if stepYears > 0 {
+		econChanged = g.TickEconomyStep(stepYears)
+	}
+
+	if (newYearInt != prevYearInt || newEra.ID != prevEra.ID) && !econChanged {
 		state := g.BuildState()
 		g.Notify(state)
 		return true
 	}
-	return false
+	return econChanged || newYearInt != prevYearInt || newEra.ID != prevEra.ID
 }
 
 // Advance performs one world mutation: it advances the action sequence
@@ -239,49 +255,135 @@ func (g *GameEngine) Advance() GameState {
 	return state
 }
 
-// TickEconomy applies one economic cycle to every owned country: the
-// treasury gains (or loses) the budget balance and population drifts with
-// prosperity, then the new state is broadcast to all clients.
-func (g *GameEngine) TickEconomy() {
+// TickEconomyStep simulates elapsed game time for every owned kingdom:
+// 1. Budget Balance: tax revenues minus standing army upkeep, social costs, and investment.
+// 2. Markets: direct commercial trade revenue plus dynamic market risk/volatility (boom vs. slump/piracy).
+// 3. Warfare & Continuous Conscription: active wars cause frontline combat attrition/casualties;
+//    kingdoms with funds automatically levy continuous conscription from the civilian population,
+//    draining treasury and reducing the civilian workforce; bankrupt kingdoms suffer desertion.
+// 4. Population growth: prosperity and infrastructure drive population growth.
+func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
+	if yearsPassed <= 0 {
+		return false
+	}
 	countries, err := database.GetCountries("medieval")
 	if err != nil {
-		log.Printf("Error getting countries for economy tick: %v", err)
-		return
+		log.Printf("Error getting countries for economy step: %v", err)
+		return false
 	}
+	activeWars, err := database.GetActiveWars()
+	if err != nil {
+		log.Printf("Error querying active wars: %v", err)
+		activeWars = make(map[int64]bool)
+	}
+
+	g.mu.RLock()
+	simYear := g.simYear
+	g.mu.RUnlock()
+
 	changed := false
 	for _, c := range countries {
 		if c.OwnerID == nil {
 			continue // unclaimed kingdoms stagnate
 		}
+
 		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
-		newResources := c.Resources + econ.BudgetBalance
+
+		// 1. Budget balance (taxes minus standing troop upkeep and slider expenditures)
+		annualBalance := float64(econ.BudgetBalance) * yearsPassed
+		newResources := c.Resources + int64(math.Round(annualBalance))
+
+		// 2. Markets: Income and Risk
+		if c.Markets > 0 {
+			baseIncome, riskSwing := MarketIncomeAndRisk(c.Markets, simYear, c.ID)
+			marketNet := int64(math.Round((baseIncome + riskSwing) * yearsPassed))
+			newResources += marketNet
+		}
+
+		// 3. Population Growth
+		newPopulation := c.Population
+		popGrowth := int64(math.Round(float64(PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)) * yearsPassed))
+		newPopulation += popGrowth
+
+		// 4. Warfare & Continuous Conscription
+		newTroops := c.Troops
+		isAtWar := activeWars[c.ID]
+		if isAtWar {
+			// Combat attrition / casualties on front lines (~8% annually)
+			casualtyRate := 0.08
+			casualties := int64(math.Ceil(float64(newTroops) * casualtyRate * yearsPassed))
+			if casualties > newTroops {
+				casualties = newTroops
+			}
+
+			// Continuous conscription to replace casualties and maintain troop readiness
+			conscriptNeeded := casualties
+			// In war, if military has reserves and population can spare, levy additional reinforcements
+			if newTroops < 200 && newPopulation > 250 {
+				conscriptNeeded += int64(math.Ceil(4.0 * yearsPassed))
+			}
+
+			draftCost := conscriptNeeded * 10 // arms, uniforms, bounty per recruit
+			if newResources >= draftCost && newPopulation > (conscriptNeeded+50) {
+				// Kingdom can fund conscription:
+				newResources -= draftCost
+				newPopulation -= conscriptNeeded
+				newTroops = newTroops - casualties + conscriptNeeded
+			} else {
+				// Bankrupt or depleted: cannot recruit replacements; troops suffer casualties + desertion
+				desertions := int64(math.Ceil(float64(newTroops) * 0.05 * yearsPassed))
+				newTroops -= (casualties + desertions)
+			}
+		} else {
+			// Peacetime: if deep in debt, troops suffer desertions due to unpaid wages
+			if newResources < -500 && newTroops > 0 {
+				desertions := int64(math.Ceil(float64(newTroops) * 0.04 * yearsPassed))
+				newTroops -= desertions
+			}
+		}
+
+		// Bound values
 		if newResources < -10000 {
 			newResources = -10000 // bounded debt
 		}
-		if newResources != c.Resources {
-			if err := database.UpdateCountryResources(c.ID, newResources); err != nil {
-				log.Printf("Error applying budget for country %d: %v", c.ID, err)
-				continue
-			}
-			changed = true
+		if newPopulation < 50 {
+			newPopulation = 50
 		}
-		newPopulation := c.Population + PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
-		if newPopulation != c.Population {
-			if err := database.UpdateCountryPopulation(c.ID, newPopulation); err != nil {
-				log.Printf("Error applying growth for country %d: %v", c.ID, err)
+		if newTroops < 0 {
+			newTroops = 0
+		}
+
+		if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops {
+			if err := database.UpdateCountryVitals(c.ID, newPopulation, newResources, newTroops); err != nil {
+				log.Printf("Error updating vitals for country %d: %v", c.ID, err)
 				continue
 			}
 			changed = true
 		}
 	}
+
 	if changed {
 		g.Advance()
-	} else {
-		g.mu.Lock()
-		g.currentTick++
-		g.mu.Unlock()
-		g.Notify(g.BuildState())
 	}
+	return changed
+}
+
+// TickEconomy flushes pending economy simulation or applies a baseline pulse
+// during slower ChronoScales (e.g. 1d = 1 yr).
+func (g *GameEngine) TickEconomy() {
+	g.mu.Lock()
+	if g.isPaused || !g.isRunning {
+		g.mu.Unlock()
+		return
+	}
+	step := g.econDebtYears
+	g.econDebtYears = 0
+	g.mu.Unlock()
+
+	if step < 0.01 {
+		step = 0.01
+	}
+	g.TickEconomyStep(step)
 }
 
 // BuildState rebuilds the canonical world from PostgreSQL. It is called by

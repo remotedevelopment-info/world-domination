@@ -772,6 +772,16 @@ func UpdateCountryPopulation(countryID int64, population int64) error {
 	return err
 }
 
+// UpdateCountryVitals atomically updates population, resources, and troops for a kingdom.
+func UpdateCountryVitals(countryID int64, population, resources, troops int64) error {
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4`,
+		population, resources, troops, countryID)
+	return err
+}
+
 // GetTroops returns the central troop count and per-border deployment counts
 // for a country.
 func GetTroops(countryID int64) (central int64, borders map[string]int64, err error) {
@@ -900,6 +910,38 @@ func GetDiplomaticRelations(countryID int64) ([]DiplomaticRelationRow, error) {
 		result = append(result, r)
 	}
 	return result, rows.Err()
+}
+
+// GetActiveWars returns a map of country IDs that are currently engaged in active warfare.
+// A country is at war if its most recent diplomatic interaction with another country was a war declaration.
+func GetActiveWars() (map[int64]bool, error) {
+	query := `
+		WITH latest_diplomacy AS (
+			SELECT DISTINCT ON (LEAST(country_id, target_country_id), GREATEST(country_id, target_country_id))
+				country_id, target_country_id, description
+			FROM game_actions
+			WHERE action_type = 'diplomacy' AND target_country_id IS NOT NULL
+			ORDER BY LEAST(country_id, target_country_id), GREATEST(country_id, target_country_id), id DESC
+		)
+		SELECT country_id, target_country_id
+		FROM latest_diplomacy
+		WHERE LOWER(description) LIKE '%war%'`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	activeWars := make(map[int64]bool)
+	for rows.Next() {
+		var c1, c2 int64
+		if err := rows.Scan(&c1, &c2); err != nil {
+			return nil, err
+		}
+		activeWars[c1] = true
+		activeWars[c2] = true
+	}
+	return activeWars, rows.Err()
 }
 
 // EconomyRateRow describes the economic rate setting for a country.

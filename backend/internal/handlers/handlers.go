@@ -551,8 +551,8 @@ func handleEconomy(userID int64, description string, req ActionRequest) error {
 	return nil
 }
 
-// handleDiplomacy logs a diplomacy action (e.g. envoy).
-// All diplomacy options require a target state (another country).
+// handleDiplomacy logs a diplomacy action (e.g. envoy, alliance, war).
+// All diplomacy options require a target state (another country) and require paying diplomatic tribute/costs.
 func handleDiplomacy(userID int64, description string, req ActionRequest) error {
 	pc, err := database.GetPlayerCountry(userID)
 	if err != nil || pc == nil {
@@ -569,6 +569,42 @@ func handleDiplomacy(userID int64, description string, req ActionRequest) error 
 	if desc == "" {
 		desc = "sent envoy"
 	}
+
+	countries, err := database.GetCountries("medieval")
+	if err != nil {
+		return err
+	}
+	var self *models.Country
+	for i := range countries {
+		if countries[i].ID == pc.CountryID {
+			self = &countries[i]
+			break
+		}
+	}
+	if self == nil {
+		return errors.New("player country not found")
+	}
+
+	// Diplomatic missions require tributes, emissary allowances, or war mobilization levies:
+	// - Sending an envoy requires 50 gold tribute/travel expenses
+	// - Proposing an alliance requires 75 gold treaty gifts
+	// - Declaring war requires 100 gold mobilization costs
+	tributeCost := int64(50)
+	lowerDesc := strings.ToLower(desc)
+	if strings.Contains(lowerDesc, "alliance") {
+		tributeCost = 75
+	} else if strings.Contains(lowerDesc, "war") {
+		tributeCost = 100
+	}
+
+	if self.Resources < tributeCost {
+		return fmt.Errorf("insufficient gold reserve to dispatch diplomatic mission (%d required for %s, have %d)", tributeCost, desc, self.Resources)
+	}
+
+	if err := database.UpdateCountryResources(self.ID, self.Resources-tributeCost); err != nil {
+		return err
+	}
+
 	return database.LogAction(userID, pc.CountryID, "diplomacy", desc,
 		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }

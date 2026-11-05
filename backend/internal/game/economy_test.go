@@ -108,3 +108,31 @@ func TestTroopsReduceTaxRevenueAndTreasury(t *testing.T) {
 			militarised.BudgetBalance, civilian.BudgetBalance)
 	}
 }
+
+func TestMarketIncomeAndRisk(t *testing.T) {
+	// Zero markets produce zero income and zero risk
+	base0, risk0 := MarketIncomeAndRisk(0, 1500, 1)
+	if base0 != 0 || risk0 != 0 {
+		t.Errorf("expected 0 income/risk with 0 markets, got base=%f, risk=%f", base0, risk0)
+	}
+
+	// Active markets produce positive base revenue
+	base1, risk1 := MarketIncomeAndRisk(2, 1500, 1)
+	if base1 <= 0 {
+		t.Errorf("expected positive market base income, got %f", base1)
+	}
+
+	// Higher tier markets produce proportionally higher base income
+	base2, _ := MarketIncomeAndRisk(4, 1500, 1)
+	if base2 != base1*2 {
+		t.Errorf("expected linear market base scaling (got %f vs %f)", base2, base1*2)
+	}
+
+	// Risk swing oscillates across simulation years (demonstrating market volatility)
+	_, riskYear1 := MarketIncomeAndRisk(2, 1500.0, 1)
+	_, riskYear2 := MarketIncomeAndRisk(2, 1500.5, 1)
+	if riskYear1 == riskYear2 {
+		t.Errorf("expected market risk volatility across different simulation phases")
+	}
+	_ = risk1
+}

@@ -1,5 +1,7 @@
 package game
 
+import "math"
+
 // EconomyState is the derived economic dashboard for one country. It is
 // recomputed from persisted state on every build, so clients always render
 // current indicators without any extra persistence.
@@ -151,4 +153,21 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 		g = 1
 	}
 	return g
+}
+
+// MarketIncomeAndRisk returns the base commercial trade revenue and volatility risk swing
+// for a kingdom with the given market level and current simYear.
+// Markets generate substantial trade revenue, but introduce economic risk (piracy, trade slumps vs merchant booms).
+func MarketIncomeAndRisk(markets int64, simYear float64, countryID int64) (baseIncome float64, riskSwing float64) {
+	if markets <= 0 {
+		return 0, 0
+	}
+	// Commercial tariff and merchant guild income per market level
+	baseIncome = float64(markets) * 12.0
+
+	// Market risk volatility wave: sinusoidal variation across time and country geography
+	cycle := math.Sin(float64(countryID)*1.618 + simYear*2.0*math.Pi)
+	// Swings between -50% (trade disruption / piracy / market slump) to +70% (merchant windfalls)
+	riskSwing = baseIncome * (0.10 + 0.60*cycle)
+	return baseIncome, riskSwing
 }

@@ -2031,6 +2031,7 @@ body {
     pointer-events: none;
     z-index: 2;
     box-shadow: 0 0 5px rgba(255,215,0,0.45);
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
 }
 .meter-needle::before {
     content: "";
