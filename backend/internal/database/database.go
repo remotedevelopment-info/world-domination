@@ -1369,7 +1369,7 @@ func GetAdminDashboardUsers() ([]AdminUserOverview, error) {
 	rows, err := DB.Query(`
 		SELECT 
 			u.id, u.username, u.email, COALESCE(u.role, 'player') AS role, u.is_active, u.created_at, u.last_login,
-			c.id, c.name, c.code, c.color, COALESCE(c.population, 0), COALESCE(c.resources, 0), COALESCE(c.troops, 0), COALESCE(c.economy_rate, 1.0)
+			c.id, c.name, c.code, c.color, COALESCE(c.population, 0), COALESCE(c.resources, 0), COALESCE(c.troops, 0), COALESCE(c.economy_rate, 50)
 		FROM users u
 		LEFT JOIN player_countries pc ON pc.user_id = u.id AND pc.is_active = true
 		LEFT JOIN countries c ON c.id = pc.country_id

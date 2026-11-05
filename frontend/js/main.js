@@ -1004,7 +1004,7 @@ function renderAdminDashboardData(data, tbody) {
           const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
           const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";
           const troopDisplay = hasCountry ? Number(u.troops || 0).toLocaleString() : "—";
-          const taxDisplay = hasCountry ? `${(Number(u.economy_rate || 1.0) * 10).toFixed(0)}%` : "—";
+          const taxDisplay = hasCountry ? `${Math.round(Number(u.economy_rate ?? 50))}%` : "—";
           if (cells[4].textContent !== popDisplay) cells[4].textContent = popDisplay;
           if (cells[5].textContent !== resDisplay) cells[5].textContent = resDisplay;
           if (cells[6].textContent !== troopDisplay) cells[6].textContent = troopDisplay;
@@ -1036,7 +1036,7 @@ function renderAdminDashboardData(data, tbody) {
       const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
       const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";
       const troopDisplay = hasCountry ? Number(u.troops || 0).toLocaleString() : "—";
-      const taxDisplay = hasCountry ? `${(Number(u.economy_rate || 1.0) * 10).toFixed(0)}%` : "—";
+      const taxDisplay = hasCountry ? `${Math.round(Number(u.economy_rate ?? 50))}%` : "—";
       const lastLoginDisplay = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
 
       tr.innerHTML = `
