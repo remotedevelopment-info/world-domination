@@ -132,12 +132,7 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
     console.error("Error fetching diplomacy:", err);
   }
 
-  const recruitCostLabel = document.getElementById("cc-recruit-cost-label");
-  if (recruitCostLabel) {
-    const pop = kingdom.population || 1000;
-    const cost = Math.max(1, Math.floor(pop / 100));
-    recruitCostLabel.textContent = `Cost: ${cost} Ducats · +10 Troops`;
-  }
+  selectRecruitTier(selectedRecruitTier || "levy");
 }
 
 export function applyLiveCommandCenterUpdate(kingdom) {
@@ -164,9 +159,22 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) troopVal.textContent = central.toLocaleString();
 
-  const levy = detail?.troops_levy ?? 0;
-  const regular = detail?.troops_regular ?? (detail?.troops ?? central);
-  const elite = detail?.troops_elite ?? 0;
+  // Safely sync detailed cache with live broadcast
+  const detail = commandCenterDetail || kingdom;
+  if (commandCenterDetail) {
+    if (kingdom.troops_levy !== undefined) commandCenterDetail.troops_levy = kingdom.troops_levy;
+    if (kingdom.troops_regular !== undefined) commandCenterDetail.troops_regular = kingdom.troops_regular;
+    if (kingdom.troops_elite !== undefined) commandCenterDetail.troops_elite = kingdom.troops_elite;
+    if (kingdom.fort_n !== undefined) commandCenterDetail.fort_n = kingdom.fort_n;
+    if (kingdom.fort_s !== undefined) commandCenterDetail.fort_s = kingdom.fort_s;
+    if (kingdom.fort_e !== undefined) commandCenterDetail.fort_e = kingdom.fort_e;
+    if (kingdom.fort_w !== undefined) commandCenterDetail.fort_w = kingdom.fort_w;
+    if (kingdom.economy) commandCenterDetail.economy = kingdom.economy;
+  }
+
+  const levy = kingdom.troops_levy ?? detail?.troops_levy ?? 0;
+  const regular = kingdom.troops_regular ?? detail?.troops_regular ?? (kingdom.troops ?? central);
+  const elite = kingdom.troops_elite ?? detail?.troops_elite ?? 0;
   const levyEl = document.getElementById("cc-troops-levy");
   if (levyEl) levyEl.textContent = levy.toLocaleString();
   const regEl = document.getElementById("cc-troops-regular");
@@ -184,10 +192,10 @@ export function applyLiveCommandCenterUpdate(kingdom) {
     tierBadge.textContent = tier;
   }
 
-  const fortN = detail?.fort_n ?? 0;
-  const fortS = detail?.fort_s ?? 0;
-  const fortE = detail?.fort_e ?? 0;
-  const fortW = detail?.fort_w ?? 0;
+  const fortN = kingdom.fort_n ?? detail?.fort_n ?? 0;
+  const fortS = kingdom.fort_s ?? detail?.fort_s ?? 0;
+  const fortE = kingdom.fort_e ?? detail?.fort_e ?? 0;
+  const fortW = kingdom.fort_w ?? detail?.fort_w ?? 0;
   const fortNames = ["Outpost", "Bastion", "Citadel", "Star Fort", "Imperial Stronghold"];
   const updateBadge = (dir, val) => {
     const el = document.getElementById(`cc-fort-badge-${dir.toLowerCase()}`);
@@ -841,17 +849,30 @@ export function updateEconomyHintsLive() {
     popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
   }
 
+  // Update Dynamic Table Header with actual simulation years
+  const curSimYear = Math.floor(state.simYear || 1500);
+  const lastSimYear = curSimYear - 1;
+  const thLast = document.getElementById("cc-th-last-year");
+  if (thLast) {
+    thLast.textContent = `Last Year (${lastSimYear >= 1500 ? lastSimYear : 1500} Actual)`;
+  }
+  const thThis = document.getElementById("cc-th-this-year");
+  if (thThis) {
+    thThis.textContent = `This Year (${curSimYear} Projected / Capped)`;
+  }
+
   // Populate Last Year vs. This Year Annual Budget Comparison Table
   const srvEcon = commandCenterDetail?.economy || kingdom.economy || {};
-  const lyTax = srvEcon.last_tax_revenue ?? taxRevenue;
-  const lyMkt = srvEcon.last_market_income ?? marketRevenue;
+  const hasRecordedActuals = srvEcon.last_tax_revenue != null && (srvEcon.last_tax_revenue > 0 || srvEcon.last_total_exp > 0 || srvEcon.last_market_income > 0);
+  const lyTax = hasRecordedActuals ? srvEcon.last_tax_revenue : (srvEcon.last_tax_revenue ?? taxRevenue);
+  const lyMkt = hasRecordedActuals ? srvEcon.last_market_income : (srvEcon.last_market_income ?? marketRevenue);
   const lyTotalRev = lyTax + lyMkt;
-  const lyMil = srvEcon.last_military_exp ?? cappedBudget.effMil;
-  const lyInv = srvEcon.last_investment_exp ?? cappedBudget.effInv;
-  const lySoc = srvEcon.last_social_exp ?? cappedBudget.effSoc;
-  const lyTotalExp = srvEcon.last_total_exp ?? (lyMil + lyInv + lySoc);
-  const lyBal = Math.max(0, srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
-  const lyMig = srvEcon.last_migration ?? netMigration;
+  const lyMil = hasRecordedActuals ? srvEcon.last_military_exp : (srvEcon.last_military_exp ?? cappedBudget.effMil);
+  const lyInv = hasRecordedActuals ? srvEcon.last_investment_exp : (srvEcon.last_investment_exp ?? cappedBudget.effInv);
+  const lySoc = hasRecordedActuals ? srvEcon.last_social_exp : (srvEcon.last_social_exp ?? cappedBudget.effSoc);
+  const lyTotalExp = hasRecordedActuals ? srvEcon.last_total_exp : (lyMil + lyInv + lySoc);
+  const lyBal = hasRecordedActuals ? Math.max(0, srvEcon.last_budget_balance) : Math.max(0, srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
+  const lyMig = hasRecordedActuals ? srvEcon.last_migration : (srvEcon.last_migration ?? netMigration);
 
   const setCell = (id, html, className = "") => {
     const el = document.getElementById(id);

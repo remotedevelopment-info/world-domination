@@ -38,6 +38,13 @@ type CountryState struct {
 	Population     int64        `json:"population"`
 	Resources      int64        `json:"resources"`
 	Troops         int64        `json:"troops"`
+	TroopsLevy     int64        `json:"troops_levy"`
+	TroopsRegular  int64        `json:"troops_regular"`
+	TroopsElite    int64        `json:"troops_elite"`
+	FortN          int64        `json:"fort_n"`
+	FortS          int64        `json:"fort_s"`
+	FortE          int64        `json:"fort_e"`
+	FortW          int64        `json:"fort_w"`
 	EconomyRate    int64        `json:"economy_rate"`
 	Investment     int64        `json:"investment"`
 	SocialCosts    int64        `json:"social_costs"`
@@ -138,10 +145,17 @@ func (g *GameEngine) ResumeState(tick int64, simYear float64, chronoScale string
 // and immediately broadcasts the updated world state to all connected clients.
 func (g *GameEngine) SetSimYear(year float64) GameState {
 	g.mu.Lock()
+	prevYearInt := int64(math.Floor(g.simYear))
+	newYearInt := int64(math.Floor(year))
 	g.simYear = year
 	g.lastTimelineUpdate = time.Now()
 	g.currentTick++
+	yearRolledOver := newYearInt > prevYearInt
 	g.mu.Unlock()
+
+	if yearRolledOver {
+		g.TickEconomyStep(0.0, true)
+	}
 
 	state := g.BuildState()
 	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
@@ -248,11 +262,12 @@ func (g *GameEngine) TickTimeline() bool {
 		stepYears = g.econDebtYears
 		g.econDebtYears = 0
 	}
+	yearRolledOver := newYearInt > prevYearInt
 	g.mu.Unlock()
 
 	econChanged := false
-	if stepYears > 0 {
-		econChanged = g.TickEconomyStep(stepYears)
+	if stepYears > 0 || yearRolledOver {
+		econChanged = g.TickEconomyStep(stepYears, yearRolledOver)
 	}
 
 	if (newYearInt != prevYearInt || newEra.ID != prevEra.ID) && !econChanged {
@@ -291,8 +306,8 @@ func (g *GameEngine) Advance() GameState {
 //    kingdoms with funds automatically levy continuous conscription from the civilian population,
 //    draining treasury and reducing the civilian workforce; bankrupt kingdoms suffer desertion.
 // 4. Population growth: prosperity and infrastructure drive population growth.
-func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
-	if yearsPassed <= 0 {
+func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) bool {
+	if yearsPassed <= 0 && !yearRolledOver {
 		return false
 	}
 	countries, err := database.GetCountries("medieval")
@@ -449,15 +464,25 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 		}
 		newTroops = newLevy + newRegular + newElite
 
-		if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
-			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite ||
-			c.LastTaxRevenue != econ.TaxRevenue || c.LastTotalExp != effTotalExpAnnual {
+		if yearRolledOver {
+			// A calendar year has officially turned over: commit the completed year's actuals
+			// into the historical Last Year ledger, rolling over previous actuals.
 			if err := database.UpdateCountryVitalsBudgetAndTroopLayers(
 				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
 				econ.TaxRevenue, annualMarketActual, effMilAnnual, effSocAnnual, effInvAnnual,
 				effTotalExpAnnual, effBalanceAnnual, econ.NetMigration,
 			); err != nil {
-				log.Printf("Error updating vitals and budget for country %d: %v", c.ID, err)
+				log.Printf("Error committing annual budget rollover for country %d: %v", c.ID, err)
+				continue
+			}
+			changed = true
+		} else if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
+			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite {
+			// Intra-year incremental tick: update dynamic vitals without overwriting Last Year's budget ledger
+			if err := database.UpdateCountryVitalsAndTroopLayers(
+				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
+			); err != nil {
+				log.Printf("Error updating intra-year vitals for country %d: %v", c.ID, err)
 				continue
 			}
 			changed = true
@@ -485,7 +510,7 @@ func (g *GameEngine) TickEconomy() {
 	if step < 0.01 {
 		step = 0.01
 	}
-	g.TickEconomyStep(step)
+	g.TickEconomyStep(step, false)
 }
 
 // BuildState rebuilds the canonical world from PostgreSQL. It is called by
@@ -498,7 +523,11 @@ func (g *GameEngine) BuildState() GameState {
 
 	var countryStates []CountryState
 	for _, c := range countries {
-		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
+		econ := ComputeEconomyWithLayers(
+			c.Population, c.Resources, c.Troops,
+			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
+			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
+		)
 		PopulateLastYearLedger(
 			&econ,
 			c.LastTaxRevenue, c.LastMarketIncome, c.LastMilitaryExp,
@@ -513,6 +542,13 @@ func (g *GameEngine) BuildState() GameState {
 			Population:     c.Population,
 			Resources:      c.Resources,
 			Troops:         c.Troops,
+			TroopsLevy:     c.TroopsLevy,
+			TroopsRegular:  c.TroopsRegular,
+			TroopsElite:    c.TroopsElite,
+			FortN:          c.FortN,
+			FortS:          c.FortS,
+			FortE:          c.FortE,
+			FortW:          c.FortW,
 			EconomyRate:    c.EconomyRate,
 			Investment:     c.Investment,
 			SocialCosts:    c.SocialCosts,

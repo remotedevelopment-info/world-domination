@@ -1056,6 +1056,39 @@ func UpgradeBorderFortification(countryID int64, side string, cost int64) (int64
 	return nextLevel, nil
 }
 
+// UpdateCountryVitalsAndTroopLayers updates dynamic vitals (population, resources, troops, layers)
+// during intra-year simulation ticks without overwriting the completed annual budget ledger.
+func UpdateCountryVitalsAndTroopLayers(
+	countryID int64,
+	population, resources, troops, levy, regular, elite int64,
+) error {
+	if DB == nil {
+		return nil
+	}
+	if levy < 0 {
+		levy = 0
+	}
+	if regular < 0 {
+		regular = 0
+	}
+	if elite < 0 {
+		elite = 0
+	}
+	if troops != (levy + regular + elite) {
+		troops = levy + regular + elite
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3,
+		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $7`,
+		population, resources, troops,
+		levy, regular, elite,
+		countryID)
+	return err
+}
+
 // UpdateCountryVitalsBudgetAndTroopLayers atomically updates vitals, troop layers, and last year's budget ledger.
 func UpdateCountryVitalsBudgetAndTroopLayers(
 	countryID int64,
@@ -1258,6 +1291,9 @@ func GetDiplomaticRelations(countryID int64) ([]DiplomaticRelationRow, error) {
 // GetActiveWars returns a map of country IDs that are currently engaged in active warfare.
 // A country is at war if its most recent diplomatic interaction with another country was a war declaration.
 func GetActiveWars() (map[int64]bool, error) {
+	if DB == nil {
+		return make(map[int64]bool), nil
+	}
 	query := `
 		WITH latest_diplomacy AS (
 			SELECT DISTINCT ON (LEAST(country_id, target_country_id), GREATEST(country_id, target_country_id))
