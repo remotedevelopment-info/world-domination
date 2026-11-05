@@ -88,6 +88,8 @@ import {
   setTaxRate,
   setInvestmentRate,
   setSocialRate,
+  adjustBudgetDial,
+  triggerAutoBalanceBudget,
 } from "./ui/console.js";
 
 // Wire module callbacks
@@ -427,13 +429,27 @@ export function updateEconomyPanel(country) {
   };
   set("econ-currency", Number(e.currency_value).toFixed(2));
   set("econ-gdp", e.gdp.toLocaleString());
-  set("econ-revenue", e.tax_revenue.toLocaleString());
-  set("econ-military", e.military_expenditure.toLocaleString());
+  const totalRev = e.total_revenue ?? e.tax_revenue ?? 0;
+  set("econ-revenue", totalRev.toLocaleString());
+  const lastExp = e.last_total_exp ?? e.effective_total_exp ?? e.military_expenditure ?? 0;
+  set("econ-last-exp", lastExp.toLocaleString());
+  const thisExp = e.effective_total_exp ?? e.military_expenditure ?? 0;
+  set("econ-military", thisExp.toLocaleString() + (e.deficit_capped ? " (Capped)" : ""));
+  const effBal = e.effective_balance ?? Math.max(0, e.budget_balance ?? 0);
   const bal = document.getElementById("econ-balance");
   if (bal) {
-    bal.textContent = (e.budget_balance >= 0 ? "+" : "") + e.budget_balance.toLocaleString();
-    bal.classList.toggle("econ-positive", e.budget_balance >= 0);
-    bal.classList.toggle("econ-negative", e.budget_balance < 0);
+    bal.textContent = "+" + effBal.toLocaleString();
+    bal.classList.add("econ-positive");
+    bal.classList.remove("econ-negative");
+  }
+  const popPress = e.population_pressure ?? 0;
+  set("econ-pop-pressure", `${popPress}% Stress`);
+  const mig = e.net_migration ?? 0;
+  const migEl = document.getElementById("econ-migration");
+  if (migEl) {
+    migEl.textContent = `${mig > 0 ? "+" : ""}${mig}/yr`;
+    migEl.classList.toggle("econ-positive", mig > 0);
+    migEl.classList.toggle("econ-negative", mig < 0);
   }
   set("econ-reserve", e.gold_reserve.toLocaleString());
   set("econ-rate", e.tax_rate);
@@ -442,7 +458,7 @@ export function updateEconomyPanel(country) {
   if (state.lastEconomy) {
     setTrend("econ-currency-trend", e.currency_value, state.lastEconomy.currency_value);
     setTrend("econ-gdp-trend", e.gdp, state.lastEconomy.gdp);
-    setTrend("econ-balance-trend", e.budget_balance, state.lastEconomy.budget_balance);
+    setTrend("econ-balance-trend", effBal, state.lastEconomy.effective_balance ?? state.lastEconomy.budget_balance);
   }
   state.lastEconomy = e;
 }
@@ -796,6 +812,8 @@ window.triggerDispatchDiplomacy = triggerDispatchDiplomacy;
 window.setTaxRate = setTaxRate;
 window.setInvestmentRate = setInvestmentRate;
 window.setSocialRate = setSocialRate;
+window.adjustBudgetDial = adjustBudgetDial;
+window.triggerAutoBalanceBudget = triggerAutoBalanceBudget;
 window.toggleDevChronoControl = toggleDevChronoControl;
 window.setChronoScale = setChronoScale;
 window.setStartYear = setStartYear;

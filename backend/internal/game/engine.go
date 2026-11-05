@@ -289,24 +289,50 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 
 		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
 
-		// 1. Budget balance (taxes minus standing troop upkeep and slider expenditures)
-		annualBalance := float64(econ.BudgetBalance) * yearsPassed
-		newResources := c.Resources + int64(math.Round(annualBalance))
-
-		// 2. Markets: Income and Risk
+		// 1. Markets: Income and Risk
+		var baseMarket, riskSwing float64
 		if c.Markets > 0 {
-			baseIncome, riskSwing := MarketIncomeAndRisk(c.Markets, simYear, c.ID)
-			marketNet := int64(math.Round((baseIncome + riskSwing) * yearsPassed))
-			newResources += marketNet
+			baseMarket, riskSwing = MarketIncomeAndRisk(c.Markets, simYear, c.ID)
 		}
+		annualMarketActual := int64(math.Round(baseMarket + riskSwing))
+		if annualMarketActual < 0 {
+			annualMarketActual = 0
+		}
+		annualTotalRev := econ.TaxRevenue + annualMarketActual
 
-		// 3. Population Growth
+		// 2. Enforce Layer 1 Balanced-Budget Regime (No Deficits):
+		// Annual expenditure cannot exceed annual revenue.
+		effMilAnnual, effSocAnnual, effInvAnnual, _ := EnforceBalancedBudget(
+			annualTotalRev,
+			econ.MilitaryUpkeep,
+			econ.SocialExpenditure,
+			econ.InvestmentExpenditure,
+		)
+		effTotalExpAnnual := effMilAnnual + effSocAnnual + effInvAnnual
+		effBalanceAnnual := annualTotalRev - effTotalExpAnnual
+
+		// Scale net surplus by yearsPassed
+		periodSurplus := int64(math.Round(float64(effBalanceAnnual) * yearsPassed))
+		newResources := c.Resources + periodSurplus
+
+		// 3. Population Growth & Tax-Driven Migration
 		newPopulation := c.Population
 		popGrowth := int64(math.Round(float64(PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)) * yearsPassed))
-		newPopulation += popGrowth
+		migrationDelta := int64(math.Round(float64(econ.NetMigration) * yearsPassed))
+		newPopulation += popGrowth + migrationDelta
 
-		// 4. Warfare & Continuous Conscription
+		// 4. Warfare, Continuous Conscription & Unfunded Troop Demobilization
 		newTroops := c.Troops
+		// If military upkeep exceeded total revenue under the no-deficit rule, unpaid troops demobilize back to civilian life
+		if econ.MilitaryUpkeep > annualTotalRev && newTroops > 0 {
+			unfundedUpkeep := float64(econ.MilitaryUpkeep - annualTotalRev)
+			demobilized := int64(math.Ceil((unfundedUpkeep / troopUpkeep) * 0.25 * yearsPassed))
+			if demobilized > newTroops {
+				demobilized = newTroops
+			}
+			newTroops -= demobilized
+		}
+
 		isAtWar := activeWars[c.ID]
 		if isAtWar {
 			// Combat attrition / casualties on front lines (~8% annually)
@@ -318,33 +344,26 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 
 			// Continuous conscription to replace casualties and maintain troop readiness
 			conscriptNeeded := casualties
-			// In war, if military has reserves and population can spare, levy additional reinforcements
 			if newTroops < 200 && newPopulation > 250 {
 				conscriptNeeded += int64(math.Ceil(4.0 * yearsPassed))
 			}
 
 			draftCost := conscriptNeeded * 10 // arms, uniforms, bounty per recruit
 			if newResources >= draftCost && newPopulation > (conscriptNeeded+50) {
-				// Kingdom can fund conscription:
+				// Kingdom can fund conscription from existing specie without deficit:
 				newResources -= draftCost
 				newPopulation -= conscriptNeeded
 				newTroops = newTroops - casualties + conscriptNeeded
 			} else {
-				// Bankrupt or depleted: cannot recruit replacements; troops suffer casualties + desertion
+				// Cannot fund conscription without deficit: troops suffer casualties + desertion
 				desertions := int64(math.Ceil(float64(newTroops) * 0.05 * yearsPassed))
 				newTroops -= (casualties + desertions)
 			}
-		} else {
-			// Peacetime: if deep in debt, troops suffer desertions due to unpaid wages
-			if newResources < -500 && newTroops > 0 {
-				desertions := int64(math.Ceil(float64(newTroops) * 0.04 * yearsPassed))
-				newTroops -= desertions
-			}
 		}
 
-		// Bound values
-		if newResources < -10000 {
-			newResources = -10000 // bounded debt
+		// Bound values (Layer 1: strictly no negative treasury deficit)
+		if newResources < 0 {
+			newResources = 0
 		}
 		if newPopulation < 50 {
 			newPopulation = 50
@@ -353,9 +372,14 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 			newTroops = 0
 		}
 
-		if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops {
-			if err := database.UpdateCountryVitals(c.ID, newPopulation, newResources, newTroops); err != nil {
-				log.Printf("Error updating vitals for country %d: %v", c.ID, err)
+		if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
+			c.LastTaxRevenue != econ.TaxRevenue || c.LastTotalExp != effTotalExpAnnual {
+			if err := database.UpdateCountryVitalsAndBudget(
+				c.ID, newPopulation, newResources, newTroops,
+				econ.TaxRevenue, annualMarketActual, effMilAnnual, effSocAnnual, effInvAnnual,
+				effTotalExpAnnual, effBalanceAnnual, econ.NetMigration,
+			); err != nil {
+				log.Printf("Error updating vitals and budget for country %d: %v", c.ID, err)
 				continue
 			}
 			changed = true
@@ -396,6 +420,13 @@ func (g *GameEngine) BuildState() GameState {
 
 	var countryStates []CountryState
 	for _, c := range countries {
+		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
+		PopulateLastYearLedger(
+			&econ,
+			c.LastTaxRevenue, c.LastMarketIncome, c.LastMilitaryExp,
+			c.LastSocialExp, c.LastInvestmentExp, c.LastTotalExp,
+			c.LastBudgetBalance, c.LastMigration,
+		)
 		cs := CountryState{
 			ID:             c.ID,
 			Name:           c.Name,
@@ -412,7 +443,7 @@ func (g *GameEngine) BuildState() GameState {
 			TerritoryType:  c.TerritoryType,
 			Borders:        c.Borders,
 			IsIsland:       c.IsIsland,
-			Economy:        ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts),
+			Economy:        econ,
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID

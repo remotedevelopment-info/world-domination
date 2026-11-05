@@ -3508,5 +3508,198 @@ body {
     color: #9cb3c9;
 }
 
+/* ============================================================================
+   ANNUAL EXCHEQUER BUDGET LEDGER & ZERO-DEFICIT CONTROLS
+   ============================================================================ */
+.dial-step-btns {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.dial-step-btn {
+    background: linear-gradient(180deg, rgba(44, 34, 18, 0.9) 0%, rgba(22, 16, 8, 0.95) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    color: #f5d76e;
+    font-family: monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dial-step-btn:hover {
+    background: rgba(212, 175, 55, 0.25);
+    border-color: #ffd700;
+    color: #fff;
+}
+
+.annual-budget-ledger {
+    background: rgba(10, 16, 24, 0.82);
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 12px 0;
+    box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6);
+}
+
+.budget-ledger-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.budget-ledger-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.budget-ledger-title {
+    color: #ffd700;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.regime-badge {
+    background: rgba(74, 222, 128, 0.14);
+    border: 1px solid rgba(74, 222, 128, 0.55);
+    color: #4ade80;
+    font-family: monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+}
+
+.budget-autobalance-btn {
+    background: linear-gradient(180deg, #3b2a10 0%, #1c1306 100%);
+    border: 1px solid #d4af37;
+    color: #ffd700;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.budget-autobalance-btn:hover {
+    background: linear-gradient(180deg, #573e18 0%, #2b1d09 100%);
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.45);
+    color: #fff;
+}
+
+.budget-era-roadmap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.68rem;
+    color: #8da4b8;
+    font-family: monospace;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(212, 175, 55, 0.2);
+}
+
+.budget-era-roadmap .roadmap-sep {
+    color: rgba(212, 175, 55, 0.45);
+}
+
+.budget-alert-banner {
+    background: rgba(251, 191, 36, 0.14);
+    border: 1px solid rgba(251, 191, 36, 0.55);
+    color: #fde68a;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 7px 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.budget-alert-banner.alert-danger {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(248, 113, 113, 0.65);
+    color: #fecaca;
+}
+
+.budget-comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.76rem;
+    font-family: monospace;
+}
+
+.budget-comparison-table th {
+    text-align: left;
+    color: #cbd5e1;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 5px 6px;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.35);
+}
+
+.budget-comparison-table th:nth-child(2),
+.budget-comparison-table th:nth-child(3),
+.budget-comparison-table td:nth-child(2),
+.budget-comparison-table td:nth-child(3) {
+    text-align: right;
+}
+
+.budget-comparison-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+}
+
+.budget-comparison-table tr.row-total-rev td,
+.budget-comparison-table tr.row-total-exp td {
+    border-top: 1px solid rgba(212, 175, 55, 0.25);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.budget-comparison-table tr.row-surplus td {
+    border-top: 1px solid rgba(74, 222, 128, 0.35);
+    border-bottom: 1px solid rgba(74, 222, 128, 0.35);
+    background: rgba(74, 222, 128, 0.07);
+}
+
+.budget-comparison-table td.val-pos {
+    color: #4ade80;
+}
+
+.budget-comparison-table td.val-neg {
+    color: #f87171;
+}
+
+.budget-comparison-table td.val-surplus {
+    color: #ffd700;
+}
+
+.cap-tag {
+    display: inline-block;
+    background: rgba(251, 191, 36, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.6);
+    color: #fbbf24;
+    font-size: 0.62rem;
+    padding: 0 4px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+
 
 

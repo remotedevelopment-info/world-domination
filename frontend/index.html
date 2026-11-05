@@ -395,12 +395,15 @@
                                         class="econ-trend"></span></p>
                                 <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend"
                                         class="econ-trend"></span></p>
-                                <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/cycle</span>
+                                <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/yr</span>
                                 </p>
-                                <p>Military Spending: <span id="econ-military">—</span><span
-                                        class="econ-unit">/cycle</span></p>
-                                <p>Budget Balance: <span id="econ-balance">—</span><span id="econ-balance-trend"
+                                <p>Last Year Expenditure: <span id="econ-last-exp">—</span><span
+                                        class="econ-unit">/yr</span></p>
+                                <p>This Year Expenditure: <span id="econ-military">—</span><span
+                                        class="econ-unit">/yr</span></p>
+                                <p>Exchequer Balance (No Deficit): <span id="econ-balance">—</span><span id="econ-balance-trend"
                                         class="econ-trend"></span></p>
+                                <p>Pop Pressure &amp; Migration: <span id="econ-pop-pressure">—</span> · <span id="econ-migration">—</span></p>
                                 <p>Gold Reserve: <span id="econ-reserve">—</span></p>
                                 <p>Tax Rate: <span id="econ-rate">—</span><span class="econ-unit">%</span></p>
                                 <p>Development: <span id="econ-levels">—</span></p>
@@ -719,6 +722,10 @@
                                                 class="readout-unit">%</span>
                                             <div class="readout-hint" id="cc-tax-impact-hint">Tithe Revenue: +25
                                                 ducats/cycle</div>
+                                            <div class="dial-step-btns">
+                                                <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('tax', -5)" title="Decrease Tax Rate by 5%">-5%</button>
+                                                <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('tax', 5)" title="Increase Tax Rate by 5%">+5%</button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -745,6 +752,10 @@
                                                 class="readout-unit">%</span>
                                             <div class="readout-hint" id="cc-investment-hint">+0.0% Trade Multiplier
                                             </div>
+                                            <div class="dial-step-btns">
+                                                <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('investment', -5)" title="Decrease Capital Investment by 5%">-5%</button>
+                                                <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('investment', 5)" title="Increase Capital Investment by 5%">+5%</button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -770,8 +781,91 @@
                                             <span class="readout-num" id="cc-social-dial-value">0</span><span
                                                 class="readout-unit">%</span>
                                             <div class="readout-hint" id="cc-social-hint">Growth vs Inflation</div>
+                                            <div class="dial-step-btns">
+                                                <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('social', -5)" title="Decrease Social Welfare by 5%">-5%</button>
+                                                <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('social', 5)" title="Increase Social Welfare by 5%">+5%</button>
+                                            </div>
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- Annual Exchequer Budget Ledger (Last Year vs. This Year) -->
+                                <div class="annual-budget-ledger" id="cc-annual-budget-ledger">
+                                    <div class="budget-ledger-header">
+                                        <div class="budget-ledger-title-group">
+                                            <span class="budget-ledger-title">📜 ANNUAL EXCHEQUER BUDGET LEDGER</span>
+                                            <span class="regime-badge" id="cc-fiscal-regime-badge">⚖️ BALANCED BUDGET (NO DEFICIT)</span>
+                                        </div>
+                                        <button type="button" class="budget-autobalance-btn" onclick="triggerAutoBalanceBudget()" title="Set optimal Laffer tax rate and balance discretionary allocations within revenue">
+                                            ⚖️ Auto-Balance This Year
+                                        </button>
+                                    </div>
+                                    <div class="budget-era-roadmap">
+                                        <span>Layer 1: Hard-Specie Balanced Budget</span>
+                                        <span class="roadmap-sep">·</span>
+                                        <span title="Unlocked in Age of Independence (1860)">🔒 World Bank Loans (1860)</span>
+                                        <span class="roadmap-sep">·</span>
+                                        <span title="Unlocked in Age of Decolonisation (1920)">🔒 Sovereign Bonds (1920)</span>
+                                        <span class="roadmap-sep">·</span>
+                                        <span title="Unlocked in Modern Age (1989)">🔒 Derivatives / CDO / CDS (1989)</span>
+                                    </div>
+                                    <div id="cc-budget-alert-banner" class="budget-alert-banner hidden"></div>
+                                    <table class="budget-comparison-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Exchequer Line Item</th>
+                                                <th>Last Year (Actual)</th>
+                                                <th>This Year (Projected / Capped)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr class="row-revenue">
+                                                <td>Crown Tithe &amp; Tax Revenue</td>
+                                                <td id="cc-ly-tax-rev">+0</td>
+                                                <td id="cc-ty-tax-rev">+0</td>
+                                            </tr>
+                                            <tr class="row-revenue">
+                                                <td>Port &amp; Market Trade Income</td>
+                                                <td id="cc-ly-mkt-rev">+0</td>
+                                                <td id="cc-ty-mkt-rev">+0</td>
+                                            </tr>
+                                            <tr class="row-total-rev">
+                                                <td><strong>Total Annual Revenue</strong></td>
+                                                <td id="cc-ly-total-rev"><strong>+0</strong></td>
+                                                <td id="cc-ty-total-rev"><strong>+0</strong></td>
+                                            </tr>
+                                            <tr class="row-expense">
+                                                <td>Standing Military Upkeep</td>
+                                                <td id="cc-ly-mil-exp">-0</td>
+                                                <td id="cc-ty-mil-exp">-0</td>
+                                            </tr>
+                                            <tr class="row-expense">
+                                                <td>Colonial &amp; Capital Investment</td>
+                                                <td id="cc-ly-inv-exp">-0</td>
+                                                <td id="cc-ty-inv-exp">-0</td>
+                                            </tr>
+                                            <tr class="row-expense">
+                                                <td>Guild &amp; Social Welfare</td>
+                                                <td id="cc-ly-soc-exp">-0</td>
+                                                <td id="cc-ty-soc-exp">-0</td>
+                                            </tr>
+                                            <tr class="row-total-exp">
+                                                <td><strong>Total Annual Expenditure</strong></td>
+                                                <td id="cc-ly-total-exp"><strong>-0</strong></td>
+                                                <td id="cc-ty-total-exp"><strong>-0</strong></td>
+                                            </tr>
+                                            <tr class="row-surplus">
+                                                <td><strong>Exchequer Surplus (No Deficit)</strong></td>
+                                                <td id="cc-ly-balance"><strong>+0</strong></td>
+                                                <td id="cc-ty-balance"><strong>+0</strong></td>
+                                            </tr>
+                                            <tr class="row-demographics">
+                                                <td>Tax Migration &amp; Pop Pressure (<span id="cc-pop-pressure-val">0%</span>)</td>
+                                                <td id="cc-ly-migration">0</td>
+                                                <td id="cc-ty-migration">0</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
 
                                 <!-- Economic Telemetry & Action Levers -->

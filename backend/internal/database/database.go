@@ -139,6 +139,14 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS infrastructure INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS investment INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS social_costs INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_tax_revenue BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_market_income BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_military_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_social_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_investment_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_total_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_budget_balance BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_migration BIGINT DEFAULT 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
 		id SERIAL PRIMARY KEY,
@@ -613,7 +621,11 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs, c.territory_type, c.borders, c.is_island
+		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
+		COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
+		COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
+		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
+		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
 		ORDER BY c.id ASC`, era)
@@ -626,7 +638,14 @@ func GetCountries(era string) ([]models.Country, error) {
 	for rows.Next() {
 		var c models.Country
 		var ownerID, ownerName sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
+		if err := rows.Scan(
+			&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName,
+			&c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts,
+			&c.LastTaxRevenue, &c.LastMarketIncome, &c.LastMilitaryExp,
+			&c.LastSocialExp, &c.LastInvestmentExp, &c.LastTotalExp,
+			&c.LastBudgetBalance, &c.LastMigration,
+			&c.TerritoryType, &c.Borders, &c.IsIsland,
+		); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
@@ -782,6 +801,26 @@ func UpdateCountryVitals(countryID int64, population, resources, troops int64) e
 	return err
 }
 
+// UpdateCountryVitalsAndBudget atomically updates population, resources, troops, and last year's budget ledger.
+func UpdateCountryVitalsAndBudget(
+	countryID int64,
+	population, resources, troops int64,
+	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
+) error {
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3,
+		    last_tax_revenue = $4, last_market_income = $5, last_military_exp = $6,
+		    last_social_exp = $7, last_investment_exp = $8, last_total_exp = $9,
+		    last_budget_balance = $10, last_migration = $11,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $12`,
+		population, resources, troops,
+		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
+		countryID)
+	return err
+}
+
 // IsCountryOwnedByUser checks whether the given country is owned by the specified user.
 func IsCountryOwnedByUser(countryID, userID int64) (bool, error) {
 	var count int
@@ -824,28 +863,36 @@ func GetTroops(countryID int64) (central int64, borders map[string]int64, err er
 
 // KingdomDetailRow consolidates all data needed for the command center view.
 type KingdomDetailRow struct {
-	CountryID      int64
-	Name           string
-	Code           string
-	Population     int64
-	Resources      int64
-	Troops         int64
-	EconomyRate    int64
-	Markets        int64
-	Infrastructure int64
-	Investment     int64
-	SocialCosts    int64
-	OwnerID        *int64
-	OwnerName      *string
-	CentralTroops  int64
-	BorderTroops   map[string]int64
-	GDP            int64
-	CurrencyValue  float64
-	InflationRate  float64
+	CountryID         int64
+	Name              string
+	Code              string
+	Population        int64
+	Resources         int64
+	Troops            int64
+	EconomyRate       int64
+	Markets           int64
+	Infrastructure    int64
+	Investment        int64
+	SocialCosts       int64
+	LastTaxRevenue    int64
+	LastMarketIncome  int64
+	LastMilitaryExp   int64
+	LastSocialExp     int64
+	LastInvestmentExp int64
+	LastTotalExp      int64
+	LastBudgetBalance int64
+	LastMigration     int64
+	OwnerID           *int64
+	OwnerName         *string
+	CentralTroops     int64
+	BorderTroops      map[string]int64
+	GDP               int64
+	CurrencyValue     float64
+	InflationRate     float64
 }
 
 // GetKingdomDetail returns all command-center data for a country: basic info,
-// central troop count, and per-border deployment counts.
+// central troop count, per-border deployment counts, and last year's budget ledger.
 func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 	var r KingdomDetailRow
 	r.BorderTroops = map[string]int64{"N": 0, "S": 0, "E": 0, "W": 0}
@@ -853,6 +900,9 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 	err := DB.QueryRow(
 		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops, c.economy_rate,
 		       c.markets, c.infrastructure, c.investment, c.social_costs,
+		       COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
+		       COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
+		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
@@ -861,6 +911,9 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		countryID,
 	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops, &r.EconomyRate,
 		&r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
+		&r.LastTaxRevenue, &r.LastMarketIncome, &r.LastMilitaryExp,
+		&r.LastSocialExp, &r.LastInvestmentExp, &r.LastTotalExp,
+		&r.LastBudgetBalance, &r.LastMigration,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err

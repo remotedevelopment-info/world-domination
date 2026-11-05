@@ -179,13 +179,13 @@ export function applyLiveCommandCenterUpdate(kingdom) {
       kingdom.economy.gdp,
       kingdom.economy.currency_value,
       kingdom.economy.inflation_rate,
-      kingdom.economy.budget_balance
+      kingdom.economy.effective_balance ?? kingdom.economy.budget_balance
     );
     const balEl = document.getElementById("cc-budget-balance");
-    if (balEl && typeof kingdom.economy.budget_balance === "number") {
-      const b = kingdom.economy.budget_balance;
-      balEl.textContent = `${b >= 0 ? "+" : ""}${b.toLocaleString()}/tick`;
-      balEl.classList.toggle("negative", b < 0);
+    if (balEl) {
+      const b = kingdom.economy.effective_balance ?? Math.max(0, kingdom.economy.budget_balance || 0);
+      balEl.textContent = `+${b.toLocaleString()}/tick`;
+      balEl.classList.remove("negative");
     }
   }
 
@@ -522,12 +522,158 @@ export function pushEconomySettings() {
       return res.json();
     })
     .then((data) => {
-      logMessage(`Economy updated: Tax ${taxRate}%, Inv ${investmentRate}%, Social ${socialCostsRate}%`);
+      logMessage(`Annual Budget updated: Tax ${taxRate}%, Inv ${investmentRate}%, Social ${socialCostsRate}%`);
       if (data) {
-        updateDerivedEconomyUI(data.gdp, data.currency_value, data.inflation_rate, data.budget_balance);
+        const econObj = data.economy || data;
+        if (commandCenterDetail) {
+          commandCenterDetail.economy = econObj;
+        }
+        updateDerivedEconomyUI(
+          data.gdp ?? econObj.gdp,
+          data.currency_value ?? econObj.currency_value,
+          data.inflation_rate ?? econObj.inflation_rate,
+          econObj.effective_balance ?? Math.max(0, econObj.budget_balance || 0)
+        );
+        updateEconomyHintsLive();
       }
     })
     .catch((err) => console.error("Error setting economy settings:", err));
+}
+
+export function adjustBudgetDial(type, delta) {
+  if (type === "tax") {
+    setTaxRate(taxRate + delta, true);
+  } else if (type === "investment") {
+    setInvestmentRate(investmentRate + delta, true);
+  } else if (type === "social") {
+    setSocialRate(socialCostsRate + delta, true);
+  }
+}
+window.adjustBudgetDial = adjustBudgetDial;
+
+export function triggerAutoBalanceBudget() {
+  const kingdom =
+    activeCommandCenterKingdom ||
+    (state.myKingdom && state.kingdoms.find((k) => k.id === state.myKingdom.country_id)) ||
+    state.myKingdom ||
+    {};
+  const pop = commandCenterDetail?.population ?? kingdom.population ?? 1000;
+  const tr = commandCenterDetail?.central_troops ?? kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
+
+  // Set tax rate to optimal non-emigration sweet spot (48%)
+  const optimalTax = 48;
+  const baseProductivity = 0.08;
+  const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
+  const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
+  const civilianWorkforce = Math.max(0, pop - tr);
+  const estGdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * lafferJs(optimalTax);
+  const estTaxRev = Math.round(estGdp * (optimalTax / 100.0) + 0.5);
+  const estMktRev = (marketsLevel || 0) * 4;
+  const totalRev = estTaxRev + estMktRev;
+  const milUpkeep = Math.round(tr * 0.5 + 0.5);
+
+  const availDiscretionary = Math.max(0, totalRev - milUpkeep);
+  // Each 5% of investment or social costs ~1 ducat/tick (0.2 * rate)
+  const maxCombinedRate = Math.min(200, Math.floor(availDiscretionary / 0.2));
+  // Keep a small exchequer surplus buffer (~20% of discretionary capacity)
+  const safeCombinedRate = Math.floor(maxCombinedRate * 0.8);
+  const newInv = Math.min(100, Math.round(safeCombinedRate * 0.55));
+  const newSoc = Math.min(100, Math.max(0, safeCombinedRate - newInv));
+
+  setTaxRate(optimalTax, false);
+  setInvestmentRate(newInv, false);
+  setSocialRate(newSoc, false);
+  schedulePushEconomySettings();
+  showToast(`⚖️ Budget Balanced: Tax ${optimalTax}%, Investment ${newInv}%, Social ${newSoc}% (Zero Deficit)`, "success");
+}
+window.triggerAutoBalanceBudget = triggerAutoBalanceBudget;
+
+export function enforceClientBalancedBudget(totalRevenue, militaryUpkeep, socialExp, investmentExp) {
+  if (totalRevenue < 0) totalRevenue = 0;
+  const plannedTotal = militaryUpkeep + socialExp + investmentExp;
+  if (plannedTotal <= totalRevenue) {
+    return {
+      effMil: militaryUpkeep,
+      effSoc: socialExp,
+      effInv: investmentExp,
+      effTotal: plannedTotal,
+      effBalance: totalRevenue - plannedTotal,
+      capped: false,
+    };
+  }
+  if (militaryUpkeep >= totalRevenue) {
+    return {
+      effMil: totalRevenue,
+      effSoc: 0,
+      effInv: 0,
+      effTotal: totalRevenue,
+      effBalance: 0,
+      capped: true,
+    };
+  }
+  const remaining = totalRevenue - militaryUpkeep;
+  const discretionary = socialExp + investmentExp;
+  if (discretionary <= 0) {
+    return {
+      effMil: militaryUpkeep,
+      effSoc: 0,
+      effInv: 0,
+      effTotal: militaryUpkeep,
+      effBalance: remaining,
+      capped: true,
+    };
+  }
+  let effSoc = Math.floor((remaining * socialExp) / discretionary);
+  let effInv = remaining - effSoc;
+  if (effInv > investmentExp) {
+    effInv = investmentExp;
+    effSoc = remaining - effInv;
+  }
+  const effTotal = militaryUpkeep + effSoc + effInv;
+  return {
+    effMil: militaryUpkeep,
+    effSoc,
+    effInv,
+    effTotal,
+    effBalance: Math.max(0, totalRevenue - effTotal),
+    capped: true,
+  };
+}
+
+export function computeClientPopulationPressure(pop, troops, tax, social, infra) {
+  if (pop <= 0) return 0;
+  let taxStress = 0;
+  if (tax > 35) {
+    taxStress = (tax - 35) * 1.1;
+  }
+  const conscriptionRatio = troops / pop;
+  const milStress = conscriptionRatio * 120.0;
+  const relief = social * 0.35 + infra * 4.0;
+  return Math.round(Math.max(0, Math.min(100, taxStress + milStress - relief)));
+}
+
+export function computeClientMigration(pop, tax, social, infra) {
+  if (pop <= 0) return 0;
+  if (tax > 60) {
+    const excess = tax - 60;
+    const rate = excess * 0.0008 + (excess * excess) * 0.00003;
+    let outflow = Math.round(pop * rate + 0.5);
+    if (outflow < 1) outflow = 1;
+    const maxOutflow = Math.floor(pop / 10);
+    if (outflow > maxOutflow && maxOutflow > 0) outflow = maxOutflow;
+    return -outflow;
+  }
+  if (tax <= 35) {
+    const taxPull = (35 - tax) * 0.00025;
+    const welfarePull = social * 0.00008 + infra * 0.0006;
+    const totalRate = taxPull + welfarePull;
+    if (totalRate > 0) {
+      let inflow = Math.round(pop * totalRate + 0.5);
+      if (inflow < 1) inflow = 1;
+      return inflow;
+    }
+  }
+  return 0;
 }
 
 export function setEconomyRate(value, push = true) {
@@ -554,6 +700,7 @@ export function lafferJs(rate) {
 
 export function updateEconomyHintsLive() {
   const kingdom =
+    activeCommandCenterKingdom ||
     (state.myKingdom && state.kingdoms.find((k) => k.id === state.myKingdom.country_id)) ||
     state.myKingdom ||
     {};
@@ -570,37 +717,49 @@ export function updateEconomyHintsLive() {
   // Mobilized troops reduce productive civilian workforce, directly reducing GDP and tax revenue
   const civilianWorkforce = Math.max(0, pop - tr);
   const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * invBonus * laffer;
-  const revenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
-  const expenditure = Math.round(tr * 0.5 + (socialCostsRate + investmentRate) * 0.2 + 0.5);
-  const balance = revenue - expenditure;
+  const taxRevenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
+  const marketRevenue = (marketsLevel || 0) * 4;
+  const totalRevenue = taxRevenue + marketRevenue;
+
+  const milUpkeep = Math.round(tr * 0.5 + 0.5);
+  const socExp = Math.round(socialCostsRate * 0.2 + 0.5);
+  const invExp = Math.round(investmentRate * 0.2 + 0.5);
+
+  // Enforce Layer 1 Balanced Budget (No Deficits)
+  const cappedBudget = enforceClientBalancedBudget(totalRevenue, milUpkeep, socExp, invExp);
+  const popPressure = computeClientPopulationPressure(pop, tr, taxRate, socialCostsRate, infraLevel || 0);
+  const netMigration = computeClientMigration(pop, taxRate, socialCostsRate, infraLevel || 0);
 
   let value = 1.0;
   if (gdp > 0) value = res / gdp / 5.0;
 
-  let inflation = 0.0;
-  if (balance < 0) inflation = -balance * 0.05;
-  inflation += socialCostsRate * 0.02 + investmentRate * 0.005;
+  let inflation = socialCostsRate * 0.02 + investmentRate * 0.005;
   if (inflation > 100) inflation = 100;
 
   const taxHint = document.getElementById("cc-tax-impact-hint");
   if (taxHint) {
-    if (taxRate > 62) {
-      taxHint.textContent = `Rev: +${revenue}/tick (⚠️ Tax Drag)`;
+    if (taxRate > 60) {
+      taxHint.textContent = `Rev: +${taxRevenue}/yr (🚨 Emigration: ${netMigration}/yr)`;
       taxHint.style.color = "#ff6b6b";
+    } else if (taxRate <= 35 && netMigration > 0) {
+      taxHint.textContent = `Rev: +${taxRevenue}/yr (✨ Immigration: +${netMigration}/yr)`;
+      taxHint.style.color = "#4ade80";
     } else {
-      taxHint.textContent = `Tax Revenue: +${revenue}/tick`;
+      taxHint.textContent = `Tax Revenue: +${taxRevenue}/yr`;
       taxHint.style.color = "#4ecdc4";
     }
   }
 
   const invHint = document.getElementById("cc-investment-hint");
   if (invHint) {
-    invHint.textContent = `+${(investmentRate * 0.2).toFixed(1)}% GDP Multiplier`;
+    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` (-${cappedBudget.effInv} ducats)`;
+    invHint.textContent = `+${(investmentRate * 0.2).toFixed(1)}% GDP${capNote}`;
   }
 
   const socHint = document.getElementById("cc-social-hint");
   if (socHint) {
-    socHint.textContent = `Spend: -${Math.round(socialCostsRate * 0.2)} ducats · Infl: +${(socialCostsRate * 0.02).toFixed(1)}%`;
+    const capNote = cappedBudget.effSoc < socExp ? ` (Capped: -${cappedBudget.effSoc})` : `-${cappedBudget.effSoc} ducats`;
+    socHint.textContent = `Spend: ${capNote} · Relief: -${(socialCostsRate * 0.35).toFixed(0)}% Stress`;
   }
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
@@ -608,11 +767,105 @@ export function updateEconomyHintsLive() {
     let growth = pop * 0.005 * (gdp / (pop * 0.02 || 1));
     growth += (investmentRate + socialCostsRate) * 0.0005;
     growth *= Math.max(0, 1.0 - pop / 1000000);
-    const g = Math.max(1, Math.round(growth));
-    popGrowthEl.textContent = `+${g}/tick`;
+    const naturalGrowth = Math.max(1, Math.round(growth));
+    const netPopChange = naturalGrowth + netMigration;
+    popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration})`;
+    popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
   }
 
-  updateDerivedEconomyUI(Math.round(gdp), value, inflation, balance);
+  // Populate Last Year vs. This Year Annual Budget Comparison Table
+  const srvEcon = commandCenterDetail?.economy || kingdom.economy || {};
+  const lyTax = srvEcon.last_tax_revenue ?? taxRevenue;
+  const lyMkt = srvEcon.last_market_income ?? marketRevenue;
+  const lyTotalRev = lyTax + lyMkt;
+  const lyMil = srvEcon.last_military_exp ?? cappedBudget.effMil;
+  const lyInv = srvEcon.last_investment_exp ?? cappedBudget.effInv;
+  const lySoc = srvEcon.last_social_exp ?? cappedBudget.effSoc;
+  const lyTotalExp = srvEcon.last_total_exp ?? (lyMil + lyInv + lySoc);
+  const lyBal = Math.max(0, srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
+  const lyMig = srvEcon.last_migration ?? netMigration;
+
+  const setCell = (id, html, className = "") => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    if (className !== undefined) {
+      el.className = className;
+    }
+  };
+
+  setCell("cc-ly-tax-rev", `+${lyTax.toLocaleString()}`, "val-pos");
+  setCell("cc-ty-tax-rev", `+${taxRevenue.toLocaleString()}`, "val-pos");
+
+  setCell("cc-ly-mkt-rev", `+${lyMkt.toLocaleString()}`, "val-pos");
+  setCell("cc-ty-mkt-rev", `+${marketRevenue.toLocaleString()}`, "val-pos");
+
+  setCell("cc-ly-total-rev", `<strong>+${lyTotalRev.toLocaleString()}</strong>`, "val-pos");
+  setCell("cc-ty-total-rev", `<strong>+${totalRevenue.toLocaleString()}</strong>`, "val-pos");
+
+  const milCapBadge = cappedBudget.effMil < milUpkeep ? ` <span class="cap-tag" title="Planned ${milUpkeep}; unpaid troops demobilize">⚠️ RATIONED</span>` : "";
+  setCell("cc-ly-mil-exp", `-${lyMil.toLocaleString()}`, "val-neg");
+  setCell("cc-ty-mil-exp", `-${cappedBudget.effMil.toLocaleString()}${milCapBadge}`, "val-neg");
+
+  const invCapBadge = cappedBudget.effInv < invExp ? ` <span class="cap-tag" title="Planned ${invExp}; capped to prevent deficit">CAPPED</span>` : "";
+  setCell("cc-ly-inv-exp", `-${lyInv.toLocaleString()}`, "val-neg");
+  setCell("cc-ty-inv-exp", `-${cappedBudget.effInv.toLocaleString()}${invCapBadge}`, "val-neg");
+
+  const socCapBadge = cappedBudget.effSoc < socExp ? ` <span class="cap-tag" title="Planned ${socExp}; capped to prevent deficit">CAPPED</span>` : "";
+  setCell("cc-ly-soc-exp", `-${lySoc.toLocaleString()}`, "val-neg");
+  setCell("cc-ty-soc-exp", `-${cappedBudget.effSoc.toLocaleString()}${socCapBadge}`, "val-neg");
+
+  setCell("cc-ly-total-exp", `<strong>-${lyTotalExp.toLocaleString()}</strong>`, "val-neg");
+  setCell("cc-ty-total-exp", `<strong>-${cappedBudget.effTotal.toLocaleString()}</strong>`, "val-neg");
+
+  setCell("cc-ly-balance", `<strong>+${lyBal.toLocaleString()}</strong>`, "val-surplus");
+  setCell("cc-ty-balance", `<strong>+${cappedBudget.effBalance.toLocaleString()}</strong>`, "val-surplus");
+
+  const popPressEl = document.getElementById("cc-pop-pressure-val");
+  if (popPressEl) {
+    popPressEl.textContent = `Stress ${popPressure}%`;
+    popPressEl.style.color = popPressure >= 65 ? "#ff6b6b" : popPressure >= 35 ? "#fbbf24" : "#4ade80";
+  }
+
+  setCell(
+    "cc-ly-migration",
+    `${lyMig > 0 ? "+" : ""}${lyMig.toLocaleString()}/yr`,
+    lyMig < 0 ? "val-neg" : lyMig > 0 ? "val-pos" : ""
+  );
+  setCell(
+    "cc-ty-migration",
+    `${netMigration > 0 ? "+" : ""}${netMigration.toLocaleString()}/yr`,
+    netMigration < 0 ? "val-neg" : netMigration > 0 ? "val-pos" : ""
+  );
+
+  // Alert banner for No-Deficit Rationing & Tax Migration
+  const alertBanner = document.getElementById("cc-budget-alert-banner");
+  if (alertBanner) {
+    const alerts = [];
+    if (cappedBudget.capped) {
+      if (cappedBudget.effMil < milUpkeep) {
+        alerts.push(`⚖️ <strong>NO-DEFICIT RATIONING:</strong> Military upkeep (${milUpkeep}) exceeds Total Revenue (${totalRevenue})! Unpaid troops will demobilize until World Bank Loans unlock in 1860.`);
+      } else {
+        alerts.push(`⚖️ <strong>NO-DEFICIT CAP ACTIVE:</strong> Planned spending (${milUpkeep + invExp + socExp}) exceeds Total Revenue (${totalRevenue}) — discretionary spending capped to ${cappedBudget.effInv + cappedBudget.effSoc} to maintain a balanced budget.`);
+      }
+    }
+    if (taxRate > 60) {
+      alerts.push(`🚨 <strong>TAX FLIGHT EMIGRATION:</strong> Punitive ${taxRate}% tax rate is driving <strong>${Math.abs(netMigration)} citizens/yr</strong> to flee the realm!`);
+    } else if (taxRate <= 35 && netMigration > 0) {
+      alerts.push(`✨ <strong>PROSPERITY IMMIGRATION:</strong> Competitive ${taxRate}% tax rate &amp; civic works are attracting <strong>+${netMigration} settlers/yr</strong>.`);
+    }
+    if (alerts.length > 0) {
+      alertBanner.innerHTML = alerts.join("<br>");
+      alertBanner.classList.remove("hidden");
+      alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep);
+    } else {
+      alertBanner.innerHTML = "";
+      alertBanner.classList.add("hidden");
+      alertBanner.classList.remove("alert-danger");
+    }
+  }
+
+  updateDerivedEconomyUI(Math.round(gdp), value, inflation, cappedBudget.effBalance);
 }
 
 export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance) {

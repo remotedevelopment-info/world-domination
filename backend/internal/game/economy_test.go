@@ -136,3 +136,100 @@ func TestMarketIncomeAndRisk(t *testing.T) {
 	}
 	_ = risk1
 }
+
+func TestBalancedBudgetNoDeficit(t *testing.T) {
+	// 1. Surplus scenario: total revenue exceeds desired spending -> not capped
+	effMil, effSoc, effInv, capped := EnforceBalancedBudget(100, 30, 20, 20)
+	if capped {
+		t.Errorf("expected uncapped budget when revenue (100) > expenditure (70)")
+	}
+	if effMil != 30 || effSoc != 20 || effInv != 20 {
+		t.Errorf("expected exact allocations 30/20/20, got %d/%d/%d", effMil, effSoc, effInv)
+	}
+
+	// 2. Discretionary overspend: military fits (40 <= 100), but social (50) + investment (50) exceed remaining (60)
+	effMil2, effSoc2, effInv2, capped2 := EnforceBalancedBudget(100, 40, 50, 50)
+	if !capped2 {
+		t.Errorf("expected DeficitCapped=true when planned spending (140) > revenue (100)")
+	}
+	if effMil2 != 40 {
+		t.Errorf("expected military upkeep to have first priority (40), got %d", effMil2)
+	}
+	if effMil2+effSoc2+effInv2 != 100 {
+		t.Errorf("expected total effective expenditure to equal total revenue (100) with zero deficit, got %d",
+			effMil2+effSoc2+effInv2)
+	}
+
+	// 3. Military overspend alone exceeds revenue: military capped at revenue, discretionary zeroed
+	effMil3, effSoc3, effInv3, capped3 := EnforceBalancedBudget(50, 80, 25, 25)
+	if !capped3 {
+		t.Errorf("expected DeficitCapped=true when military upkeep exceeds revenue")
+	}
+	if effMil3 != 50 || effSoc3 != 0 || effInv3 != 0 {
+		t.Errorf("expected 50/0/0 under military overspend, got %d/%d/%d", effMil3, effSoc3, effInv3)
+	}
+
+	// 4. Verify ComputeEconomy always yields EffectiveBalance >= 0
+	overextended := ComputeEconomy(1000, 500, 500, 40, 0, 0, 100, 100)
+	if overextended.EffectiveBalance < 0 {
+		t.Errorf("expected Layer 1 EffectiveBalance >= 0 (no deficits), got %d", overextended.EffectiveBalance)
+	}
+	if !overextended.DeficitCapped {
+		t.Errorf("expected DeficitCapped=true for overextended kingdom")
+	}
+}
+
+func TestTaxDrivenMigration(t *testing.T) {
+	// Confiscatory taxes (> 60%) trigger negative migration (emigration / tax flight)
+	mig70 := ComputeMigration(10000, 70, 0, 1)
+	mig95 := ComputeMigration(10000, 95, 0, 1)
+	if mig70 >= 0 {
+		t.Errorf("expected emigration (negative migration) at 70%% tax, got %d", mig70)
+	}
+	if mig95 >= mig70 {
+		t.Errorf("expected worse tax flight at 95%% (%d) than at 70%% (%d)", mig95, mig70)
+	}
+
+	// Social spending cushions tax flight
+	mig75NoSocial := ComputeMigration(50000, 75, 0, 1)
+	mig75HighSocial := ComputeMigration(50000, 75, 80, 1)
+	if mig75HighSocial <= mig75NoSocial {
+		t.Errorf("expected social spending to cushion emigration (got %d vs %d)", mig75HighSocial, mig75NoSocial)
+	}
+
+	// Low taxes (<= 35%) with infrastructure attract immigrants
+	imm := ComputeMigration(10000, 20, 30, 3)
+	if imm <= 0 {
+		t.Errorf("expected positive immigration under low taxes and good infrastructure, got %d", imm)
+	}
+}
+
+func TestPopulationPressure(t *testing.T) {
+	lowDensity := ComputePopulationPressure(5000, 50, 3, 20)
+	highDensity := ComputePopulationPressure(400000, 50, 0, 0)
+	if highDensity <= lowDensity {
+		t.Errorf("expected higher population pressure with large unserviced population (%f vs %f)", highDensity, lowDensity)
+	}
+
+	lowArmy := ComputePopulationPressure(10000, 100, 2, 10)
+	highArmy := ComputePopulationPressure(10000, 4000, 2, 10)
+	if highArmy <= lowArmy {
+		t.Errorf("expected higher population pressure under heavy military mobilization (%f vs %f)", highArmy, lowArmy)
+	}
+}
+
+func TestLastYearExpenditureTracking(t *testing.T) {
+	econ := ComputeEconomy(10000, 1000, 50, 50, 2, 2, 20, 20)
+
+	// Initial fallback when persisted last-year values are all zero
+	PopulateLastYearLedger(&econ, 0, 0, 0, 0, 0, 0, 0, 0)
+	if econ.LastTaxRevenue != econ.TaxRevenue || econ.LastTotalExp != econ.EffectiveTotalExp {
+		t.Errorf("expected fallback to populate current baseline into Last Year ledger")
+	}
+
+	// Explicit persisted last-year values
+	PopulateLastYearLedger(&econ, 120, 24, 30, 10, 15, 55, 89, -12)
+	if econ.LastTaxRevenue != 120 || econ.LastMarketIncome != 24 || econ.LastTotalExp != 55 || econ.LastMigration != -12 {
+		t.Errorf("expected explicit last-year ledger values to be preserved, got %+v", econ)
+	}
+}

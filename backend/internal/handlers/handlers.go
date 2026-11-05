@@ -323,6 +323,12 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts)
+	game.PopulateLastYearLedger(
+		&econ,
+		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
+		detail.LastSocialExp, detail.LastInvestmentExp, detail.LastTotalExp,
+		detail.LastBudgetBalance, detail.LastMigration,
+	)
 	detail.GDP = econ.GDP
 	detail.CurrencyValue = econ.CurrencyValue
 	detail.InflationRate = econ.InflationRate
@@ -346,6 +352,7 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"currency_value": detail.CurrencyValue,
 		"inflation_rate": detail.InflationRate,
 		"owner_name":     detail.OwnerName,
+		"economy":        econ,
 	})
 }
 
@@ -889,16 +896,23 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		EconomyRate int64 `json:"economy_rate"`
-		Investment  int64 `json:"investment"`
-		SocialCosts int64 `json:"social_costs"`
+		EconomyRate *int64 `json:"economy_rate"`
+		TaxRate     *int64 `json:"tax_rate"`
+		Investment  int64  `json:"investment"`
+		SocialCosts int64  `json:"social_costs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	econRate := int64(50)
+	if req.EconomyRate != nil {
+		econRate = *req.EconomyRate
+	} else if req.TaxRate != nil {
+		econRate = *req.TaxRate
+	}
 
-	err = database.SetEconomySettings(pc.CountryID, req.EconomyRate, req.Investment, req.SocialCosts)
+	err = database.SetEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
 	if err != nil {
 		http.Error(w, "Error setting economy settings", http.StatusInternalServerError)
 		return
@@ -922,21 +936,30 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts)
+	game.PopulateLastYearLedger(
+		&econ,
+		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
+		detail.LastSocialExp, detail.LastInvestmentExp, detail.LastTotalExp,
+		detail.LastBudgetBalance, detail.LastMigration,
+	)
 	detail.GDP = econ.GDP
 	detail.CurrencyValue = econ.CurrencyValue
 	detail.InflationRate = econ.InflationRate
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"country_id":     detail.CountryID,
-		"name":           detail.Name,
-		"code":           detail.Code,
-		"economy_rate":   settings.EconomyRate,
-		"investment":     settings.Investment,
-		"social_costs":   settings.SocialCosts,
-		"gdp":            detail.GDP,
-		"currency_value": detail.CurrencyValue,
-		"inflation_rate": detail.InflationRate,
+		"country_id":        detail.CountryID,
+		"name":              detail.Name,
+		"code":              detail.Code,
+		"economy_rate":      settings.EconomyRate,
+		"investment":        settings.Investment,
+		"social_costs":      settings.SocialCosts,
+		"gdp":               detail.GDP,
+		"currency_value":    detail.CurrencyValue,
+		"inflation_rate":    detail.InflationRate,
+		"budget_balance":    econ.BudgetBalance,
+		"effective_balance": econ.EffectiveBalance,
+		"economy":           econ,
 	})
 }
 

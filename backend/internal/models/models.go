@@ -34,6 +34,14 @@ type Country struct {
 	SocialCosts   int64     `json:"social_costs"`  // Growth/wealth vs currency strength (0-100 slider)
 	Markets       int64     `json:"markets"`       // Build level: boosts trade output
 	Infrastructure int64    `json:"infrastructure"` // Build level: boosts productivity & growth
+	LastTaxRevenue    int64 `json:"last_tax_revenue"`
+	LastMarketIncome  int64 `json:"last_market_income"`
+	LastMilitaryExp   int64 `json:"last_military_exp"`
+	LastSocialExp     int64 `json:"last_social_exp"`
+	LastInvestmentExp int64 `json:"last_investment_exp"`
+	LastTotalExp      int64 `json:"last_total_exp"`
+	LastBudgetBalance int64 `json:"last_budget_balance"`
+	LastMigration     int64 `json:"last_migration"`
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
