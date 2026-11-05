@@ -316,7 +316,11 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 			continue // unclaimed kingdoms stagnate
 		}
 
-		econ := ComputeEconomy(c.Population, c.Resources, c.Troops, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
+		econ := ComputeEconomyWithLayers(
+			c.Population, c.Resources, c.Troops,
+			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
+			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
+		)
 
 		// 1. Markets: Income and Risk
 		var baseMarket, riskSwing float64
@@ -350,8 +354,38 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 		migrationDelta := int64(math.Round(float64(econ.NetMigration) * yearsPassed))
 		newPopulation += popGrowth + migrationDelta
 
-		// 4. Warfare, Continuous Conscription & Unfunded Troop Demobilization
+		// 4. Warfare, Multi-Layered Troops, Continuous Conscription & Demobilization
 		newTroops := c.Troops
+		newLevy := c.TroopsLevy
+		newRegular := c.TroopsRegular
+		newElite := c.TroopsElite
+		if newTroops > 0 && (newLevy+newRegular+newElite) == 0 {
+			newRegular = newTroops
+		}
+
+		// Helper to expend casualties/demobilizations across layers (Levies first, then Regulars, then Elites)
+		expendCasualties := func(loss int64) {
+			if loss <= 0 {
+				return
+			}
+			if loss <= newLevy {
+				newLevy -= loss
+				return
+			}
+			loss -= newLevy
+			newLevy = 0
+			if loss <= newRegular {
+				newRegular -= loss
+				return
+			}
+			loss -= newRegular
+			newRegular = 0
+			newElite -= loss
+			if newElite < 0 {
+				newElite = 0
+			}
+		}
+
 		// If military upkeep exceeded total revenue under the no-deficit rule, unpaid troops demobilize back to civilian life
 		if econ.MilitaryUpkeep > annualTotalRev && newTroops > 0 {
 			unfundedUpkeep := float64(econ.MilitaryUpkeep - annualTotalRev)
@@ -359,7 +393,8 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 			if demobilized > newTroops {
 				demobilized = newTroops
 			}
-			newTroops -= demobilized
+			expendCasualties(demobilized)
+			newTroops = newLevy + newRegular + newElite
 		}
 
 		isAtWar := activeWars[c.ID]
@@ -371,22 +406,28 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 				casualties = newTroops
 			}
 
+			// Wars expend soldiers: raw levies break and take the brunt first, preserving veterans longest
+			expendCasualties(casualties)
+			newTroops = newLevy + newRegular + newElite
+
 			// Continuous conscription to replace casualties and maintain troop readiness
 			conscriptNeeded := casualties
 			if newTroops < 200 && newPopulation > 250 {
 				conscriptNeeded += int64(math.Ceil(4.0 * yearsPassed))
 			}
 
-			draftCost := conscriptNeeded * 10 // arms, uniforms, bounty per recruit
+			draftCost := conscriptNeeded * 15 // arms, uniforms, bounty per levy recruit
 			if newResources >= draftCost && newPopulation > (conscriptNeeded+50) {
 				// Kingdom can fund conscription from existing specie without deficit:
 				newResources -= draftCost
 				newPopulation -= conscriptNeeded
-				newTroops = newTroops - casualties + conscriptNeeded
+				newLevy += conscriptNeeded
+				newTroops = newLevy + newRegular + newElite
 			} else {
 				// Cannot fund conscription without deficit: troops suffer casualties + desertion
 				desertions := int64(math.Ceil(float64(newTroops) * 0.05 * yearsPassed))
-				newTroops -= (casualties + desertions)
+				expendCasualties(desertions)
+				newTroops = newLevy + newRegular + newElite
 			}
 		}
 
@@ -397,14 +438,22 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64) bool {
 		if newPopulation < 50 {
 			newPopulation = 50
 		}
-		if newTroops < 0 {
-			newTroops = 0
+		if newLevy < 0 {
+			newLevy = 0
 		}
+		if newRegular < 0 {
+			newRegular = 0
+		}
+		if newElite < 0 {
+			newElite = 0
+		}
+		newTroops = newLevy + newRegular + newElite
 
 		if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
+			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite ||
 			c.LastTaxRevenue != econ.TaxRevenue || c.LastTotalExp != effTotalExpAnnual {
-			if err := database.UpdateCountryVitalsAndBudget(
-				c.ID, newPopulation, newResources, newTroops,
+			if err := database.UpdateCountryVitalsBudgetAndTroopLayers(
+				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
 				econ.TaxRevenue, annualMarketActual, effMilAnnual, effSocAnnual, effInvAnnual,
 				effTotalExpAnnual, effBalanceAnnual, econ.NetMigration,
 			); err != nil {

@@ -15,6 +15,9 @@ type EconomyState struct {
 	SocialExpenditure   int64   `json:"social_expenditure"`
 	InvestmentExpenditure int64 `json:"investment_expenditure"`
 	MilitaryExpenditure int64   `json:"military_expenditure"`
+	TroopsLevy          int64   `json:"troops_levy"`
+	TroopsRegular       int64   `json:"troops_regular"`
+	TroopsElite         int64   `json:"troops_elite"`
 	BudgetBalance       int64   `json:"budget_balance"`
 	EffectiveMilitaryExp  int64 `json:"effective_military_exp"`
 	EffectiveSocialExp    int64 `json:"effective_social_exp"`
@@ -196,18 +199,41 @@ func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) in
 
 // ComputeEconomy derives all dashboard and annual budget indicators from persisted state.
 func ComputeEconomy(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64) EconomyState {
+	return ComputeEconomyWithLayers(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts, 0, troops, 0)
+}
+
+// ComputeEconomyWithLayers derives all economic, budget, and military ledger indicators
+// incorporating tiered military units (levies, regulars, elites) and scaled civic/cathedral investments.
+func ComputeEconomyWithLayers(
+	population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64,
+	levy, regular, elite int64,
+) EconomyState {
 	gdp := gdpValue(population, troops, taxRate, markets, infrastructure)
 	// Investment compounds GDP in future periods (a perennial productivity lever).
 	gdp *= 1.0 + investmentBoost*float64(investment)
 	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
 	marketRev := int64(markets * 12)
 	totalRev := revenue + marketRev
+	if totalRev < 0 {
+		totalRev = 0
+	}
 
-	milUpkeep := int64(float64(troops)*troopUpkeep + 0.5)
-	// Social costs and investment are deliberate spend: they buy future growth
-	// or welfare now, drawing down the budget balance.
-	socialSpend := int64(float64(socialCosts) * socialSpendPerUnit)
-	investmentSpend := int64(float64(investment) * socialSpendPerUnit)
+	// Multi-tiered military upkeep:
+	// Levy: 0.5 gold/troop (peasant militia, cheap upkeep)
+	// Regular: 1.5 gold/troop (disciplined standing footmen, arms, armor)
+	// Elite: 3.5 gold/troop (royal tercios, knightly retinues, high maintenance)
+	var milUpkeep int64
+	if (levy + regular + elite) > 0 {
+		milUpkeep = int64(math.Round(float64(levy)*0.5 + float64(regular)*1.5 + float64(elite)*3.5))
+	} else {
+		milUpkeep = int64(float64(troops)*troopUpkeep + 0.5)
+	}
+
+	// Cathedral tithes, civic administration, and court justice:
+	// Scales with total revenue and population scale, giving player finer control over national institutions.
+	socialSpend := int64(math.Round(float64(socialCosts)*1.5 + float64(totalRev)*(float64(socialCosts)/100.0)*0.40))
+	// Colonial expeditions, trading ventures, and infrastructure investment:
+	investmentSpend := int64(math.Round(float64(investment)*1.5 + float64(totalRev)*(float64(investment)/100.0)*0.40))
 	expenditure := milUpkeep + socialSpend + investmentSpend
 	balance := revenue - expenditure
 
@@ -252,6 +278,9 @@ func ComputeEconomy(population, resources, troops, taxRate, markets, infrastruct
 		SocialExpenditure:      socialSpend,
 		InvestmentExpenditure:  investmentSpend,
 		MilitaryExpenditure:    expenditure,
+		TroopsLevy:             levy,
+		TroopsRegular:          regular,
+		TroopsElite:            elite,
 		BudgetBalance:          balance,
 		EffectiveMilitaryExp:   effMil,
 		EffectiveSocialExp:     effSoc,

@@ -164,15 +164,46 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) troopVal.textContent = central.toLocaleString();
 
+  const levy = detail?.troops_levy ?? 0;
+  const regular = detail?.troops_regular ?? (detail?.troops ?? central);
+  const elite = detail?.troops_elite ?? 0;
+  const levyEl = document.getElementById("cc-troops-levy");
+  if (levyEl) levyEl.textContent = levy.toLocaleString();
+  const regEl = document.getElementById("cc-troops-regular");
+  if (regEl) regEl.textContent = regular.toLocaleString();
+  const eliteEl = document.getElementById("cc-troops-elite");
+  if (eliteEl) eliteEl.textContent = elite.toLocaleString();
+
   const tierBadge = document.getElementById("cc-army-tier");
   if (tierBadge) {
-    let tier = "LEVY";
-    if (central >= 5000) tier = "HORDE";
-    else if (central >= 1000) tier = "LEGION";
-    else if (central >= 500) tier = "BATTALION";
-    else if (central >= 100) tier = "COMPANY";
+    let tier = "MILITIA";
+    if (elite >= 20) tier = "ROYAL GUARD";
+    else if (regular >= 50) tier = "TERCIOS";
+    else if (regular > 0) tier = "LINE REGULARS";
+    else if (levy > 0) tier = "CONSCRIPT LEVY";
     tierBadge.textContent = tier;
   }
+
+  const fortN = detail?.fort_n ?? 0;
+  const fortS = detail?.fort_s ?? 0;
+  const fortE = detail?.fort_e ?? 0;
+  const fortW = detail?.fort_w ?? 0;
+  const fortNames = ["Outpost", "Bastion", "Citadel", "Star Fort", "Imperial Stronghold"];
+  const updateBadge = (dir, val) => {
+    const el = document.getElementById(`cc-fort-badge-${dir.toLowerCase()}`);
+    if (el) {
+      const name = fortNames[Math.min(val, fortNames.length - 1)];
+      el.textContent = `🏰 Tier ${val} (${name})`;
+      if (val > 0) el.classList.add("fort-active");
+      else el.classList.remove("fort-active");
+    }
+  };
+  updateBadge("N", fortN);
+  updateBadge("S", fortS);
+  updateBadge("E", fortE);
+  updateBadge("W", fortW);
+
+  updateFortifyButtonLabel();
 
   if (kingdom.economy) {
     updateDerivedEconomyUI(
@@ -239,15 +270,46 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) troopVal.textContent = central.toLocaleString();
 
+  const levy = detail?.troops_levy ?? 0;
+  const regular = detail?.troops_regular ?? (detail?.troops ?? central);
+  const elite = detail?.troops_elite ?? 0;
+  const levyEl = document.getElementById("cc-troops-levy");
+  if (levyEl) levyEl.textContent = levy.toLocaleString();
+  const regEl = document.getElementById("cc-troops-regular");
+  if (regEl) regEl.textContent = regular.toLocaleString();
+  const eliteEl = document.getElementById("cc-troops-elite");
+  if (eliteEl) eliteEl.textContent = elite.toLocaleString();
+
   const tierBadge = document.getElementById("cc-army-tier");
   if (tierBadge) {
-    let tier = "LEVY";
-    if (central >= 5000) tier = "HORDE";
-    else if (central >= 1000) tier = "LEGION";
-    else if (central >= 500) tier = "BATTALION";
-    else if (central >= 100) tier = "COMPANY";
+    let tier = "MILITIA";
+    if (elite >= 20) tier = "ROYAL GUARD";
+    else if (regular >= 50) tier = "TERCIOS";
+    else if (regular > 0) tier = "LINE REGULARS";
+    else if (levy > 0) tier = "CONSCRIPT LEVY";
     tierBadge.textContent = tier;
   }
+
+  const fortN = detail?.fort_n ?? 0;
+  const fortS = detail?.fort_s ?? 0;
+  const fortE = detail?.fort_e ?? 0;
+  const fortW = detail?.fort_w ?? 0;
+  const fortNames = ["Outpost", "Bastion", "Citadel", "Star Fort", "Imperial Stronghold"];
+  const updateBadge = (dir, val) => {
+    const el = document.getElementById(`cc-fort-badge-${dir.toLowerCase()}`);
+    if (el) {
+      const name = fortNames[Math.min(val, fortNames.length - 1)];
+      el.textContent = `🏰 Tier ${val} (${name})`;
+      if (val > 0) el.classList.add("fort-active");
+      else el.classList.remove("fort-active");
+    }
+  };
+  updateBadge("N", fortN);
+  updateBadge("S", fortS);
+  updateBadge("E", fortE);
+  updateBadge("W", fortW);
+
+  updateFortifyButtonLabel();
 
   if (!activeDial) {
     if (typeof detail?.economy_rate === "number") setTaxRate(detail.economy_rate, false);
@@ -721,9 +783,15 @@ export function updateEconomyHintsLive() {
   const marketRevenue = (marketsLevel || 0) * 4;
   const totalRevenue = taxRevenue + marketRevenue;
 
-  const milUpkeep = Math.round(tr * 0.5 + 0.5);
-  const socExp = Math.round(socialCostsRate * 0.2 + 0.5);
-  const invExp = Math.round(investmentRate * 0.2 + 0.5);
+  const levy = commandCenterDetail?.troops_levy ?? 0;
+  const regular = commandCenterDetail?.troops_regular ?? tr;
+  const elite = commandCenterDetail?.troops_elite ?? 0;
+  const milUpkeep = (levy + regular + elite > 0)
+    ? Math.round(levy * 0.5 + regular * 1.5 + elite * 3.5)
+    : Math.round(tr * 0.5 + 0.5);
+
+  const socExp = Math.round(socialCostsRate * 1.5 + totalRevenue * (socialCostsRate / 100.0) * 0.40);
+  const invExp = Math.round(investmentRate * 1.5 + totalRevenue * (investmentRate / 100.0) * 0.40);
 
   // Enforce Layer 1 Balanced Budget (No Deficits)
   const cappedBudget = enforceClientBalancedBudget(totalRevenue, milUpkeep, socExp, invExp);
@@ -752,14 +820,14 @@ export function updateEconomyHintsLive() {
 
   const invHint = document.getElementById("cc-investment-hint");
   if (invHint) {
-    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` (-${cappedBudget.effInv} ducats)`;
-    invHint.textContent = `+${(investmentRate * 0.2).toFixed(1)}% GDP${capNote}`;
+    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` (-${cappedBudget.effInv} ducats/yr)`;
+    invHint.textContent = `Colonial Ventures: ${capNote}`;
   }
 
   const socHint = document.getElementById("cc-social-hint");
   if (socHint) {
-    const capNote = cappedBudget.effSoc < socExp ? ` (Capped: -${cappedBudget.effSoc})` : `-${cappedBudget.effSoc} ducats`;
-    socHint.textContent = `Spend: ${capNote} · Relief: -${(socialCostsRate * 0.35).toFixed(0)}% Stress`;
+    const capNote = cappedBudget.effSoc < socExp ? ` (Capped: -${cappedBudget.effSoc})` : `-${cappedBudget.effSoc} ducats/yr`;
+    socHint.textContent = `Cathedrals & Guilds: ${capNote}`;
   }
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
@@ -986,10 +1054,7 @@ export function setCompassSide(side, updateAngle = true) {
     pod.classList.toggle("selected-frontier", pod.classList.contains(`pod-${side.toLowerCase()}`));
   });
 
-  const fortifyLabel = document.getElementById("cc-fortify-border-label");
-  if (fortifyLabel) {
-    fortifyLabel.textContent = `Reinforce ${sideNames[side]} Frontier`;
-  }
+  updateFortifyButtonLabel();
 
   if (updateAngle) {
     const angleMap = { N: 0, E: 90, S: 180, W: 270 };
@@ -1307,6 +1372,47 @@ export function triggerUpgradeInfra() {
   performActionDirect("economy", "Invest in Infrastructure");
 }
 
+export function updateFortifyButtonLabel() {
+  const fortifyLabel = document.getElementById("cc-fortify-border-label");
+  if (!fortifyLabel) return;
+  const side = compassDirection || "N";
+  const sideNames = { N: "North", S: "South", E: "East", W: "West" };
+  const currentFort = (commandCenterDetail && commandCenterDetail[`fort_${side.toLowerCase()}`]) || 0;
+  const nextTier = currentFort + 1;
+  const cost = 500 * nextTier;
+  fortifyLabel.textContent = `Cost: ${cost.toLocaleString()} Ducats · Fortify ${sideNames[side]} Frontier (Tier ${currentFort} ➔ ${nextTier})`;
+}
+
+export let selectedRecruitTier = "levy";
+
+export function selectRecruitTier(tier) {
+  selectedRecruitTier = tier;
+  const tabs = ["levy", "regular", "elite", "drill"];
+  tabs.forEach((t) => {
+    const tabEl = document.getElementById(`tab-recruit-${t}`);
+    if (tabEl) {
+      if (t === tier) tabEl.classList.add("active");
+      else tabEl.classList.remove("active");
+    }
+  });
+
+  const btnText = document.getElementById("cc-recruit-btn-text");
+  const costLabel = document.getElementById("cc-recruit-cost-label");
+  if (tier === "levy") {
+    if (btnText) btnText.textContent = "MUSTER RECRUITS";
+    if (costLabel) costLabel.textContent = "Cost: 150 Ducats · +10 Conscripts";
+  } else if (tier === "regular") {
+    if (btnText) btnText.textContent = "ENLIST LINE REGULARS";
+    if (costLabel) costLabel.textContent = "Cost: 450 Ducats · +10 Trained Regulars";
+  } else if (tier === "elite") {
+    if (btnText) btnText.textContent = "COMMISSION ROYAL GUARD";
+    if (costLabel) costLabel.textContent = "Cost: 1,200 Ducats · +10 Elite Tercios";
+  } else if (tier === "drill") {
+    if (btnText) btnText.textContent = "DRILL & PROMOTE RANKS";
+    if (costLabel) costLabel.textContent = "Cost: 300 Ducats · 10 Levies ➔ Regulars / 5 Regs ➔ Elites";
+  }
+}
+
 export function triggerRecruitTroops() {
   const btn = document.getElementById("cc-lever-recruit");
   if (btn) {
@@ -1315,10 +1421,25 @@ export function triggerRecruitTroops() {
       btn.style.transform = "";
     }, 180);
   }
-  performActionDirect("military", "Recruit Troops");
+  if (selectedRecruitTier === "drill") {
+    performActionDirect("military", "Drill & Promote", {
+      troop_tier: "drill",
+    });
+  } else {
+    performActionDirect("military", "Recruit Troops", {
+      troop_tier: selectedRecruitTier,
+    });
+  }
 }
 
 export function triggerFortifyBorder() {
+  const btn = document.getElementById("cc-lever-fortify");
+  if (btn) {
+    btn.style.transform = "scale(0.96)";
+    setTimeout(() => {
+      btn.style.transform = "";
+    }, 180);
+  }
   performActionDirect("military", "Fortify Borders", {
     direction: compassDirection,
   });

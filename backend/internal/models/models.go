@@ -29,6 +29,13 @@ type Country struct {
 	Population    int64     `json:"population"`
 	Resources     int64     `json:"resources"`
 	Troops        int64     `json:"troops"`     // Central troop count for this kingdom
+	TroopsLevy    int64     `json:"troops_levy"`    // Conscript levies / raw militia
+	TroopsRegular int64     `json:"troops_regular"` // Trained line regulars
+	TroopsElite   int64     `json:"troops_elite"`   // Royal guard / veteran elites
+	FortN         int64     `json:"fort_n"`         // North frontier fortification tier
+	FortS         int64     `json:"fort_s"`         // South frontier fortification tier
+	FortE         int64     `json:"fort_e"`         // East frontier fortification tier
+	FortW         int64     `json:"fort_w"`         // West frontier fortification tier
 	EconomyRate   int64     `json:"economy_rate"`  // Tax rate 0-100 set by the owning player
 	Investment    int64     `json:"investment"`    // Future GDP multiplier (0-100 slider)
 	SocialCosts   int64     `json:"social_costs"`  // Growth/wealth vs currency strength (0-100 slider)

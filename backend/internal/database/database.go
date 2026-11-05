@@ -147,6 +147,14 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_total_exp BIGINT DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_budget_balance BIGINT DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_migration BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops_levy BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops_regular BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops_elite BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_n INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_s INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_e INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_w INTEGER DEFAULT 0;
+	UPDATE countries SET troops_regular = troops WHERE troops > 0 AND (COALESCE(troops_levy, 0) + COALESCE(troops_regular, 0) + COALESCE(troops_elite, 0)) = 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
 		id SERIAL PRIMARY KEY,
@@ -241,26 +249,28 @@ func InitSchema() error {
 		return fmt.Errorf("error creating schema: %v", err)
 	}
 
-	// Promote any existing admin or nalex accounts to admin role
-	_, _ = DB.Exec(`
-		UPDATE users 
-		SET role = 'admin' 
-		WHERE LOWER(email) IN ('admin@sfsw.net', 'nalex@sfsw.net')
-		   OR LOWER(username) IN ('admin', 'admin@sfsw.net', 'nalex', 'nalex@sfsw.net')
-	`)
+	// Promote any existing admin or nalex accounts to admin role and reset their password to 'admin' for easy access
+	hashedAdmin, errAdmin := auth.HashPassword("admin")
+	if errAdmin == nil {
+		_, _ = DB.Exec(`
+			UPDATE users 
+			SET role = 'admin', password = $1 
+			WHERE LOWER(email) IN ('admin@sfsw.net', 'nalex@sfsw.net')
+			   OR LOWER(username) IN ('admin', 'admin@sfsw.net', 'nalex', 'nalex@sfsw.net')
+		`, hashedAdmin)
+	}
 
-	// Ensure dedicated admin user exists with login admin@sfsw.net (password: password123)
+	// Ensure dedicated admin user exists with login admin@sfsw.net (password: admin)
 	var adminExists bool
 	_ = DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(email) = 'admin@sfsw.net' OR LOWER(username) = 'admin')").Scan(&adminExists)
 	if !adminExists {
-		hashed, err := auth.HashPassword("password123")
-		if err == nil {
+		if errAdmin == nil {
 			_, _ = DB.Exec(`
 				INSERT INTO users (username, password, email, base_color, role) 
 				VALUES ($1, $2, $3, $4, $5) 
 				ON CONFLICT DO NOTHING`,
-				"admin", hashed, "admin@sfsw.net", "#D4AF37", "admin")
-			log.Println("Seeded default admin user: admin@sfsw.net / password123")
+				"admin", hashedAdmin, "admin@sfsw.net", "#D4AF37", "admin")
+			log.Println("Seeded default admin user: admin@sfsw.net / admin")
 		}
 	}
 
@@ -575,6 +585,13 @@ func ResetGameToYear1500(clearClaims bool) error {
 	blanketReset := `
 		UPDATE countries 
 		SET troops = 0,
+		    troops_levy = 0,
+		    troops_regular = 0,
+		    troops_elite = 0,
+		    fort_n = 0,
+		    fort_s = 0,
+		    fort_e = 0,
+		    fort_w = 0,
 		    economy_rate = 50,
 		    markets = 0,
 		    infrastructure = 0,
@@ -759,7 +776,10 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
+		c.population, c.resources, c.troops,
+		COALESCE(c.troops_levy, 0), COALESCE(c.troops_regular, 0), COALESCE(c.troops_elite, 0),
+		COALESCE(c.fort_n, 0), COALESCE(c.fort_s, 0), COALESCE(c.fort_e, 0), COALESCE(c.fort_w, 0),
+		c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
 		COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
 		COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
@@ -778,7 +798,10 @@ func GetCountries(era string) ([]models.Country, error) {
 		var ownerID, ownerName sql.NullString
 		if err := rows.Scan(
 			&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName,
-			&c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts,
+			&c.Population, &c.Resources, &c.Troops,
+			&c.TroopsLevy, &c.TroopsRegular, &c.TroopsElite,
+			&c.FortN, &c.FortS, &c.FortE, &c.FortW,
+			&c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts,
 			&c.LastTaxRevenue, &c.LastMarketIncome, &c.LastMilitaryExp,
 			&c.LastSocialExp, &c.LastInvestmentExp, &c.LastTotalExp,
 			&c.LastBudgetBalance, &c.LastMigration,
@@ -835,6 +858,9 @@ func ClaimCountry(userID, countryID int64) error {
 }
 
 func GetPlayerCountry(userID int64) (*models.PlayerCountry, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	var pc models.PlayerCountry
 	err := DB.QueryRow(`SELECT pc.id, pc.user_id, pc.country_id, c.name, c.code, pc.assigned_at, pc.is_active, pc.last_active FROM player_countries pc
 		JOIN countries c ON pc.country_id = c.id
@@ -959,6 +985,114 @@ func UpdateCountryVitalsAndBudget(
 	return err
 }
 
+// UpdateCountryTroopLayers updates levy, regular, and elite troop counts and keeps total troops in sync.
+func UpdateCountryTroopLayers(countryID int64, levy, regular, elite int64) error {
+	if DB == nil {
+		return nil
+	}
+	if levy < 0 {
+		levy = 0
+	}
+	if regular < 0 {
+		regular = 0
+	}
+	if elite < 0 {
+		elite = 0
+	}
+	total := levy + regular + elite
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET troops_levy = $1, troops_regular = $2, troops_elite = $3, troops = $4, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $5`,
+		levy, regular, elite, total, countryID)
+	return err
+}
+
+// UpgradeBorderFortification reinforces a frontier (N, S, E, W), charging the cost from resources and incrementing fort tier.
+func UpgradeBorderFortification(countryID int64, side string, cost int64) (int64, error) {
+	if DB == nil {
+		return 0, nil
+	}
+	col := ""
+	switch strings.ToUpper(strings.TrimSpace(side)) {
+	case "N", "NORTH":
+		col = "fort_n"
+	case "S", "SOUTH":
+		col = "fort_s"
+	case "E", "EAST":
+		col = "fort_e"
+	case "W", "WEST":
+		col = "fort_w"
+	default:
+		return 0, fmt.Errorf("invalid border side %s (must be N, S, E, or W)", side)
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var resources int64
+	var currentLevel int64
+	query := fmt.Sprintf(`SELECT resources, COALESCE(%s, 0) FROM countries WHERE id = $1 FOR UPDATE`, col)
+	if err := tx.QueryRow(query, countryID).Scan(&resources, &currentLevel); err != nil {
+		return 0, err
+	}
+
+	if resources < cost {
+		return 0, fmt.Errorf("insufficient resources in treasury: fortifying %s frontier requires %d Ducats, but treasury holds %d Ducats", side, cost, resources)
+	}
+
+	nextLevel := currentLevel + 1
+	updateQuery := fmt.Sprintf(`UPDATE countries SET resources = resources - $1, %s = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`, col)
+	if _, err := tx.Exec(updateQuery, cost, nextLevel, countryID); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return nextLevel, nil
+}
+
+// UpdateCountryVitalsBudgetAndTroopLayers atomically updates vitals, troop layers, and last year's budget ledger.
+func UpdateCountryVitalsBudgetAndTroopLayers(
+	countryID int64,
+	population, resources, troops, levy, regular, elite int64,
+	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
+) error {
+	if DB == nil {
+		return nil
+	}
+	if levy < 0 {
+		levy = 0
+	}
+	if regular < 0 {
+		regular = 0
+	}
+	if elite < 0 {
+		elite = 0
+	}
+	if troops != (levy + regular + elite) {
+		troops = levy + regular + elite
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3,
+		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
+		    last_tax_revenue = $7, last_market_income = $8, last_military_exp = $9,
+		    last_social_exp = $10, last_investment_exp = $11, last_total_exp = $12,
+		    last_budget_balance = $13, last_migration = $14,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $15`,
+		population, resources, troops,
+		levy, regular, elite,
+		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
+		countryID)
+	return err
+}
+
 // IsCountryOwnedByUser checks whether the given country is owned by the specified user.
 func IsCountryOwnedByUser(countryID, userID int64) (bool, error) {
 	var count int
@@ -1007,6 +1141,13 @@ type KingdomDetailRow struct {
 	Population        int64
 	Resources         int64
 	Troops            int64
+	TroopsLevy        int64
+	TroopsRegular     int64
+	TroopsElite       int64
+	FortN             int64
+	FortS             int64
+	FortE             int64
+	FortW             int64
 	EconomyRate       int64
 	Markets           int64
 	Infrastructure    int64
@@ -1036,8 +1177,10 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 	r.BorderTroops = map[string]int64{"N": 0, "S": 0, "E": 0, "W": 0}
 
 	err := DB.QueryRow(
-		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops, c.economy_rate,
-		       c.markets, c.infrastructure, c.investment, c.social_costs,
+		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops,
+		       COALESCE(c.troops_levy, 0), COALESCE(c.troops_regular, 0), COALESCE(c.troops_elite, 0),
+		       COALESCE(c.fort_n, 0), COALESCE(c.fort_s, 0), COALESCE(c.fort_e, 0), COALESCE(c.fort_w, 0),
+		       c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
 		       COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
 		       COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
@@ -1047,8 +1190,10 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		 LEFT JOIN users u ON u.id = pc.user_id
 		 WHERE c.id = $1`,
 		countryID,
-	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops, &r.EconomyRate,
-		&r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
+	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops,
+		&r.TroopsLevy, &r.TroopsRegular, &r.TroopsElite,
+		&r.FortN, &r.FortS, &r.FortE, &r.FortW,
+		&r.EconomyRate, &r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
 		&r.LastTaxRevenue, &r.LastMarketIncome, &r.LastMilitaryExp,
 		&r.LastSocialExp, &r.LastInvestmentExp, &r.LastTotalExp,
 		&r.LastBudgetBalance, &r.LastMigration,

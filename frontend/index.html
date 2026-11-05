@@ -765,6 +765,11 @@
                             <div class="gauge-readout">
                                 <span class="gauge-value" id="cc-meter-troop-val">0</span>
                                 <span class="gauge-sub">TERCIOS &amp; CARAVELS</span>
+                                <div class="military-tiers-breakdown">
+                                    <span class="troop-layer-pill layer-levy" title="Raw Conscript Levies (Upkeep: 0.5 D/cycle)">🌾 <strong id="cc-troops-levy">0</strong></span>
+                                    <span class="troop-layer-pill layer-regular" title="Disciplined Line Regulars (Upkeep: 1.5 D/cycle)">⚔️ <strong id="cc-troops-regular">0</strong></span>
+                                    <span class="troop-layer-pill layer-elite" title="Royal Elite Veterans (Upkeep: 3.5 D/cycle)">👑 <strong id="cc-troops-elite">0</strong></span>
+                                </div>
                             </div>
                         </div>
 
@@ -1048,6 +1053,7 @@
                                         <div class="border-gauge-pod pod-n" id="pod-border-n"
                                             onclick="selectCompassSide('N')">
                                             <div class="pod-dir">NORTH BORDER</div>
+                                            <div class="pod-fort-badge" id="cc-fort-badge-n">🏰 Fort Tier 0</div>
                                             <div class="pod-meter-bar">
                                                 <div class="pod-bar-fill" id="bar-fill-n"></div>
                                             </div>
@@ -1060,6 +1066,7 @@
                                             <div class="border-gauge-pod pod-w" id="pod-border-w"
                                                 onclick="selectCompassSide('W')">
                                                 <div class="pod-dir">WEST</div>
+                                                <div class="pod-fort-badge" id="cc-fort-badge-w">🏰 Tier 0</div>
                                                 <div class="pod-meter-bar vertical">
                                                     <div class="pod-bar-fill" id="bar-fill-w"></div>
                                                 </div>
@@ -1076,6 +1083,7 @@
                                             <div class="border-gauge-pod pod-e" id="pod-border-e"
                                                 onclick="selectCompassSide('E')">
                                                 <div class="pod-dir">EAST</div>
+                                                <div class="pod-fort-badge" id="cc-fort-badge-e">🏰 Tier 0</div>
                                                 <div class="pod-meter-bar vertical">
                                                     <div class="pod-bar-fill" id="bar-fill-e"></div>
                                                 </div>
@@ -1087,6 +1095,7 @@
                                         <div class="border-gauge-pod pod-s" id="pod-border-s"
                                             onclick="selectCompassSide('S')">
                                             <div class="pod-dir">SOUTH BORDER</div>
+                                            <div class="pod-fort-badge" id="cc-fort-badge-s">🏰 Fort Tier 0</div>
                                             <div class="pod-meter-bar">
                                                 <div class="pod-bar-fill" id="bar-fill-s"></div>
                                             </div>
@@ -1172,13 +1181,18 @@
                                     <!-- Action Levers: Conscribe, Fortify, Deploy -->
                                     <div class="military-actuators-row">
                                         <!-- Conscribe Troops Lever / Plunger -->
-                                        <div class="actuator-box">
+                                        <div class="actuator-box actuator-recruit-tiered">
+                                            <div class="recruit-tier-selector" role="radiogroup" aria-label="Troop Recruitment Layer">
+                                                <button type="button" class="tier-tab-btn active" id="tab-recruit-levy" onclick="selectRecruitTier('levy')" title="Enlist raw peasant levies (150 D / 10 troops)">🌾 Conscripts (150 D)</button>
+                                                <button type="button" class="tier-tab-btn" id="tab-recruit-regular" onclick="selectRecruitTier('regular')" title="Train disciplined line regulars (450 D / 10 troops)">⚔️ Regulars (450 D)</button>
+                                                <button type="button" class="tier-tab-btn" id="tab-recruit-elite" onclick="selectRecruitTier('elite')" title="Commission elite knights / guard (1,200 D / 10 troops)">👑 Elite Guard (1,200 D)</button>
+                                                <button type="button" class="tier-tab-btn" id="tab-recruit-drill" onclick="selectRecruitTier('drill')" title="Drill levies into regulars or regulars into elites (300 D)">🎯 Drill &amp; Promote (300 D)</button>
+                                            </div>
                                             <button id="cc-lever-recruit" class="chunky-actuator-btn btn-recruit"
                                                 onclick="triggerRecruitTroops()">
                                                 <span class="btn-icon">🎖️</span>
-                                                <span class="btn-main">MUSTER TERCIOS &amp; FLEET</span>
-                                                <span class="btn-meta" id="cc-recruit-cost-label">Cost: 10 Ducats · +10
-                                                    Troops</span>
+                                                <span class="btn-main" id="cc-recruit-btn-text">MUSTER RECRUITS</span>
+                                                <span class="btn-meta" id="cc-recruit-cost-label">Cost: 150 Ducats · +10 Conscripts</span>
                                             </button>
                                         </div>
 
@@ -1188,8 +1202,7 @@
                                                 onclick="triggerFortifyBorder()">
                                                 <span class="btn-icon">🏰</span>
                                                 <span class="btn-main">FORTIFY CITADEL &amp; BORDER</span>
-                                                <span class="btn-meta" id="cc-fortify-border-label">Reinforce North
-                                                    Frontier</span>
+                                                <span class="btn-meta" id="cc-fortify-border-label">Cost: 500 Ducats · Reinforce North Frontier</span>
                                             </button>
                                         </div>
 

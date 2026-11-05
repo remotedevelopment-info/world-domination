@@ -322,7 +322,11 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts)
+	econ := game.ComputeEconomyWithLayers(
+		detail.Population, detail.Resources, detail.Troops,
+		detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts,
+		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
+	)
 	game.PopulateLastYearLedger(
 		&econ,
 		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
@@ -341,6 +345,13 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"population":     detail.Population,
 		"resources":      detail.Resources,
 		"troops":         detail.Troops,
+		"troops_levy":    detail.TroopsLevy,
+		"troops_regular": detail.TroopsRegular,
+		"troops_elite":   detail.TroopsElite,
+		"fort_n":         detail.FortN,
+		"fort_s":         detail.FortS,
+		"fort_e":         detail.FortE,
+		"fort_w":         detail.FortW,
 		"central_troops": detail.CentralTroops,
 		"border_troops":  detail.BorderTroops,
 		"economy_rate":   detail.EconomyRate,
@@ -390,6 +401,8 @@ type ActionRequest struct {
 	Direction       string `json:"direction,omitempty"`   // N, S, E, W, or 0-360 (interior movement)
 	Speed           string `json:"speed,omitempty"`       // Slow, Fast (interior movement)
 	MovementType    string `json:"movement_type,omitempty"` // interior, target
+	TroopTier       string `json:"troop_tier,omitempty"`    // levy, regular, elite, drill
+	TroopCount      *int64 `json:"troop_count,omitempty"`   // optional batch count (default 10)
 }
 
 // ActionHandler handles diplomacy / economy / military actions. Each action
@@ -646,6 +659,9 @@ func handleMilitary(userID int64, description string, req ActionRequest) error {
 	switch description {
 	case "Recruit Troops":
 		return handleMilitaryRecruit(userID, pc, req)
+	case "Train Troops", "Drill & Promote":
+		req.TroopTier = "drill"
+		return handleMilitaryRecruit(userID, pc, req)
 	case "Move Army":
 		return handleMilitaryMove(userID, pc, req)
 	case "Fortify Borders":
@@ -657,39 +673,133 @@ func handleMilitary(userID int64, description string, req ActionRequest) error {
 	}
 }
 
-// handleMilitaryRecruit recruits troops within the player's own kingdom.
-// Recruited troops accumulate at a central location in the country.
+// handleMilitaryRecruit recruits or trains/promotes troops across layered military tiers.
 func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
-	countries, err := database.GetCountries("medieval")
-	if err != nil {
-		return err
+	country, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil || country == nil {
+		return errors.New("country not found")
 	}
-	var resources, troops int64
-	for _, c := range countries {
-		if c.ID == pc.CountryID {
-			resources, troops = c.Resources, c.Troops
-			break
+
+	tier := strings.ToLower(strings.TrimSpace(req.TroopTier))
+	if tier == "" {
+		tier = "levy" // default entry tier
+	}
+
+	batchCount := int64(10)
+	if req.TroopCount != nil && *req.TroopCount > 0 {
+		batchCount = *req.TroopCount
+	}
+
+	switch tier {
+	case "levy", "conscript", "militia":
+		// Levy: 150 gold per 10 troops (15 gold/troop)
+		cost := (batchCount / 10) * 150
+		if cost < 150 {
+			cost = 150
 		}
+		if country.Resources < cost {
+			return fmt.Errorf("insufficient resources in treasury: levying %d recruits requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
+		}
+		newResources := country.Resources - cost
+		newLevy := country.TroopsLevy + batchCount
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, newLevy, country.TroopsRegular, country.TroopsElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			fmt.Sprintf("levied %d raw conscripts (-%d gold from treasury)", batchCount, cost),
+			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+
+	case "regular", "line", "footmen":
+		// Regulars: 450 gold per 10 troops (45 gold/troop)
+		cost := (batchCount / 10) * 450
+		if cost < 450 {
+			cost = 450
+		}
+		if country.Resources < cost {
+			return fmt.Errorf("insufficient resources in treasury: recruiting %d line regulars requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
+		}
+		newResources := country.Resources - cost
+		newRegular := country.TroopsRegular + batchCount
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, newRegular, country.TroopsElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			fmt.Sprintf("enlisted %d disciplined line regulars (-%d gold from treasury)", batchCount, cost),
+			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+
+	case "elite", "guard", "knights", "veteran":
+		// Elite Guard: 1,200 gold per 10 troops (120 gold/troop)
+		cost := (batchCount / 10) * 1200
+		if cost < 1200 {
+			cost = 1200
+		}
+		if country.Resources < cost {
+			return fmt.Errorf("insufficient resources in treasury: commissioning %d royal elite guards requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
+		}
+		newResources := country.Resources - cost
+		newElite := country.TroopsElite + batchCount
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, country.TroopsRegular, newElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			fmt.Sprintf("commissioned %d elite royal guards (-%d gold from treasury)", batchCount, cost),
+			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+
+	case "drill", "promote", "train":
+		return handleMilitaryDrillAndPromote(userID, pc, country)
+
+	default:
+		return fmt.Errorf("unknown troop layer %q (valid layers: levy, regular, elite, drill)", tier)
 	}
-	// Recruitment cost: enlistment bounty, arms, armor, and provisioning (10 gold per soldier, minimum 50 gold)
-	const recruitBatch = int64(10)
-	cost := recruitBatch * 10
-	if cost < 50 {
-		cost = 50
+}
+
+// handleMilitaryDrillAndPromote trains troops into higher ranks over time.
+func handleMilitaryDrillAndPromote(userID int64, pc *models.PlayerCountry, country *database.KingdomDetailRow) error {
+	cost := int64(300)
+	if country.Resources < cost {
+		return fmt.Errorf("insufficient resources: drilling and promoting troops requires %d gold, treasury holds %d", cost, country.Resources)
 	}
-	if resources < cost {
-		return fmt.Errorf("insufficient resources in treasury: recruitment requires %d gold, treasury holds %d", cost, resources)
+
+	if country.TroopsLevy >= 10 {
+		// Drill 10 Levies into 10 Line Regulars
+		newLevy := country.TroopsLevy - 10
+		newRegular := country.TroopsRegular + 10
+		newResources := country.Resources - cost
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, newLevy, newRegular, country.TroopsElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			"drilled and promoted 10 raw levies into disciplined line regulars (-300 gold)",
+			nil, "", "", "")
+	} else if country.TroopsRegular >= 5 {
+		// Promote 5 Battle-Tested Regulars into 5 Elite Imperial Veterans
+		newRegular := country.TroopsRegular - 5
+		newElite := country.TroopsElite + 5
+		newResources := country.Resources - cost
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, newRegular, newElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			"promoted 5 battle-tested regulars to elite imperial veterans (-300 gold)",
+			nil, "", "", "")
+	} else {
+		return errors.New("no troops eligible for drill and promotion; recruit at least 10 levies or 5 line regulars first")
 	}
-	resources -= cost
-	troops += recruitBatch // Recruited troops accumulate in kingdom's armada
-	if err := database.UpdateCountryResources(pc.CountryID, resources); err != nil {
-		return err
-	}
-	if err := database.UpdateCountryTroops(pc.CountryID, troops); err != nil {
-		return err
-	}
-	return database.LogAction(userID, pc.CountryID, "military", "recruited "+strconv.FormatInt(recruitBatch, 10)+" troops (-"+strconv.FormatInt(cost, 10)+" gold from treasury)",
-		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
 
 // handleMilitaryMove moves troops either interior (guard a border) or toward a target.
@@ -783,15 +893,57 @@ func directionToBorderSide(direction string) string {
 	}
 }
 
-// handleMilitaryFortify fortifies an owned border side.
+// handleMilitaryFortify fortifies an owned frontier, deducting high construction costs and upgrading defenses.
 func handleMilitaryFortify(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
 	if req.TargetCountryID != nil && *req.TargetCountryID != 0 {
 		return errors.New("target country not allowed for fortify borders")
 	}
-	if req.Direction == "" {
-		return errors.New("border side required for fortify borders")
+	direction := strings.ToUpper(strings.TrimSpace(req.Direction))
+	if direction == "" {
+		return errors.New("border side required for fortify borders (N, S, E, or W)")
 	}
-	return database.LogAction(userID, pc.CountryID, "military", "fortified borders",
+	side := directionToBorderSide(direction)
+	if side != "N" && side != "S" && side != "E" && side != "W" {
+		return fmt.Errorf("invalid border side %q (must be N, S, E, or W)", direction)
+	}
+
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil || detail == nil {
+		return errors.New("country not found")
+	}
+
+	var currentTier int64
+	switch side {
+	case "N":
+		currentTier = detail.FortN
+	case "S":
+		currentTier = detail.FortS
+	case "E":
+		currentTier = detail.FortE
+	case "W":
+		currentTier = detail.FortW
+	}
+
+	// Cost scales heavily by tier: Tier 1 = 500 D, Tier 2 = 1,000 D, Tier 3 = 1,500 D, etc.
+	cost := int64(500) * (currentTier + 1)
+	if detail.Resources < cost {
+		return fmt.Errorf("insufficient resources in treasury: constructing Tier %d fortification on %s frontier requires %d gold, treasury holds %d", currentTier+1, side, cost, detail.Resources)
+	}
+
+	newTier, err := database.UpgradeBorderFortification(pc.CountryID, side, cost)
+	if err != nil {
+		return err
+	}
+
+	// Deploy a stationed defensive garrison on this fortified frontier
+	_, _ = database.DB.Exec(
+		`INSERT INTO troop_deployments (user_id, country_id, border_side, direction, speed, strength, deployed_at, updated_at)
+		 VALUES ($1, $2, $3, $4, 'Stationary', 10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		 ON CONFLICT DO NOTHING`,
+		userID, pc.CountryID, side, side)
+
+	return database.LogAction(userID, pc.CountryID, "military",
+		fmt.Sprintf("constructed Tier %d frontier fortification on %s border (-%d gold)", newTier, side, cost),
 		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
 

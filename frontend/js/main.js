@@ -78,6 +78,7 @@ import {
   triggerUpgradeMarket,
   triggerUpgradeInfra,
   triggerRecruitTroops,
+  selectRecruitTier,
   triggerFortifyBorder,
   triggerDispatchTroops,
   stepTargetKingdom,
@@ -809,6 +810,7 @@ window.selectCompassSide = selectCompassSide;
 window.toggleMovementMode = toggleMovementMode;
 window.toggleMarchSpeed = toggleMarchSpeed;
 window.triggerRecruitTroops = triggerRecruitTroops;
+window.selectRecruitTier = selectRecruitTier;
 window.triggerFortifyBorder = triggerFortifyBorder;
 window.triggerDispatchTroops = triggerDispatchTroops;
 window.stepTargetKingdom = stepTargetKingdom;

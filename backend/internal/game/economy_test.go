@@ -233,3 +233,39 @@ func TestLastYearExpenditureTracking(t *testing.T) {
 		t.Errorf("expected explicit last-year ledger values to be preserved, got %+v", econ)
 	}
 }
+
+func TestComputeEconomyWithLayersAndSocialScaling(t *testing.T) {
+	// 1. Differentiated Military Upkeep across Tiers
+	levyEcon := ComputeEconomyWithLayers(10000, 2000, 100, 50, 0, 0, 0, 0, 100, 0, 0)
+	regEcon := ComputeEconomyWithLayers(10000, 2000, 100, 50, 0, 0, 0, 0, 0, 100, 0)
+	eliteEcon := ComputeEconomyWithLayers(10000, 2000, 100, 50, 0, 0, 0, 0, 0, 0, 100)
+
+	if levyEcon.MilitaryUpkeep != 50 {
+		t.Errorf("expected levy upkeep to be 50 (0.5/troop), got %d", levyEcon.MilitaryUpkeep)
+	}
+	if regEcon.MilitaryUpkeep != 150 {
+		t.Errorf("expected regular upkeep to be 150 (1.5/troop), got %d", regEcon.MilitaryUpkeep)
+	}
+	if eliteEcon.MilitaryUpkeep != 350 {
+		t.Errorf("expected elite upkeep to be 350 (3.5/troop), got %d", eliteEcon.MilitaryUpkeep)
+	}
+	if eliteEcon.MilitaryUpkeep <= regEcon.MilitaryUpkeep || regEcon.MilitaryUpkeep <= levyEcon.MilitaryUpkeep {
+		t.Errorf("expected military upkeep to strictly escalate by tier (levy < regular < elite)")
+	}
+
+	// 2. Cathedral Tithes and Social Spending Scaling
+	zeroSoc := ComputeEconomyWithLayers(10000, 2000, 0, 50, 2, 2, 0, 0, 0, 0, 0)
+	midSoc := ComputeEconomyWithLayers(10000, 2000, 0, 50, 2, 2, 0, 40, 0, 0, 0)
+	highSoc := ComputeEconomyWithLayers(10000, 2000, 0, 50, 2, 2, 0, 80, 0, 0, 0)
+
+	if zeroSoc.SocialExpenditure != 0 {
+		t.Errorf("expected zero social expenditure at 0%%, got %d", zeroSoc.SocialExpenditure)
+	}
+	if midSoc.SocialExpenditure <= 20 {
+		t.Errorf("expected meaningful scaled cathedral/social spending at 40%% (got %d)", midSoc.SocialExpenditure)
+	}
+	if highSoc.SocialExpenditure <= midSoc.SocialExpenditure {
+		t.Errorf("expected higher cathedral/social spending at 80%% than 40%% (got %d vs %d)",
+			highSoc.SocialExpenditure, midSoc.SocialExpenditure)
+	}
+}

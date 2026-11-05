@@ -282,3 +282,28 @@ func TestTimelineHandlers(t *testing.T) {
 	}
 }
 
+func TestActionHandlerMilitaryValidation(t *testing.T) {
+	// 1. Unauthenticated ActionHandler -> 401
+	payload, _ := json.Marshal(map[string]interface{}{
+		"action_type": "military",
+		"description": "Recruit Troops",
+		"troop_tier":  "regular",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(payload))
+	rr := httptest.NewRecorder()
+	ActionHandler(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated ActionHandler, got %d", rr.Code)
+	}
+
+	// 2. Authenticated user without country -> 400
+	userToken := &auth.Token{UserID: 9999, Username: "landless", Email: "landless@example.com"}
+	req = httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(payload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", userToken))
+	rr = httptest.NewRecorder()
+	ActionHandler(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for user with no country, got %d", rr.Code)
+	}
+}
+
