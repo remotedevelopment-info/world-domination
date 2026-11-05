@@ -10,6 +10,7 @@ import {
   apiGetMyCountry,
   apiAssignCountry,
   apiGetAdminDashboard,
+  apiAdminResetGame,
   readErrorMessage,
   onUnauthorized,
 } from "./api.js";
@@ -111,9 +112,13 @@ onSocketStateChange((payload) => {
     refreshAdminDashboard();
   }
   if (state.myKingdom && state.myKingdom.country_id) {
-    const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
-    updateEconomyPanel(mk);
-    refreshKingdomCommandCenter(mk);
+    const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
+    if (!mk || !mk.owner_id || !isCountryOwnedByCurrentUser(mk)) {
+      checkMyKingdom();
+    } else {
+      updateEconomyPanel(mk);
+      refreshKingdomCommandCenter(mk);
+    }
   }
   if (state.shownKingdomId) {
     const shown = state.kingdoms.find((k) => k.id === state.shownKingdomId);
@@ -871,6 +876,7 @@ export function toggleAdminDashboard(forceOpen) {
       adminRefreshTimer = null;
     }
     isAdminRefreshPending = false;
+    adminResetAbort(false);
   }
 }
 
@@ -1069,6 +1075,127 @@ export function adminTogglePause() {
   setTimelinePause(!isCurrentlyPaused);
   setTimeout(refreshAdminDashboard, 200);
 }
+
+// ----------------------------------------------------------------------------
+// PROTECTED 3-STAGE GAME RESET WORKFLOW
+// ----------------------------------------------------------------------------
+let adminResetStage = 1;
+
+export function adminResetSetStage(stage) {
+  adminResetStage = stage;
+  const s1 = document.getElementById("admin-reset-stage-1");
+  const s2 = document.getElementById("admin-reset-stage-2");
+  const s3 = document.getElementById("admin-reset-stage-3");
+  const b1 = document.getElementById("reset-step-1");
+  const b2 = document.getElementById("reset-step-2");
+  const b3 = document.getElementById("reset-step-3");
+  const l1 = document.getElementById("reset-line-1");
+  const l2 = document.getElementById("reset-line-2");
+  const badge = document.getElementById("admin-reset-stage-badge");
+
+  if (s1) s1.classList.toggle("hidden", stage !== 1);
+  if (s2) s2.classList.toggle("hidden", stage !== 2);
+  if (s3) s3.classList.toggle("hidden", stage !== 3);
+
+  if (b1) b1.className = stage >= 1 ? "reset-step active" : "reset-step";
+  if (b2) b2.className = stage >= 2 ? "reset-step active" : "reset-step";
+  if (b3) b3.className = stage >= 3 ? "reset-step active" : "reset-step";
+  if (l1) l1.classList.toggle("active", stage >= 2);
+  if (l2) l2.classList.toggle("active", stage >= 3);
+
+  if (badge) {
+    if (stage === 1) {
+      badge.textContent = "STAGE 1: LATCH SECURED 🔒";
+      badge.className = "admin-stage-indicator stage-locked";
+    } else if (stage === 2) {
+      badge.textContent = "STAGE 2: DISARMED / VERIFYING ⚠️";
+      badge.className = "admin-stage-indicator stage-verifying";
+    } else if (stage === 3) {
+      badge.textContent = "STAGE 3: MASTER TRIGGER ARMED 🚨";
+      badge.className = "admin-stage-indicator stage-critical";
+    }
+  }
+}
+
+export function adminResetStage1Unlock() {
+  adminResetSetStage(2);
+  const input = document.getElementById("admin-reset-confirm-input");
+  if (input) {
+    input.value = "";
+    setTimeout(() => input.focus(), 60);
+  }
+  const btn2 = document.getElementById("admin-reset-btn-stage2");
+  if (btn2) btn2.disabled = true;
+}
+
+export function adminResetCheckInput(val) {
+  const btn2 = document.getElementById("admin-reset-btn-stage2");
+  const matches = (val || "").trim().toUpperCase() === "RESET WORLD 1500";
+  if (btn2) {
+    btn2.disabled = !matches;
+  }
+}
+
+export function adminResetStage2Verify() {
+  const input = document.getElementById("admin-reset-confirm-input");
+  const matches = (input?.value || "").trim().toUpperCase() === "RESET WORLD 1500";
+  if (!matches) {
+    showToast("Authorization phrase must be 'RESET WORLD 1500'", "error");
+    return;
+  }
+  const clearClaims = document.getElementById("admin-reset-clear-claims")?.checked ?? true;
+  const summary = document.getElementById("admin-reset-stage3-summary");
+  if (summary) {
+    summary.textContent = `Rewind to 1500.0 · Reset All Players to Initial Values · Claims: ${clearClaims ? "Unassigned (Full Realm Wipe)" : "Retained with 1500 Starting Vitals"}`;
+  }
+  adminResetSetStage(3);
+}
+
+export function adminResetAbort(notify = true) {
+  const input = document.getElementById("admin-reset-confirm-input");
+  if (input) input.value = "";
+  adminResetSetStage(1);
+  if (notify) {
+    showToast("World Reset Aborted. Safety Latch Re-Engaged 🔒", "info");
+  }
+}
+
+export async function adminResetStage3Execute() {
+  const btn = document.getElementById("admin-reset-btn-stage3");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ DISPATCHING MASTER PURGE...";
+  }
+  const clearClaims = document.getElementById("admin-reset-clear-claims")?.checked ?? true;
+  try {
+    const res = await apiAdminResetGame("RESET WORLD 1500", clearClaims);
+    if (!res.ok) {
+      throw new Error(await readErrorMessage(res, "Failed to execute world reset"));
+    }
+    const data = await res.json();
+    showToast("🔥 " + (data.message || "World reset to Year 1500!"), "success");
+    logMessage("CRITICAL: Master World Reset to Year 1500 executed by Imperial Admin.");
+    adminResetSetStage(1);
+    const input = document.getElementById("admin-reset-confirm-input");
+    if (input) input.value = "";
+    refreshAdminDashboard();
+    checkMyKingdom();
+  } catch (err) {
+    console.error("Error executing world reset:", err);
+    showToast(err.message || "Error executing world reset", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🔥 STAGE 3: EXECUTE TOTAL WORLD RESET (1500)";
+    }
+  }
+}
+
+window.adminResetStage1Unlock = adminResetStage1Unlock;
+window.adminResetCheckInput = adminResetCheckInput;
+window.adminResetStage2Verify = adminResetStage2Verify;
+window.adminResetAbort = adminResetAbort;
+window.adminResetStage3Execute = adminResetStage3Execute;
 
 // Initialize when DOM is ready
 async function initApp() {

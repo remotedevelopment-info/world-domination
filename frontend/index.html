@@ -519,6 +519,108 @@
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Sovereign Armageddon & Game Reset (Protected 3-Stage Mechanism) -->
+                        <div class="admin-section admin-reset-section">
+                            <div class="admin-section-header">
+                                <div class="reset-section-header-title">
+                                    <span class="hazard-icon">⚠️</span>
+                                    <span class="section-title">Imperial Reset &amp; World Rewind Protocol (3-Stage Safety Lock)</span>
+                                </div>
+                                <span class="admin-stage-indicator stage-locked" id="admin-reset-stage-badge">STAGE 1: LATCH SECURED 🔒</span>
+                            </div>
+
+                            <div class="admin-reset-body">
+                                <!-- Stage Progress Visualizer -->
+                                <div class="admin-reset-stepper">
+                                    <div class="reset-step active" id="reset-step-1">
+                                        <span class="step-num">1</span>
+                                        <span class="step-text">Disarm Safety</span>
+                                    </div>
+                                    <div class="reset-step-line" id="reset-line-1"></div>
+                                    <div class="reset-step" id="reset-step-2">
+                                        <span class="step-num">2</span>
+                                        <span class="step-text">Authorize &amp; Scope</span>
+                                    </div>
+                                    <div class="reset-step-line" id="reset-line-2"></div>
+                                    <div class="reset-step" id="reset-step-3">
+                                        <span class="step-num">3</span>
+                                        <span class="step-text">Execute Purge</span>
+                                    </div>
+                                </div>
+
+                                <!-- STAGE 1: Disarm Latch -->
+                                <div id="admin-reset-stage-1" class="reset-stage-pane">
+                                    <div class="reset-info-box">
+                                        <h4>🛡️ Stage 1: Safety Interlock Engaged</h4>
+                                        <p>Complete world rewind mechanism: Restores the simulation timeline to <strong>Year 1500.0 (The Age of Discovery)</strong> and resets all player domains, armies, borders, and treasuries to initial baseline values.</p>
+                                        <div class="reset-scope-summary">
+                                            <span>• Rewind global simulation clock to Year 1500.0 (Base Date)</span>
+                                            <span>• Demobilize all mobilized armies &amp; border garrisons to 0</span>
+                                            <span>• Restore all starting treasuries &amp; seed populations</span>
+                                            <span>• Reset fiscal levers (50% Tax, 0% Investment, 0% Social)</span>
+                                            <span>• Clear in-flight movements, deployed garrisons &amp; chronicles</span>
+                                        </div>
+                                    </div>
+                                    <div class="reset-action-row">
+                                        <button type="button" class="admin-reset-btn btn-stage1-disarm" onclick="adminResetStage1Unlock()">
+                                            🔓 STAGE 1: DISARM SAFETY LATCH
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STAGE 2: Verification, Scope & Authorization Key -->
+                                <div id="admin-reset-stage-2" class="reset-stage-pane hidden">
+                                    <div class="reset-warning-box">
+                                        <h4>⚠️ Stage 2: Scope Verification &amp; Authorization Key</h4>
+                                        <p>This action is <strong>irreversible</strong>. Review the reset scope and type the master confirmation phrase below to verify intent and unlock the master trigger.</p>
+
+                                        <div class="reset-options-group">
+                                            <label class="reset-option-checkbox">
+                                                <input type="checkbox" id="admin-reset-clear-claims" checked>
+                                                <span><strong>Clear All Realm Claims:</strong> Unassign all player territories so all players re-select fresh in Era I (1500). (Uncheck to retain users' primary realm assignment with 1500 starting vitals).</span>
+                                            </label>
+                                        </div>
+
+                                        <div class="reset-key-prompt">
+                                            <label for="admin-reset-confirm-input">Type exact phrase <code>RESET WORLD 1500</code> to authorize:</label>
+                                            <input type="text" id="admin-reset-confirm-input" class="admin-reset-input" placeholder="RESET WORLD 1500" autocomplete="off" oninput="adminResetCheckInput(this.value)">
+                                        </div>
+                                    </div>
+                                    <div class="reset-action-row">
+                                        <button type="button" class="admin-reset-cancel-btn" onclick="adminResetAbort()">
+                                            🔒 Abort &amp; Re-Engage Latch
+                                        </button>
+                                        <button type="button" id="admin-reset-btn-stage2" class="admin-reset-btn btn-stage2-arm" disabled onclick="adminResetStage2Verify()">
+                                            ⚠️ STAGE 2: VERIFY &amp; ARM TRIGGER
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STAGE 3: Final Master Trigger Armed -->
+                                <div id="admin-reset-stage-3" class="reset-stage-pane hidden">
+                                    <div class="reset-critical-box">
+                                        <div class="critical-alarm-header">
+                                            <span class="flashing-alarm">🚨</span>
+                                            <h4>CRITICAL: STAGE 3 MASTER TRIGGER ARMED</h4>
+                                            <span class="flashing-alarm">🚨</span>
+                                        </div>
+                                        <p>All safety locks have been disarmed and verified. Engaging the master actuator below will immediately rewind the world simulation to <strong>Year 1500.0</strong>, restore all players to initial values, and broadcast the authoritative base state to every live session.</p>
+                                        <div class="critical-badge" id="admin-reset-stage3-summary">
+                                            Rewind to 1500.0 · Reset All Players to Initial Values
+                                        </div>
+                                    </div>
+                                    <div class="reset-action-row">
+                                        <button type="button" class="admin-reset-cancel-btn" onclick="adminResetAbort()">
+                                            🔒 ABORT &amp; RE-LOCK
+                                        </button>
+                                        <button type="button" id="admin-reset-btn-stage3" class="admin-reset-btn btn-stage3-fire" onclick="adminResetStage3Execute()">
+                                            🔥 STAGE 3: EXECUTE TOTAL WORLD RESET (1500)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

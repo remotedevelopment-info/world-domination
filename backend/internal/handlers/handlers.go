@@ -1024,6 +1024,70 @@ func GetAdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type AdminResetGameRequest struct {
+	Confirmation string `json:"confirmation"`
+	ClearClaims  *bool  `json:"clear_claims"`
+}
+
+// AdminResetGameHandler handles the protected 3-stage game reset action.
+// Requires admin authorization, exact verification phrase match, and rewinds
+// the game to the Year 1500 base date while resetting all players and countries.
+func AdminResetGameHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	admin, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	var req AdminResetGameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	// Require exact confirmation code for stage 2/3 protection
+	expectedKey := "RESET WORLD 1500"
+	if strings.TrimSpace(strings.ToUpper(req.Confirmation)) != expectedKey {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid confirmation key: must type exact string '%s'", expectedKey))
+		return
+	}
+
+	clearClaims := true
+	if req.ClearClaims != nil {
+		clearClaims = *req.ClearClaims
+	}
+
+	engine := game.GetEngine()
+	state, err := engine.ResetToYear1500(clearClaims)
+	if err != nil {
+		log.Printf("Error resetting game to Year 1500: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "Failed to execute world reset: "+err.Error())
+		return
+	}
+
+	log.Printf("CRITICAL: Master game reset to Year 1500 executed by admin %s (%s). ClearClaims: %v",
+		admin.Username, admin.Email, clearClaims)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"message":      "Game successfully reset to Year 1500 base date and all players restored to initial values.",
+		"sim_year":     1500.0,
+		"era_id":       "discovery",
+		"clear_claims": clearClaims,
+		"tick":         state.Tick,
+	})
+}
+
 // GetTimelineHandler returns the current authoritative game timeline telemetry.
 func GetTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

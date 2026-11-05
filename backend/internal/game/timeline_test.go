@@ -73,5 +73,28 @@ func TestTimelineMutations(t *testing.T) {
 	if state.IsPaused {
 		t.Fatalf("Expected IsPaused false, got true")
 	}
+
+	// Advance to year 1920, scale 1s, paused
+	engine.SetSimYear(1920)
+	engine.SetChronoScale("1s")
+	engine.SetTimelinePaused(true)
+
+	// Execute full reset to Year 1500 base date
+	resetState, err := engine.ResetToYear1500(true)
+	if err != nil {
+		t.Fatalf("ResetToYear1500 failed: %v", err)
+	}
+	if resetState.SimYear != 1500.0 {
+		t.Fatalf("Expected SimYear 1500.0 after reset, got %f", resetState.SimYear)
+	}
+	if resetState.EraID != "discovery" {
+		t.Fatalf("Expected EraID discovery after reset, got %s", resetState.EraID)
+	}
+	if resetState.ChronoScale != "1d" {
+		t.Fatalf("Expected ChronoScale 1d after reset, got %s", resetState.ChronoScale)
+	}
+	if resetState.IsPaused {
+		t.Fatalf("Expected IsPaused false after reset, got true")
+	}
 }
 

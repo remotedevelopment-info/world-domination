@@ -228,5 +228,57 @@ func TestTimelineHandlers(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("JumpTimelineHandler admin@sfsw.net status = %d, expected 200", rr.Code)
 	}
+
+	// 13. POST /api/admin/reset-game without auth -> 401
+	resetPayload, _ := json.Marshal(map[string]interface{}{"confirmation": "RESET WORLD 1500"})
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reset-game", bytes.NewReader(resetPayload))
+	rr = httptest.NewRecorder()
+	AdminResetGameHandler(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("AdminResetGameHandler unauthenticated status = %d, expected 401", rr.Code)
+	}
+
+	// 14. POST /api/admin/reset-game with player -> 403
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reset-game", bytes.NewReader(resetPayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", nonAdminToken))
+	rr = httptest.NewRecorder()
+	AdminResetGameHandler(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminResetGameHandler player status = %d, expected 403", rr.Code)
+	}
+
+	// 15. POST /api/admin/reset-game with invalid confirmation phrase -> 400
+	badKeyPayload, _ := json.Marshal(map[string]interface{}{"confirmation": "wrong key"})
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reset-game", bytes.NewReader(badKeyPayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", newAdminToken))
+	rr = httptest.NewRecorder()
+	AdminResetGameHandler(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("AdminResetGameHandler bad key status = %d, expected 400", rr.Code)
+	}
+
+	// 16. POST /api/admin/reset-game with admin and exact confirmation phrase -> 200
+	validResetPayload, _ := json.Marshal(map[string]interface{}{
+		"confirmation": "RESET WORLD 1500",
+		"clear_claims": true,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reset-game", bytes.NewReader(validResetPayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", newAdminToken))
+	rr = httptest.NewRecorder()
+	AdminResetGameHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminResetGameHandler valid admin status = %d, expected 200", rr.Code)
+	}
+	var resetRes map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &resetRes)
+	if resetRes["success"] != true {
+		t.Errorf("Expected success true, got %v", resetRes["success"])
+	}
+	if resetRes["sim_year"] != 1500.0 {
+		t.Errorf("Expected sim_year 1500.0, got %v", resetRes["sim_year"])
+	}
+	if resetRes["era_id"] != "discovery" {
+		t.Errorf("Expected era_id discovery, got %v", resetRes["era_id"])
+	}
 }
 

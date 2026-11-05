@@ -159,3 +159,13 @@ export async function apiSetTimelinePause(paused) {
 export async function apiGetAdminDashboard() {
   return apiFetch("/admin/dashboard");
 }
+
+export async function apiAdminResetGame(confirmation, clearClaims = true) {
+  return apiFetch("/admin/reset-game", {
+    method: "POST",
+    body: JSON.stringify({
+      confirmation: confirmation,
+      clear_claims: Boolean(clearClaims),
+    }),
+  });
+}

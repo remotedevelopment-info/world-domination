@@ -176,6 +176,35 @@ func (g *GameEngine) SetTimelinePaused(paused bool) GameState {
 	return state
 }
 
+// ResetToYear1500 executes a full reset to the Year 1500 base date, restoring
+// all players and territories to initial baseline values and broadcasting
+// the clean state to all connected clients.
+func (g *GameEngine) ResetToYear1500(clearClaims bool) (GameState, error) {
+	if database.DB != nil {
+		if err := database.ResetGameToYear1500(clearClaims); err != nil {
+			return GameState{}, err
+		}
+	}
+
+	g.mu.Lock()
+	g.simYear = 1500.0
+	g.chronoScale = "1d"
+	g.isPaused = false
+	g.econDebtYears = 0
+	g.lastTimelineUpdate = time.Now()
+	g.currentTick++
+	g.mu.Unlock()
+
+	state := g.BuildState()
+	if database.DB != nil {
+		if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+			log.Printf("Error saving game state snapshot on reset: %v", err)
+		}
+	}
+	g.Notify(state)
+	return state, nil
+}
+
 // GetTimeline returns current authoritative timeline parameters.
 func (g *GameEngine) GetTimeline() (float64, int64, Era, string, bool) {
 	g.mu.RLock()
