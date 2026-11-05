@@ -295,13 +295,28 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pc, err := database.GetPlayerCountry(user.UserID)
-	if err != nil || pc == nil {
-		http.Error(w, "No country assigned", http.StatusBadRequest)
-		return
+	targetCountryID := int64(0)
+	if cidStr := r.URL.Query().Get("country_id"); cidStr != "" {
+		if cid, err := strconv.ParseInt(cidStr, 10, 64); err == nil && cid > 0 {
+			// Allow querying if owned by user or if admin
+			isOwner, _ := database.IsCountryOwnedByUser(cid, user.UserID)
+			isAdmin := user.Role == "admin" || database.IsAdminIdentifier(user.Email) || database.IsAdminIdentifier(user.Username)
+			if isOwner || isAdmin {
+				targetCountryID = cid
+			}
+		}
 	}
 
-	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if targetCountryID == 0 {
+		pc, err := database.GetPlayerCountry(user.UserID)
+		if err != nil || pc == nil {
+			http.Error(w, "No country assigned", http.StatusBadRequest)
+			return
+		}
+		targetCountryID = pc.CountryID
+	}
+
+	detail, err := database.GetKingdomDetail(targetCountryID)
 	if err != nil {
 		http.Error(w, "Error fetching kingdom detail", http.StatusInternalServerError)
 		return

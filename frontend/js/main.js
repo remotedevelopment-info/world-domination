@@ -105,6 +105,9 @@ onSocketStateChange((payload) => {
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
+  if (isAdminDashboardOpen) {
+    refreshAdminDashboard();
+  }
   if (state.myKingdom && state.myKingdom.country_id) {
     const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
     updateEconomyPanel(mk);
@@ -818,6 +821,9 @@ window.adminTogglePause = adminTogglePause;
 
 let isAdminDashboardOpen = false;
 let currentAdminDashboardData = null;
+let isAdminRefreshing = false;
+let isAdminRefreshPending = false;
+let adminRefreshTimer = null;
 
 export function toggleAdminDashboard(forceOpen) {
   if (typeof forceOpen === "boolean") {
@@ -833,6 +839,20 @@ export function toggleAdminDashboard(forceOpen) {
 
   if (isAdminDashboardOpen) {
     refreshAdminDashboard();
+    if (!adminRefreshTimer) {
+      // Live background update pulse every 1 second without queuing
+      adminRefreshTimer = setInterval(() => {
+        if (isAdminDashboardOpen) {
+          refreshAdminDashboard();
+        }
+      }, 1000);
+    }
+  } else {
+    if (adminRefreshTimer) {
+      clearInterval(adminRefreshTimer);
+      adminRefreshTimer = null;
+    }
+    isAdminRefreshPending = false;
   }
 }
 
@@ -853,6 +873,15 @@ function escapeHTML(str) {
 }
 
 export async function refreshAdminDashboard() {
+  if (!isAdminDashboardOpen) return;
+  // Non-queuing: if an update is currently in flight, record pending and skip spawning another request
+  if (isAdminRefreshing) {
+    isAdminRefreshPending = true;
+    return;
+  }
+  isAdminRefreshing = true;
+  isAdminRefreshPending = false;
+
   const tbody = document.getElementById("admin-users-tbody");
   try {
     const res = await apiGetAdminDashboard();
@@ -861,111 +890,149 @@ export async function refreshAdminDashboard() {
     }
     const data = await res.json();
     currentAdminDashboardData = data;
+    renderAdminDashboardData(data, tbody);
+  } catch (err) {
+    console.error("Error refreshing admin dashboard:", err);
+    if (tbody && !currentAdminDashboardData) {
+      tbody.innerHTML = `<tr><td colspan="9" class="loading-cell" style="color:#ff8b7b;">Error loading telemetry: ${escapeHTML(err.message)}</td></tr>`;
+    }
+  } finally {
+    isAdminRefreshing = false;
+    if (isAdminRefreshPending && isAdminDashboardOpen) {
+      isAdminRefreshPending = false;
+      setTimeout(refreshAdminDashboard, 200);
+    }
+  }
+}
 
-    // Update Telemetry Grid
-    const simYearEl = document.getElementById("admin-sim-year");
-    if (simYearEl) simYearEl.textContent = data.timeline.sim_year ? Number(data.timeline.sim_year).toFixed(2) : "—";
+function renderAdminDashboardData(data, tbody) {
+  if (!data) return;
 
-    const eraNameEl = document.getElementById("admin-era-name");
-    if (eraNameEl) eraNameEl.textContent = `${data.timeline.era_name || "Era"} (${data.timeline.era_id || ""})`;
+  // Update Telemetry Grid
+  const simYearEl = document.getElementById("admin-sim-year");
+  if (simYearEl) simYearEl.textContent = data.timeline.sim_year ? Number(data.timeline.sim_year).toFixed(2) : "—";
 
-    const chronoScaleEl = document.getElementById("admin-chrono-scale");
-    if (chronoScaleEl) chronoScaleEl.textContent = data.timeline.chrono_scale || "—";
+  const eraNameEl = document.getElementById("admin-era-name");
+  if (eraNameEl) eraNameEl.textContent = `${data.timeline.era_name || "Era"} (${data.timeline.era_id || ""})`;
 
-    const ticksEl = document.getElementById("admin-ticks-count");
-    if (ticksEl) ticksEl.textContent = `Server Tick #${data.timeline.tick || 0}`;
+  const chronoScaleEl = document.getElementById("admin-chrono-scale");
+  if (chronoScaleEl) chronoScaleEl.textContent = data.timeline.chrono_scale || "—";
 
-    const simStatusEl = document.getElementById("admin-sim-status");
-    if (simStatusEl) {
-      simStatusEl.textContent = data.timeline.is_paused ? "⏸️ PAUSED" : "▶️ RUNNING";
-      simStatusEl.style.color = data.timeline.is_paused ? "#ff8b7b" : "#4ade80";
+  const ticksEl = document.getElementById("admin-ticks-count");
+  if (ticksEl) ticksEl.textContent = `Server Tick #${data.timeline.tick || 0}`;
+
+  const simStatusEl = document.getElementById("admin-sim-status");
+  if (simStatusEl) {
+    simStatusEl.textContent = data.timeline.is_paused ? "⏸️ PAUSED" : "▶️ RUNNING";
+    simStatusEl.style.color = data.timeline.is_paused ? "#ff8b7b" : "#4ade80";
+  }
+
+  const pauseToggleBtn = document.getElementById("admin-pause-toggle-btn");
+  if (pauseToggleBtn) {
+    pauseToggleBtn.textContent = data.timeline.is_paused ? "▶️ Resume Simulation" : "⏸️ Pause Simulation";
+  }
+
+  const userCountEl = document.getElementById("admin-user-count");
+  if (userCountEl) userCountEl.textContent = `${(data.users || []).length} Users`;
+
+  const claimedCount = (data.users || []).filter((u) => u.country_id).length;
+  const realmsClaimedEl = document.getElementById("admin-realms-claimed");
+  if (realmsClaimedEl) realmsClaimedEl.textContent = `${claimedCount} of ${data.total_countries || 32} Realms Claimed`;
+
+  const rosterCountEl = document.getElementById("admin-roster-count");
+  if (rosterCountEl) rosterCountEl.textContent = `${(data.users || []).length} Users / ${claimedCount} Active Realms`;
+
+  const syncTimeEl = document.getElementById("admin-timeline-sync-time");
+  if (syncTimeEl) syncTimeEl.textContent = `Live · ${new Date().toLocaleTimeString()}`;
+
+  // Highlight active era button
+  document.querySelectorAll(".admin-era-btn").forEach((btn) => {
+    const eraId = data.timeline.era_id;
+    const text = btn.textContent.toLowerCase();
+    btn.classList.toggle("active", text.includes(eraId));
+  });
+
+  // Highlight active speed button
+  document.querySelectorAll(".admin-speed-btn").forEach((btn) => {
+    const scale = data.timeline.chrono_scale;
+    btn.classList.toggle("active", btn.textContent.startsWith(scale));
+  });
+
+  // Populate Users Table (in-place cell updates when rows match, preventing scroll jumping or row flicker)
+  if (tbody) {
+    if (!data.users || data.users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="loading-cell">No registered users in database.</td></tr>`;
+      return;
     }
 
-    const pauseToggleBtn = document.getElementById("admin-pause-toggle-btn");
-    if (pauseToggleBtn) {
-      pauseToggleBtn.textContent = data.timeline.is_paused ? "▶️ Resume Simulation" : "⏸️ Pause Simulation";
-    }
-
-    const userCountEl = document.getElementById("admin-user-count");
-    if (userCountEl) userCountEl.textContent = `${(data.users || []).length} Users`;
-
-    const claimedCount = (data.users || []).filter((u) => u.country_id).length;
-    const realmsClaimedEl = document.getElementById("admin-realms-claimed");
-    if (realmsClaimedEl) realmsClaimedEl.textContent = `${claimedCount} of ${data.total_countries || 32} Realms Claimed`;
-
-    const rosterCountEl = document.getElementById("admin-roster-count");
-    if (rosterCountEl) rosterCountEl.textContent = `${(data.users || []).length} Users / ${claimedCount} Active Realms`;
-
-    const syncTimeEl = document.getElementById("admin-timeline-sync-time");
-    if (syncTimeEl) syncTimeEl.textContent = `Live · ${new Date().toLocaleTimeString()}`;
-
-    // Highlight active era button
-    document.querySelectorAll(".admin-era-btn").forEach((btn) => {
-      const eraId = data.timeline.era_id;
-      const text = btn.textContent.toLowerCase();
-      btn.classList.toggle("active", text.includes(eraId));
-    });
-
-    // Highlight active speed button
-    document.querySelectorAll(".admin-speed-btn").forEach((btn) => {
-      const scale = data.timeline.chrono_scale;
-      btn.classList.toggle("active", btn.textContent.startsWith(scale));
-    });
-
-    // Populate Users Table
-    if (tbody) {
-      tbody.innerHTML = "";
-      if (!data.users || data.users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="loading-cell">No registered users in database.</td></tr>`;
-      } else {
-        data.users.forEach((u) => {
-          const tr = document.createElement("tr");
-          const isUserAdmin = isTimelineAdmin(u);
-          const isOverseer = isPureOverseer(u);
-          const roleBadgeClass = isUserAdmin ? "role-admin" : "role-player";
-          const roleLabel = isOverseer
-            ? "👑 Pure Overseer"
-            : (isUserAdmin ? "👑 Player-Admin" : "Player");
-
+    const existingRows = tbody.querySelectorAll("tr[data-user-id]");
+    if (existingRows.length === data.users.length) {
+      let allFound = true;
+      data.users.forEach((u) => {
+        const row = tbody.querySelector(`tr[data-user-id="${u.id}"]`);
+        if (!row) {
+          allFound = false;
+          return;
+        }
+        const cells = row.children;
+        if (cells.length >= 9) {
           const hasCountry = u.country_id && u.country_name;
-          const realmDisplay = hasCountry
-            ? `<span class="admin-realm-tag">
-                 <span class="admin-realm-swatch" style="background-color: ${u.country_color || '#d4af37'}"></span>
-                 <span>${escapeHTML(u.country_name)} (${escapeHTML(u.country_code || '---')})</span>
-               </span>`
-            : (isOverseer ? `<span class="admin-spectator-tag">👑 Overseer (Monitor)</span>` : `<span class="admin-spectator-tag">Spectator / Unclaimed</span>`);
-
           const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
           const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";
           const troopDisplay = hasCountry ? Number(u.troops || 0).toLocaleString() : "—";
           const taxDisplay = hasCountry ? `${(Number(u.economy_rate || 1.0) * 10).toFixed(0)}%` : "—";
-          const lastLoginDisplay = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
+          if (cells[4].textContent !== popDisplay) cells[4].textContent = popDisplay;
+          if (cells[5].textContent !== resDisplay) cells[5].textContent = resDisplay;
+          if (cells[6].textContent !== troopDisplay) cells[6].textContent = troopDisplay;
+          if (cells[7].textContent !== taxDisplay) cells[7].textContent = taxDisplay;
+        }
+      });
+      if (allFound) return;
+    }
 
-          tr.innerHTML = `
-            <td>#${u.id}</td>
-            <td>
-              <span class="admin-user-pill">
-                ${isUserAdmin ? "👑" : "👤"} ${escapeHTML(u.username)}
-              </span>
-              <span class="admin-email-sub">${escapeHTML(u.email)}</span>
-            </td>
-            <td><span class="admin-role-badge ${roleBadgeClass}">${roleLabel}</span></td>
-            <td>${realmDisplay}</td>
-            <td>${popDisplay}</td>
-            <td>${resDisplay}</td>
-            <td>${troopDisplay}</td>
-            <td>${taxDisplay}</td>
-            <td><small>${lastLoginDisplay}</small></td>
-          `;
-          tbody.appendChild(tr);
-        });
-      }
-    }
-  } catch (err) {
-    console.error("Error refreshing admin dashboard:", err);
-    if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="9" class="loading-cell" style="color:#ff8b7b;">Error loading telemetry: ${escapeHTML(err.message)}</td></tr>`;
-    }
+    tbody.innerHTML = "";
+    data.users.forEach((u) => {
+      const tr = document.createElement("tr");
+      tr.setAttribute("data-user-id", String(u.id));
+      const isUserAdmin = isTimelineAdmin(u);
+      const isOverseer = isPureOverseer(u);
+      const roleBadgeClass = isUserAdmin ? "role-admin" : "role-player";
+      const roleLabel = isOverseer
+        ? "👑 Pure Overseer"
+        : (isUserAdmin ? "👑 Player-Admin" : "Player");
+
+      const hasCountry = u.country_id && u.country_name;
+      const realmDisplay = hasCountry
+        ? `<span class="admin-realm-tag">
+             <span class="admin-realm-swatch" style="background-color: ${u.country_color || '#d4af37'}"></span>
+             <span>${escapeHTML(u.country_name)} (${escapeHTML(u.country_code || '---')})</span>
+           </span>`
+        : (isOverseer ? `<span class="admin-spectator-tag">👑 Overseer (Monitor)</span>` : `<span class="admin-spectator-tag">Spectator / Unclaimed</span>`);
+
+      const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
+      const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";
+      const troopDisplay = hasCountry ? Number(u.troops || 0).toLocaleString() : "—";
+      const taxDisplay = hasCountry ? `${(Number(u.economy_rate || 1.0) * 10).toFixed(0)}%` : "—";
+      const lastLoginDisplay = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
+
+      tr.innerHTML = `
+        <td>#${u.id}</td>
+        <td>
+          <span class="admin-user-pill">
+            ${isUserAdmin ? "👑" : "👤"} ${escapeHTML(u.username)}
+          </span>
+          <span class="admin-email-sub">${escapeHTML(u.email)}</span>
+        </td>
+        <td><span class="admin-role-badge ${roleBadgeClass}">${roleLabel}</span></td>
+        <td>${realmDisplay}</td>
+        <td>${popDisplay}</td>
+        <td>${resDisplay}</td>
+        <td>${troopDisplay}</td>
+        <td>${taxDisplay}</td>
+        <td><small>${lastLoginDisplay}</small></td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 }
 

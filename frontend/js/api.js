@@ -91,8 +91,9 @@ export async function apiAssignCountry(countryId) {
   });
 }
 
-export async function apiGetKingdomDetail() {
-  return apiFetch("/kingdom-detail");
+export async function apiGetKingdomDetail(countryId = null) {
+  const query = countryId ? `?country_id=${encodeURIComponent(countryId)}` : "";
+  return apiFetch(`/kingdom-detail${query}`);
 }
 
 export async function apiGetDiplomacy() {

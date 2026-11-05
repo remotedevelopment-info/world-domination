@@ -782,6 +782,13 @@ func UpdateCountryVitals(countryID int64, population, resources, troops int64) e
 	return err
 }
 
+// IsCountryOwnedByUser checks whether the given country is owned by the specified user.
+func IsCountryOwnedByUser(countryID, userID int64) (bool, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM countries WHERE id = $1 AND owner_id = $2", countryID, userID).Scan(&count)
+	return count > 0, err
+}
+
 // GetTroops returns the central troop count and per-border deployment counts
 // for a country.
 func GetTroops(countryID int64) (central int64, borders map[string]int64, err error) {

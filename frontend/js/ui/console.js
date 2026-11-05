@@ -11,6 +11,8 @@ import {
 import { showToast, logMessage, escapeHtml } from "./toast.js";
 import { kingdomPolygons } from "../map/polygons.js";
 import { applyActionResult } from "./actions.js";
+import { isCountryOwnedByCurrentUser } from "../map/renderer.js";
+import { isPureOverseer } from "./clock.js";
 
 let currentConsoleBay = "all";
 let taxRate = 50;
@@ -31,130 +33,111 @@ let debouncedPushSettingsTimer = null;
 let dialsWired = false;
 let compassDragging = false;
 
+// Round-robin territory state without queuing events
+let activeCommandCenterKingdom = null;
+let isTerritoryFetching = false;
+let isTerritoryFetchPending = false;
+let territoryPeriodicTimer = null;
+let roundRobinTerritoryIndex = 0;
+
 const DIAL_BASE_DEG = 120;
 const DIAL_DEG_PER_UNIT = 2.4; // 240 deg sweep for 0..100 range
 
 export function closeKingdomCommandCenter() {
   const cc = document.getElementById("kingdom-command-center");
   if (cc) cc.classList.add("hidden");
+  stopTerritoryRoundRobinUpdater();
+  activeCommandCenterKingdom = null;
 }
+
+export function getPlayerOwnedTerritories() {
+  if (typeof isPureOverseer === "function" && isPureOverseer()) return [];
+  const owned = (state.kingdoms || []).filter((k) => isCountryOwnedByCurrentUser(k));
+  if (owned.length > 0) return owned;
+  if (state.myKingdom && state.myKingdom.country_id) {
+    const mk = (state.kingdoms || []).find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
+    return [mk];
+  }
+  return [];
+}
+
+export function renderTerritoryPills() {
+  const container = document.getElementById("cc-territory-pills");
+  if (!container) return;
+  const owned = getPlayerOwnedTerritories();
+  if (!owned || owned.length <= 1) {
+    container.innerHTML = "";
+    container.style.display = "none";
+    return;
+  }
+  container.style.display = "flex";
+  const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
+
+  container.innerHTML = owned.map((t) => {
+    const isActive = t.id === activeId;
+    const name = t.name || t.code;
+    const color = t.color || "#ffd700";
+    return `
+      <button type="button" class="cc-territory-pill ${isActive ? "active" : ""}" data-territory-id="${t.id}" onclick="switchActiveTerritory(${t.id})">
+        <span class="cc-territory-dot" style="background-color: ${color}"></span>
+        <span>${escapeHtml(name)}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+export function switchActiveTerritory(territoryId) {
+  const territory = (state.kingdoms || []).find((k) => k.id === territoryId);
+  if (!territory) return;
+  activeCommandCenterKingdom = territory;
+  renderTerritoryPills();
+  applyLiveCommandCenterUpdate(territory);
+  stepTerritoryRoundRobin(true);
+}
+window.switchActiveTerritory = switchActiveTerritory;
 
 export async function openKingdomCommandCenter(kingdom, bay = "all") {
   const modal = document.getElementById("kingdom-command-center");
   if (!modal) return;
 
   if (!kingdom) {
-    kingdom = state.myKingdom
-      ? state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom
-      : null;
+    const owned = getPlayerOwnedTerritories();
+    kingdom = activeCommandCenterKingdom || (owned.length > 0 ? owned[0] : null);
   }
   if (!kingdom) return;
 
-  const kingdomNameEl = document.getElementById("cc-kingdom-name");
-  if (kingdomNameEl) kingdomNameEl.textContent = kingdom.name || "My Kingdom";
+  activeCommandCenterKingdom = kingdom;
+  renderTerritoryPills();
+  applyLiveCommandCenterUpdate(kingdom);
 
-  const codeEl = document.getElementById("cc-kingdom-code");
-  if (codeEl) codeEl.textContent = kingdom.code || "REALM";
+  // Wire controls and meters
+  renderMeters();
+  wireConsoleDials();
+  setCompassSide(compassDirection, true);
+  switchConsoleBay(bay);
+  modal.classList.remove("hidden");
 
-  const rulerEl = document.getElementById("cc-ruler-name");
-  if (rulerEl) {
-    rulerEl.textContent = state.currentUser ? `Lord ${state.currentUser.username}` : "Sovereign";
-  }
-
-  const crestEl = document.getElementById("cc-realm-crest");
-  if (crestEl && kingdom.color) {
-    crestEl.style.filter = `drop-shadow(0 0 10px ${kingdom.color})`;
-  }
-
-  // Fetch consolidated kingdom detail
-  let detail = null;
-  try {
-    const res = await apiGetKingdomDetail();
-    if (res.ok) {
-      detail = await res.json();
-      commandCenterDetail = detail;
-    }
-  } catch (err) {
-    console.error("Error fetching kingdom detail:", err);
-  }
+  // Start non-queuing round-robin background updater & do immediate initial fetch
+  startTerritoryRoundRobinUpdater();
+  stepTerritoryRoundRobin(true);
 
   // Fetch diplomatic relations
-  let relations = [];
   try {
     const res = await apiGetDiplomacy();
     if (res.ok) {
-      relations = await res.json();
+      const relations = await res.json();
+      renderDiplomacyLedger(relations);
     }
   } catch (err) {
     console.error("Error fetching diplomacy:", err);
   }
 
-  // Bind values from server detail or fallbacks
-  const pop = detail?.population ?? kingdom.population ?? 1000;
-  const resAmt = detail?.resources ?? kingdom.resources ?? 500;
-  const central = detail?.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
-  const borders = detail?.border_troops ?? state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
-
-  taxRate = typeof detail?.economy_rate === "number" ? detail.economy_rate : 50;
-  investmentRate = typeof detail?.investment === "number" ? detail.investment : 0;
-  socialCostsRate = typeof detail?.social_costs === "number" ? detail.social_costs : 0;
-  marketsLevel = typeof detail?.markets === "number" ? detail.markets : 0;
-  infraLevel = typeof detail?.infrastructure === "number" ? detail.infrastructure : 0;
-
-  // Initialize and render all meters
-  renderMeters();
-  setMeter("cc-meter-population", pop, 5000);
-  setMeter("cc-meter-resources", resAmt, 3000);
-  setMeter("cc-meter-troops", central, 200);
-
-  const popVal = document.getElementById("cc-meter-pop-val");
-  if (popVal) popVal.textContent = pop.toLocaleString();
-  const resVal = document.getElementById("cc-meter-res-val");
-  if (resVal) resVal.textContent = resAmt.toLocaleString();
-  const troopVal = document.getElementById("cc-meter-troop-val");
-  if (troopVal) troopVal.textContent = central.toLocaleString();
-
-  // Military Tier Label
-  const tierBadge = document.getElementById("cc-army-tier");
-  if (tierBadge) {
-    let tier = "LEVY";
-    if (central >= 5000) tier = "HORDE";
-    else if (central >= 1000) tier = "LEGION";
-    else if (central >= 500) tier = "BATTALION";
-    else if (central >= 100) tier = "COMPANY";
-    tierBadge.textContent = tier;
-  }
-
-  updateStepperDisplay();
-  wireConsoleDials();
-
-  setTaxRate(taxRate, false);
-  setInvestmentRate(investmentRate, false);
-  setSocialRate(socialCostsRate, false);
-  updateEconomyHintsLive();
-
-  updateBorderGarrisonPods(borders);
-  setCompassSide(compassDirection, true);
-
-  const minimap = document.getElementById("cc-minimap");
-  if (minimap) {
-    const ctx = minimap.getContext("2d");
-    ctx.clearRect(0, 0, minimap.width, minimap.height);
-    renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
-  }
-
-  updateTargetKingdomDisplay();
-  selectDiploStance(diplomaticStance);
-  renderDiplomacyLedger(relations);
-
   const recruitCostLabel = document.getElementById("cc-recruit-cost-label");
   if (recruitCostLabel) {
+    const pop = kingdom.population || 1000;
     const cost = Math.max(1, Math.floor(pop / 100));
     recruitCostLabel.textContent = `Cost: ${cost} Ducats · +10 Troops`;
   }
-
-  switchConsoleBay(bay);
-  modal.classList.remove("hidden");
 }
 
 export function applyLiveCommandCenterUpdate(kingdom) {
@@ -218,71 +201,157 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   }
 }
 
-export async function refreshKingdomCommandCenter(liveKingdom = null) {
-  const modal = document.getElementById("kingdom-command-center");
-  if (!modal || modal.classList.contains("hidden")) return;
-  if (!state.myKingdom) return;
+export function applyDetailedCommandCenterData(kingdom, detail) {
+  commandCenterDetail = detail;
 
-  const kingdom = liveKingdom || state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
-  // Apply immediate real-time update from authoritative state/WebSocket broadcast
-  if (kingdom) {
-    applyLiveCommandCenterUpdate(kingdom);
+  const kingdomNameEl = document.getElementById("cc-kingdom-name");
+  if (kingdomNameEl) kingdomNameEl.textContent = (detail?.name || kingdom.name || "My Kingdom");
+
+  const codeEl = document.getElementById("cc-kingdom-code");
+  if (codeEl) codeEl.textContent = (detail?.code || kingdom.code || "REALM");
+
+  const rulerEl = document.getElementById("cc-ruler-name");
+  if (rulerEl) {
+    rulerEl.textContent = state.currentUser ? `Lord ${state.currentUser.username}` : "Sovereign";
+  }
+
+  const crestEl = document.getElementById("cc-realm-crest");
+  if (crestEl && (detail?.color || kingdom.color)) {
+    crestEl.style.filter = `drop-shadow(0 0 10px ${detail?.color || kingdom.color})`;
+  }
+
+  const pop = detail?.population ?? kingdom.population ?? 1000;
+  const resAmt = detail?.resources ?? kingdom.resources ?? 500;
+  const central = detail?.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
+  const borders = detail?.border_troops ?? state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  marketsLevel = detail?.markets || 0;
+  infraLevel = detail?.infrastructure || 0;
+
+  renderMeters();
+  setMeter("cc-meter-population", pop, 5000);
+  setMeter("cc-meter-resources", resAmt, 3000);
+  setMeter("cc-meter-troops", central, 200);
+
+  const popVal = document.getElementById("cc-meter-pop-val");
+  if (popVal) popVal.textContent = pop.toLocaleString();
+  const resVal = document.getElementById("cc-meter-res-val");
+  if (resVal) resVal.textContent = resAmt.toLocaleString();
+  const troopVal = document.getElementById("cc-meter-troop-val");
+  if (troopVal) troopVal.textContent = central.toLocaleString();
+
+  const tierBadge = document.getElementById("cc-army-tier");
+  if (tierBadge) {
+    let tier = "LEVY";
+    if (central >= 5000) tier = "HORDE";
+    else if (central >= 1000) tier = "LEGION";
+    else if (central >= 500) tier = "BATTALION";
+    else if (central >= 100) tier = "COMPANY";
+    tierBadge.textContent = tier;
+  }
+
+  if (!activeDial) {
+    if (typeof detail?.economy_rate === "number") setTaxRate(detail.economy_rate, false);
+    if (typeof detail?.investment === "number") setInvestmentRate(detail.investment, false);
+    if (typeof detail?.social_costs === "number") setSocialRate(detail.social_costs, false);
+  }
+
+  updateStepperDisplay();
+  updateBorderGarrisonPods(borders);
+  updateEconomyHintsLive();
+
+  const minimap = document.getElementById("cc-minimap");
+  if (minimap) {
+    const ctx = minimap.getContext("2d");
+    ctx.clearRect(0, 0, minimap.width, minimap.height);
+    renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
+  }
+}
+
+export async function stepTerritoryRoundRobin(forceActive = false) {
+  const modal = document.getElementById("kingdom-command-center");
+  if (!modal || modal.classList.contains("hidden")) {
+    stopTerritoryRoundRobinUpdater();
+    return;
+  }
+
+  const owned = getPlayerOwnedTerritories();
+  if (!owned || owned.length === 0) return;
+
+  // Non-queuing check: if a fetch is already in flight, mark pending and skip
+  if (isTerritoryFetching) {
+    isTerritoryFetchPending = true;
+    return;
+  }
+
+  isTerritoryFetching = true;
+  isTerritoryFetchPending = false;
+
+  // Round-robin selection: cycle through all owned territories so each is updated every period
+  let targetTerritory = activeCommandCenterKingdom || owned[0];
+  if (!forceActive && owned.length > 1) {
+    targetTerritory = owned[roundRobinTerritoryIndex % owned.length];
+    roundRobinTerritoryIndex = (roundRobinTerritoryIndex + 1) % owned.length;
   }
 
   try {
-    const res = await apiGetKingdomDetail();
-    if (!res.ok) return;
-    const detail = await res.json();
-    commandCenterDetail = detail;
+    const res = await apiGetKingdomDetail(targetTerritory.id);
+    if (res.ok) {
+      const detail = await res.json();
+      if (!state.territoryDetails) state.territoryDetails = {};
+      state.territoryDetails[targetTerritory.id] = detail;
 
-    const pop = detail.population ?? kingdom.population ?? 1000;
-    const resAmt = detail.resources ?? kingdom.resources ?? 500;
-    const central = detail.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
-    const borders = detail.border_troops ?? state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
-    marketsLevel = detail.markets || 0;
-    infraLevel = detail.infrastructure || 0;
+      if (detail.central_troops != null || detail.border_troops) {
+        state.troops[targetTerritory.id] = {
+          central: detail.central_troops ?? 0,
+          borders: detail.border_troops ?? { N: 0, S: 0, E: 0, W: 0 },
+        };
+      }
 
-    renderMeters();
-    setMeter("cc-meter-population", pop, 5000);
-    setMeter("cc-meter-resources", resAmt, 3000);
-    setMeter("cc-meter-troops", central, 200);
-
-    const popVal = document.getElementById("cc-meter-pop-val");
-    if (popVal) popVal.textContent = pop.toLocaleString();
-    const resVal = document.getElementById("cc-meter-res-val");
-    if (resVal) resVal.textContent = resAmt.toLocaleString();
-    const troopVal = document.getElementById("cc-meter-troop-val");
-    if (troopVal) troopVal.textContent = central.toLocaleString();
-
-    const tierBadge = document.getElementById("cc-army-tier");
-    if (tierBadge) {
-      let tier = "LEVY";
-      if (central >= 5000) tier = "HORDE";
-      else if (central >= 1000) tier = "LEGION";
-      else if (central >= 500) tier = "BATTALION";
-      else if (central >= 100) tier = "COMPANY";
-      tierBadge.textContent = tier;
-    }
-
-    if (!activeDial) {
-      if (typeof detail.economy_rate === "number") setTaxRate(detail.economy_rate, false);
-      if (typeof detail.investment === "number") setInvestmentRate(detail.investment, false);
-      if (typeof detail.social_costs === "number") setSocialRate(detail.social_costs, false);
-    }
-
-    updateStepperDisplay();
-    updateBorderGarrisonPods(borders);
-    updateEconomyHintsLive();
-
-    const minimap = document.getElementById("cc-minimap");
-    if (minimap) {
-      const ctx = minimap.getContext("2d");
-      ctx.clearRect(0, 0, minimap.width, minimap.height);
-      renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
+      const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
+      if (targetTerritory.id === activeId) {
+        applyDetailedCommandCenterData(targetTerritory, detail);
+      }
+      renderTerritoryPills();
     }
   } catch (err) {
-    console.error("Error refreshing command center:", err);
+    console.error("Round-robin territory update error:", err);
+  } finally {
+    isTerritoryFetching = false;
+    if (isTerritoryFetchPending) {
+      isTerritoryFetchPending = false;
+      setTimeout(() => stepTerritoryRoundRobin(), 200);
+    }
   }
+}
+
+export function startTerritoryRoundRobinUpdater() {
+  if (territoryPeriodicTimer) return;
+  // Non-queuing periodic round-robin updater: runs every 1.5s
+  territoryPeriodicTimer = setInterval(() => {
+    stepTerritoryRoundRobin();
+  }, 1500);
+}
+
+export function stopTerritoryRoundRobinUpdater() {
+  if (territoryPeriodicTimer) {
+    clearInterval(territoryPeriodicTimer);
+    territoryPeriodicTimer = null;
+  }
+  isTerritoryFetchPending = false;
+}
+
+export function refreshKingdomCommandCenter(liveKingdom = null) {
+  const modal = document.getElementById("kingdom-command-center");
+  if (!modal || modal.classList.contains("hidden")) return;
+
+  const kingdom = liveKingdom || activeCommandCenterKingdom || (state.myKingdom ? ((state.kingdoms || []).find((k) => k.id === state.myKingdom.country_id) || state.myKingdom) : null);
+  if (!kingdom) return;
+
+  // Apply instant zero-lag update from authoritative WebSocket state
+  applyLiveCommandCenterUpdate(kingdom);
+
+  // Trigger round-robin fetch without queuing
+  stepTerritoryRoundRobin();
 }
 
 export function dialValueFromPoint(dialEl, clientX, clientY) {
