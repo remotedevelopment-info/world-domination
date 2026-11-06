@@ -169,13 +169,26 @@ func TestBalancedBudgetNoDeficit(t *testing.T) {
 		t.Errorf("expected 50/0/0 under military overspend, got %d/%d/%d", effMil3, effSoc3, effInv3)
 	}
 
-	// 4. Verify ComputeEconomy always yields EffectiveBalance >= 0
-	overextended := ComputeEconomy(1000, 500, 500, 40, 0, 0, 100, 100)
-	if overextended.EffectiveBalance < 0 {
-		t.Errorf("expected Layer 1 EffectiveBalance >= 0 (no deficits), got %d", overextended.EffectiveBalance)
+	// 4. Verify ComputeEconomy:
+	// A) Kingdom with gold reserves can run a deficit by drawing down treasury reserves:
+	withReserves := ComputeEconomy(1000, 500, 500, 40, 0, 0, 100, 100)
+	if withReserves.EffectiveBalance >= 0 {
+		t.Errorf("expected deficit (EffectiveBalance < 0) when planned spending exceeds revenue with reserves, got %d", withReserves.EffectiveBalance)
 	}
-	if !overextended.DeficitCapped {
-		t.Errorf("expected DeficitCapped=true for overextended kingdom")
+	if withReserves.FiscalRegime != "DEFICIT_RESERVE_DRAIN" {
+		t.Errorf("expected DEFICIT_RESERVE_DRAIN fiscal regime, got %q", withReserves.FiscalRegime)
+	}
+
+	// B) Kingdom with exhausted treasury (resources == 0) has outlays strictly capped to revenue (Hard-Specie Rule):
+	broke := ComputeEconomy(1000, 0, 500, 40, 0, 0, 100, 100)
+	if broke.EffectiveBalance < 0 {
+		t.Errorf("expected broke kingdom to have EffectiveBalance >= 0 (strictly capped to revenue), got %d", broke.EffectiveBalance)
+	}
+	if !broke.DeficitCapped {
+		t.Errorf("expected DeficitCapped=true for broke overextended kingdom")
+	}
+	if broke.FiscalRegime != "HARD_SPECIE_RATIONING" {
+		t.Errorf("expected HARD_SPECIE_RATIONING fiscal regime, got %q", broke.FiscalRegime)
 	}
 }
 
@@ -240,14 +253,14 @@ func TestComputeEconomyWithLayersAndSocialScaling(t *testing.T) {
 	regEcon := ComputeEconomyWithLayers(10000, 2000, 100, 50, 0, 0, 0, 0, 0, 100, 0)
 	eliteEcon := ComputeEconomyWithLayers(10000, 2000, 100, 50, 0, 0, 0, 0, 0, 0, 100)
 
-	if levyEcon.MilitaryUpkeep != 50 {
-		t.Errorf("expected levy upkeep to be 50 (0.5/troop), got %d", levyEcon.MilitaryUpkeep)
+	if levyEcon.MilitaryUpkeep != 200 {
+		t.Errorf("expected levy upkeep to be 200 (2.0/troop), got %d", levyEcon.MilitaryUpkeep)
 	}
-	if regEcon.MilitaryUpkeep != 150 {
-		t.Errorf("expected regular upkeep to be 150 (1.5/troop), got %d", regEcon.MilitaryUpkeep)
+	if regEcon.MilitaryUpkeep != 600 {
+		t.Errorf("expected regular upkeep to be 600 (6.0/troop), got %d", regEcon.MilitaryUpkeep)
 	}
-	if eliteEcon.MilitaryUpkeep != 350 {
-		t.Errorf("expected elite upkeep to be 350 (3.5/troop), got %d", eliteEcon.MilitaryUpkeep)
+	if eliteEcon.MilitaryUpkeep != 1800 {
+		t.Errorf("expected elite upkeep to be 1800 (18.0/troop), got %d", eliteEcon.MilitaryUpkeep)
 	}
 	if eliteEcon.MilitaryUpkeep <= regEcon.MilitaryUpkeep || regEcon.MilitaryUpkeep <= levyEcon.MilitaryUpkeep {
 		t.Errorf("expected military upkeep to strictly escalate by tier (levy < regular < elite)")

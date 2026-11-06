@@ -348,20 +348,37 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		}
 		annualTotalRev := econ.TaxRevenue + annualMarketActual
 
-		// 2. Enforce Layer 1 Balanced-Budget Regime (No Deficits):
-		// Annual expenditure cannot exceed annual revenue.
-		effMilAnnual, effSocAnnual, effInvAnnual, _ := EnforceBalancedBudget(
-			annualTotalRev,
-			econ.MilitaryUpkeep,
-			econ.SocialExpenditure,
-			econ.InvestmentExpenditure,
-		)
-		effTotalExpAnnual := effMilAnnual + effSocAnnual + effInvAnnual
-		effBalanceAnnual := annualTotalRev - effTotalExpAnnual
+		// 2. Fiscal Discipline & Budget Execution (Layer 1 Hard-Specie Regime):
+		// As long as the treasury holds specie reserves (c.Resources > 0), planned spending
+		// can proceed and draws down gold reserves when in deficit.
+		// Once gold reserves are exhausted (c.Resources <= 0), no sovereign debt/loans exist in Era 1,
+		// so expenditures are strictly capped to annual revenue.
+		var effMilAnnual, effSocAnnual, effInvAnnual int64
+		var effTotalExpAnnual, effBalanceAnnual int64
 
-		// Scale net surplus by yearsPassed
-		periodSurplus := int64(math.Round(float64(effBalanceAnnual) * yearsPassed))
-		newResources := c.Resources + periodSurplus
+		if c.Resources > 0 {
+			effMilAnnual = econ.MilitaryUpkeep
+			effSocAnnual = econ.SocialExpenditure
+			effInvAnnual = econ.InvestmentExpenditure
+			effTotalExpAnnual = effMilAnnual + effSocAnnual + effInvAnnual
+			effBalanceAnnual = annualTotalRev - effTotalExpAnnual
+		} else {
+			effMilAnnual, effSocAnnual, effInvAnnual, _ = EnforceBalancedBudget(
+				annualTotalRev,
+				econ.MilitaryUpkeep,
+				econ.SocialExpenditure,
+				econ.InvestmentExpenditure,
+			)
+			effTotalExpAnnual = effMilAnnual + effSocAnnual + effInvAnnual
+			effBalanceAnnual = annualTotalRev - effTotalExpAnnual
+		}
+
+		// Net treasury balance delta (drain on deficit, expand on surplus)
+		periodDelta := int64(math.Round(float64(effBalanceAnnual) * yearsPassed))
+		newResources := c.Resources + periodDelta
+		if newResources < 0 {
+			newResources = 0
+		}
 
 		// 3. Population Growth & Tax-Driven Migration
 		newPopulation := c.Population
@@ -401,10 +418,14 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			}
 		}
 
-		// If military upkeep exceeded total revenue under the no-deficit rule, unpaid troops demobilize back to civilian life
-		if econ.MilitaryUpkeep > annualTotalRev && newTroops > 0 {
+		// If treasury is exhausted (c.Resources <= 0 or newResources == 0) and military upkeep exceeds revenue,
+		// the crown has no gold to pay its soldiers. Unpaid troops demobilize/desert!
+		if (c.Resources <= 0 || newResources <= 0) && econ.MilitaryUpkeep > annualTotalRev && newTroops > 0 {
 			unfundedUpkeep := float64(econ.MilitaryUpkeep - annualTotalRev)
-			demobilized := int64(math.Ceil((unfundedUpkeep / troopUpkeep) * 0.25 * yearsPassed))
+			demobilized := int64(math.Ceil((unfundedUpkeep / 6.0) * 0.5 * yearsPassed))
+			if demobilized < 1 && yearsPassed > 0 {
+				demobilized = 1
+			}
 			if demobilized > newTroops {
 				demobilized = newTroops
 			}

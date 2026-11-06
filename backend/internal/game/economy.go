@@ -53,8 +53,8 @@ const (
 	// (logistic damping). Without it, per-capita growth is proportional to
 	// population, which blows up the treasury in days.
 	carryingCapacity = 1000000
-	// troopUpkeep is the gold cost per troop per cycle.
-	troopUpkeep = 0.5
+	// troopUpkeep is the gold cost per troop per cycle for unstratified troops.
+	troopUpkeep = 4.0
 	// marketBoost / infraBoost compound GDP per build level.
 	marketBoost = 0.05
 	infraBoost  = 0.03
@@ -219,26 +219,47 @@ func ComputeEconomyWithLayers(
 	}
 
 	// Multi-tiered military upkeep:
-	// Levy: 0.5 gold/troop (peasant militia, cheap upkeep)
-	// Regular: 1.5 gold/troop (disciplined standing footmen, arms, armor)
-	// Elite: 3.5 gold/troop (royal tercios, knightly retinues, high maintenance)
+	// Levy: 2.0 gold/troop (peasant militia, cheap upkeep)
+	// Regular: 6.0 gold/troop (disciplined standing footmen, arms, armor)
+	// Elite: 18.0 gold/troop (royal tercios, knightly retinues, high maintenance)
 	var milUpkeep int64
 	if (levy + regular + elite) > 0 {
-		milUpkeep = int64(math.Round(float64(levy)*0.5 + float64(regular)*1.5 + float64(elite)*3.5))
+		milUpkeep = int64(math.Round(float64(levy)*2.0 + float64(regular)*6.0 + float64(elite)*18.0))
 	} else {
 		milUpkeep = int64(float64(troops)*troopUpkeep + 0.5)
 	}
 
 	// Cathedral tithes, civic administration, and court justice:
-	// Scales with total revenue and population scale, giving player finer control over national institutions.
-	socialSpend := int64(math.Round(float64(socialCosts)*1.5 + float64(totalRev)*(float64(socialCosts)/100.0)*0.40))
+	// Scales with realm GDP capacity, reflecting real fiscal burdens of monumental building and national institutions.
+	socialSpend := int64(math.Round(float64(socialCosts)*2.0 + float64(gdp)*(float64(socialCosts)/100.0)*0.08))
 	// Colonial expeditions, trading ventures, and infrastructure investment:
-	investmentSpend := int64(math.Round(float64(investment)*1.5 + float64(totalRev)*(float64(investment)/100.0)*0.40))
+	investmentSpend := int64(math.Round(float64(investment)*2.0 + float64(gdp)*(float64(investment)/100.0)*0.08))
 	expenditure := milUpkeep + socialSpend + investmentSpend
-	balance := revenue - expenditure
+	balance := totalRev - expenditure
 
-	// Enforce Layer 1 Balanced-Budget Regime (no deficits allowed):
-	effMil, effSoc, effInv, capped := EnforceBalancedBudget(totalRev, milUpkeep, socialSpend, investmentSpend)
+	// Enforce Layer 1 Hard-Specie Fiscal Rules:
+	// As long as the kingdom has gold reserves in its treasury (resources > 0),
+	// it can spend down its specie reserves to fund deficits.
+	// Once the treasury is exhausted (resources <= 0), sovereign borrowing is unavailable
+	// in Era 1, so outlays are strictly capped to annual revenue.
+	var effMil, effSoc, effInv int64
+	var capped bool
+	fiscalRegime := "BALANCED_SPECIE"
+
+	if resources > 0 {
+		effMil = milUpkeep
+		effSoc = socialSpend
+		effInv = investmentSpend
+		capped = false
+		if balance < 0 {
+			fiscalRegime = "DEFICIT_RESERVE_DRAIN"
+		}
+	} else {
+		effMil, effSoc, effInv, capped = EnforceBalancedBudget(totalRev, milUpkeep, socialSpend, investmentSpend)
+		if capped {
+			fiscalRegime = "HARD_SPECIE_RATIONING"
+		}
+	}
 	effTotalExp := effMil + effSoc + effInv
 	effBalance := totalRev - effTotalExp
 
@@ -288,7 +309,7 @@ func ComputeEconomyWithLayers(
 		EffectiveTotalExp:      effTotalExp,
 		EffectiveBalance:       effBalance,
 		DeficitCapped:          capped,
-		FiscalRegime:           "BALANCED_SPECIE",
+		FiscalRegime:           fiscalRegime,
 		GoldReserve:            resources,
 		CurrencyValue:          value,
 		InflationRate:          inflation,

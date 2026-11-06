@@ -658,14 +658,47 @@ export function triggerAutoBalanceBudget() {
 }
 window.triggerAutoBalanceBudget = triggerAutoBalanceBudget;
 
-export function enforceClientBalancedBudget(totalRevenue, militaryUpkeep, socialExp, investmentExp) {
+export function enforceClientBalancedBudget(resOrRev, totalRevenueOrMil, militaryUpkeepOrSoc, socialExpOrInv, investmentExp) {
+  let res = 0;
+  let totalRevenue, militaryUpkeep, socialExp, invExp;
+  if (investmentExp === undefined) {
+    // 4 arguments: (totalRevenue, militaryUpkeep, socialExp, investmentExp)
+    totalRevenue = resOrRev;
+    militaryUpkeep = totalRevenueOrMil;
+    socialExp = militaryUpkeepOrSoc;
+    invExp = socialExpOrInv;
+  } else {
+    // 5 arguments: (res, totalRevenue, militaryUpkeep, socialExp, investmentExp)
+    res = resOrRev;
+    totalRevenue = totalRevenueOrMil;
+    militaryUpkeep = militaryUpkeepOrSoc;
+    socialExp = socialExpOrInv;
+    invExp = investmentExp;
+  }
+
   if (totalRevenue < 0) totalRevenue = 0;
-  const plannedTotal = militaryUpkeep + socialExp + investmentExp;
+  const plannedTotal = militaryUpkeep + socialExp + invExp;
+
+  // If the kingdom has gold reserves in its treasury (res > 0), deficit spending is allowed
+  // and is funded by drawing down treasury reserves.
+  if (res > 0) {
+    return {
+      effMil: militaryUpkeep,
+      effSoc: socialExp,
+      effInv: invExp,
+      effTotal: plannedTotal,
+      effBalance: totalRevenue - plannedTotal,
+      capped: false,
+    };
+  }
+
+  // Once treasury is exhausted (res <= 0), no loans/debt exist in Era 1 (Hard-Specie Rule).
+  // Spending is strictly clamped to total revenue.
   if (plannedTotal <= totalRevenue) {
     return {
       effMil: militaryUpkeep,
       effSoc: socialExp,
-      effInv: investmentExp,
+      effInv: invExp,
       effTotal: plannedTotal,
       effBalance: totalRevenue - plannedTotal,
       capped: false,
@@ -682,22 +715,13 @@ export function enforceClientBalancedBudget(totalRevenue, militaryUpkeep, social
     };
   }
   const remaining = totalRevenue - militaryUpkeep;
-  const discretionary = socialExp + investmentExp;
-  if (discretionary <= 0) {
-    return {
-      effMil: militaryUpkeep,
-      effSoc: 0,
-      effInv: 0,
-      effTotal: militaryUpkeep,
-      effBalance: remaining,
-      capped: true,
-    };
-  }
-  let effSoc = Math.floor((remaining * socialExp) / discretionary);
-  let effInv = remaining - effSoc;
-  if (effInv > investmentExp) {
-    effInv = investmentExp;
-    effSoc = remaining - effInv;
+  const discretionary = socialExp + invExp;
+  let effSoc = 0;
+  let effInv = 0;
+  if (discretionary > 0) {
+    effSoc = Math.round((remaining * socialExp) / discretionary);
+    if (effSoc > remaining) effSoc = remaining;
+    effInv = remaining - effSoc;
   }
   const effTotal = militaryUpkeep + effSoc + effInv;
   return {
@@ -705,7 +729,7 @@ export function enforceClientBalancedBudget(totalRevenue, militaryUpkeep, social
     effSoc,
     effInv,
     effTotal,
-    effBalance: Math.max(0, totalRevenue - effTotal),
+    effBalance: 0,
     capped: true,
   };
 }
@@ -795,14 +819,14 @@ export function updateEconomyHintsLive() {
   const regular = commandCenterDetail?.troops_regular ?? tr;
   const elite = commandCenterDetail?.troops_elite ?? 0;
   const milUpkeep = (levy + regular + elite > 0)
-    ? Math.round(levy * 0.5 + regular * 1.5 + elite * 3.5)
-    : Math.round(tr * 0.5 + 0.5);
+    ? Math.round(levy * 2.0 + regular * 6.0 + elite * 18.0)
+    : Math.round(tr * 4.0);
 
-  const socExp = Math.round(socialCostsRate * 1.5 + totalRevenue * (socialCostsRate / 100.0) * 0.40);
-  const invExp = Math.round(investmentRate * 1.5 + totalRevenue * (investmentRate / 100.0) * 0.40);
+  const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.08);
+  const invExp = Math.round(investmentRate * 2.0 + gdp * (investmentRate / 100.0) * 0.08);
 
-  // Enforce Layer 1 Balanced Budget (No Deficits)
-  const cappedBudget = enforceClientBalancedBudget(totalRevenue, milUpkeep, socExp, invExp);
+  // Enforce Layer 1 Hard-Specie Fiscal Rules
+  const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
   const popPressure = computeClientPopulationPressure(pop, tr, taxRate, socialCostsRate, infraLevel || 0);
   const netMigration = computeClientMigration(pop, taxRate, socialCostsRate, infraLevel || 0);
 
@@ -871,7 +895,7 @@ export function updateEconomyHintsLive() {
   const lyInv = hasRecordedActuals ? srvEcon.last_investment_exp : (srvEcon.last_investment_exp ?? cappedBudget.effInv);
   const lySoc = hasRecordedActuals ? srvEcon.last_social_exp : (srvEcon.last_social_exp ?? cappedBudget.effSoc);
   const lyTotalExp = hasRecordedActuals ? srvEcon.last_total_exp : (lyMil + lyInv + lySoc);
-  const lyBal = hasRecordedActuals ? Math.max(0, srvEcon.last_budget_balance) : Math.max(0, srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
+  const lyBal = hasRecordedActuals ? srvEcon.last_budget_balance : (srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
   const lyMig = hasRecordedActuals ? srvEcon.last_migration : (srvEcon.last_migration ?? netMigration);
 
   const setCell = (id, html, className = "") => {
@@ -907,8 +931,27 @@ export function updateEconomyHintsLive() {
   setCell("cc-ly-total-exp", `<strong>-${lyTotalExp.toLocaleString()}</strong>`, "val-neg");
   setCell("cc-ty-total-exp", `<strong>-${cappedBudget.effTotal.toLocaleString()}</strong>`, "val-neg");
 
-  setCell("cc-ly-balance", `<strong>+${lyBal.toLocaleString()}</strong>`, "val-surplus");
-  setCell("cc-ty-balance", `<strong>+${cappedBudget.effBalance.toLocaleString()}</strong>`, "val-surplus");
+  const tyBal = cappedBudget.effBalance;
+  const lyBalSign = lyBal < 0 ? "-" : "+";
+  const tyBalSign = tyBal < 0 ? "-" : "+";
+  const lyBalClass = lyBal < 0 ? "val-neg" : "val-surplus";
+  const tyBalClass = tyBal < 0 ? "val-neg" : "val-surplus";
+  const tyBalSuffix = (tyBal < 0 && res > 0) ? " (Draining Reserves)" : "";
+
+  setCell("cc-ly-balance", `<strong>${lyBalSign}${Math.abs(lyBal).toLocaleString()}</strong>`, lyBalClass);
+  setCell("cc-ty-balance", `<strong>${tyBalSign}${Math.abs(tyBal).toLocaleString()}${tyBalSuffix}</strong>`, tyBalClass);
+
+  const balRow = document.getElementById("cc-balance-row");
+  const balLabel = document.getElementById("cc-balance-label");
+  if (balRow) {
+    if (tyBal < 0) {
+      balRow.className = "row-deficit";
+      if (balLabel) balLabel.innerHTML = `<strong>Exchequer Deficit (Draining Reserves)</strong>`;
+    } else {
+      balRow.className = "row-surplus";
+      if (balLabel) balLabel.innerHTML = `<strong>Exchequer Surplus (No Deficit)</strong>`;
+    }
+  }
 
   const popPressEl = document.getElementById("cc-pop-pressure-val");
   if (popPressEl) {
@@ -927,16 +970,18 @@ export function updateEconomyHintsLive() {
     netMigration < 0 ? "val-neg" : netMigration > 0 ? "val-pos" : ""
   );
 
-  // Alert banner for No-Deficit Rationing & Tax Migration
+  // Alert banner for No-Deficit Rationing, Deficit Drain & Tax Migration
   const alertBanner = document.getElementById("cc-budget-alert-banner");
   if (alertBanner) {
     const alerts = [];
-    if (cappedBudget.capped) {
+    if (res <= 0 && (milUpkeep + invExp + socExp) > totalRevenue) {
       if (cappedBudget.effMil < milUpkeep) {
-        alerts.push(`⚖️ <strong>NO-DEFICIT RATIONING:</strong> Military upkeep (${milUpkeep}) exceeds Total Revenue (${totalRevenue})! Unpaid troops will demobilize until World Bank Loans unlock in 1860.`);
+        alerts.push(`🚨 <strong>TREASURY EXHAUSTED & UNPAID TROOPS:</strong> Zero gold reserves in treasury! Revenue (${totalRevenue.toLocaleString()}) cannot cover military upkeep (${milUpkeep.toLocaleString()}). Unpaid troops are deserting!`);
       } else {
-        alerts.push(`⚖️ <strong>NO-DEFICIT CAP ACTIVE:</strong> Planned spending (${milUpkeep + invExp + socExp}) exceeds Total Revenue (${totalRevenue}) — discretionary spending capped to ${cappedBudget.effInv + cappedBudget.effSoc} to maintain a balanced budget.`);
+        alerts.push(`⚖️ <strong>TREASURY EXHAUSTED (NO BORROWING):</strong> Zero gold reserves remaining! Discretionary civic spending capped to ${(cappedBudget.effInv + cappedBudget.effSoc).toLocaleString()} ducats to prevent deficits until 1860.`);
       }
+    } else if (res > 0 && cappedBudget.effBalance < 0) {
+      alerts.push(`📉 <strong>DEFICIT FINANCING:</strong> Operating at an annual deficit of <strong>-${Math.abs(cappedBudget.effBalance).toLocaleString()} ducats/yr</strong>! Draining treasury reserves (holds ${res.toLocaleString()} gold).`);
     }
     if (taxRate > 60) {
       alerts.push(`🚨 <strong>TAX FLIGHT EMIGRATION:</strong> Punitive ${taxRate}% tax rate is driving <strong>${Math.abs(netMigration)} citizens/yr</strong> to flee the realm!`);
@@ -944,6 +989,13 @@ export function updateEconomyHintsLive() {
       alerts.push(`✨ <strong>PROSPERITY IMMIGRATION:</strong> Competitive ${taxRate}% tax rate &amp; civic works are attracting <strong>+${netMigration} settlers/yr</strong>.`);
     }
     if (alerts.length > 0) {
+      alertBanner.innerHTML = alerts.join("<br>");
+      alertBanner.classList.remove("hidden");
+      alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep || (res <= 0 && (milUpkeep + invExp + socExp) > totalRevenue));
+    } else {
+      alertBanner.classList.add("hidden");
+    }
+  }
       alertBanner.innerHTML = alerts.join("<br>");
       alertBanner.classList.remove("hidden");
       alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep);
