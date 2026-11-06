@@ -492,6 +492,111 @@
                             </div>
                         </div>
 
+                        <!-- Game Monitor & Dynamic Internal Variable Matrix -->
+                        <div class="admin-section admin-monitor-section">
+                            <div class="admin-section-header">
+                                <div class="monitor-header-left">
+                                    <span class="section-title">🔭 Imperial Game Monitor &amp; Variable Matrix</span>
+                                    <span class="monitor-class-count-tag">5 Classified Tiers</span>
+                                </div>
+                                <div class="monitor-header-right">
+                                    <span id="admin-monitor-last-sync" class="admin-sync-tag">Telemetry: Live</span>
+                                </div>
+                            </div>
+
+                            <!-- Seasonal & Climatic Atmospheric Indicator Strip -->
+                            <div class="admin-seasonal-bar" id="admin-seasonal-bar">
+                                <div class="seasonal-pill season-badge" id="admin-climate-season">
+                                    <span class="pill-icon">☀️</span>
+                                    <span class="pill-val" id="admin-climate-season-name">Summer</span>
+                                </div>
+                                <div class="seasonal-pill climate-badge" id="admin-climate-phase-box">
+                                    <span class="pill-label">CLIMATE CYCLE:</span>
+                                    <span class="pill-val" id="admin-climate-phase">Baseline Holocene</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">HARVEST YIELD:</span>
+                                    <span class="metric-val" id="admin-climate-harvest">100%</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">WINTER ATTRITION:</span>
+                                    <span class="metric-val" id="admin-climate-winter-logistics">1.00x</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">TRADE VELOCITY:</span>
+                                    <span class="metric-val" id="admin-climate-velocity">1.00x</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">ORBITAL FORCING:</span>
+                                    <span class="metric-val" id="admin-climate-orbital">Neutral</span>
+                                </div>
+                            </div>
+
+                            <!-- Taxonomy Classification Filter Bar & Realm Selection -->
+                            <div class="monitor-controls-row">
+                                <div class="monitor-taxonomy-filters">
+                                    <span class="filter-label">VARIABLE CLASS:</span>
+                                    <button type="button" class="monitor-pill-btn active" data-class="all" onclick="setMonitorClassFilter('all')">🌐 All Classes</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="user_setting" onclick="setMonitorClassFilter('user_setting')">⚙️ 1. User Settings</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="user_state" onclick="setMonitorClassFilter('user_state')">👁️ 2. User State (Hidden)</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="game_state" onclick="setMonitorClassFilter('game_state')">🌍 3. Game State</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="seasonal" onclick="setMonitorClassFilter('seasonal')">❄️ 4. Seasonal</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="population_pressure" onclick="setMonitorClassFilter('population_pressure')">👥 5. Population Pressure</button>
+                                </div>
+                                <div class="monitor-realm-selector-box">
+                                    <label for="admin-monitor-realm-select">REALM FOCUS:</label>
+                                    <select id="admin-monitor-realm-select" class="admin-select" onchange="renderGameMonitorCards()">
+                                        <option value="ALL">🌐 All Realms Matrix</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Live Telemetry Matrix Grid -->
+                            <div class="admin-monitor-cards-grid" id="admin-monitor-cards-container">
+                                <div class="loading-cell" style="grid-column: 1 / -1; padding: 20px; text-align: center; color: #8da4b8;">
+                                    Reading internal variable matrix from authoritative server...
+                                </div>
+                            </div>
+
+                            <!-- Scenario Injection & Dynamic Variable Fine-Tuner -->
+                            <div class="admin-scenario-tuner-panel">
+                                <div class="scenario-tuner-header">
+                                    <span class="scenario-tuner-title">⚡ Scenario Injection &amp; Live Variable Calibration</span>
+                                    <span class="scenario-tuner-hint">Inject stress tests and macroeconomic shocks to fine-tune balancing</span>
+                                </div>
+
+                                <div class="scenario-presets-bar">
+                                    <span class="presets-label">QUICK PRESETS:</span>
+                                    <button type="button" class="scenario-preset-btn debt-shock-btn" onclick="applyScenarioPreset('debt_shock')">📉 Fiscal Debt Shock</button>
+                                    <button type="button" class="scenario-preset-btn winter-btn" onclick="applyScenarioPreset('severe_winter')">❄️ Severe Frost &amp; Attrition</button>
+                                    <button type="button" class="scenario-preset-btn golden-age-btn" onclick="applyScenarioPreset('golden_age')">🌟 Entrepreneurial Golden Age</button>
+                                </div>
+
+                                <div class="scenario-custom-tune-form">
+                                    <div class="tune-field">
+                                        <label for="tune-realm-id">TARGET REALM:</label>
+                                        <select id="tune-realm-id" class="admin-select"></select>
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-pride">ENTREPRENEURIAL PRIDE (0-100%):</label>
+                                        <input type="number" id="tune-pride" class="admin-input-num" min="0" max="100" step="1" placeholder="e.g. 75">
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-delayed-costs">DELAYED MILITARY LIABILITIES ($):</label>
+                                        <input type="number" id="tune-delayed-costs" class="admin-input-num" min="0" step="100" placeholder="e.g. 2500">
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-resources">TREASURY RESERVES ($):</label>
+                                        <input type="number" id="tune-resources" class="admin-input-num" min="0" step="1000" placeholder="Leave blank for unchanged">
+                                    </div>
+                                    <div class="tune-action">
+                                        <button type="button" class="admin-btn-action-primary" onclick="submitCustomScenarioTune()">Apply Variable Calibration</button>
+                                    </div>
+                                </div>
+                                <div id="scenario-tune-status" class="scenario-tune-feedback"></div>
+                            </div>
+                        </div>
+
                         <!-- All Users & Assigned Territories / Resources Roster -->
                         <div class="admin-section">
                             <div class="admin-section-header">

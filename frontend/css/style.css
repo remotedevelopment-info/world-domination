@@ -4182,6 +4182,494 @@ body {
     border-color: rgba(255, 255, 255, 0.4);
 }
 
+/* ==========================================================================
+   Admin Game Monitor & 5-Tier Variable Classification Matrix
+   ========================================================================== */
+.admin-monitor-section {
+    background: radial-gradient(circle at 50% 0%, rgba(15, 30, 48, 0.85) 0%, rgba(10, 16, 24, 0.95) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.7), 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.monitor-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.monitor-class-count-tag {
+    font-family: monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #7dd3fc;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* Seasonal & Climatic Atmospheric Gauge Bar */
+.admin-seasonal-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    background: rgba(6, 12, 18, 0.75);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+}
+
+.seasonal-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.season-badge {
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    color: #fbbf24;
+}
+
+.season-badge.season-spring {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(74, 222, 128, 0.5);
+    color: #4ade80;
+}
+
+.season-badge.season-summer {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.6);
+    color: #fde047;
+}
+
+.season-badge.season-autumn {
+    background: rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 0.6);
+    color: #fb923c;
+}
+
+.season-badge.season-winter {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.7);
+    color: #bae6fd;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.climate-badge {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.45);
+    color: #c7d2fe;
+}
+
+.climate-badge.little-ice-age-active {
+    background: rgba(6, 182, 212, 0.2);
+    border: 1px solid rgba(6, 182, 212, 0.7);
+    color: #67e8f9;
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.35);
+}
+
+.seasonal-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.seasonal-metric .metric-label {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.seasonal-metric .metric-val {
+    font-family: monospace;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+/* Taxonomy Filter Controls & Realm Selection */
+.monitor-controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.monitor-taxonomy-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+}
+
+.monitor-pill-btn {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #cbd5e1;
+    font-family: inherit;
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.monitor-pill-btn:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(212, 175, 55, 0.5);
+    color: #fff;
+}
+
+.monitor-pill-btn.active {
+    background: rgba(56, 189, 248, 0.25);
+    border: 1px solid #38bdf8;
+    color: #7dd3fc;
+    font-weight: 700;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.monitor-realm-selector-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.monitor-realm-selector-box label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.06em;
+}
+
+.admin-select {
+    background: #0b131e;
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    color: #ffd700;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    outline: none;
+}
+
+.admin-select:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.5);
+}
+
+/* Live Telemetry Grid & Cards */
+.admin-monitor-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 12px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.monitor-card {
+    background: rgba(8, 14, 22, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.monitor-card:hover {
+    border-color: rgba(212, 175, 55, 0.45);
+    transform: translateY(-1px);
+}
+
+.card-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.class-tier-tag {
+    font-family: monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.class-tier-tag.class-user_setting {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #7dd3fc;
+}
+
+.class-tier-tag.class-user_state {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    color: #fbbf24;
+}
+
+.class-tier-tag.class-game_state {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.5);
+    color: #c084fc;
+}
+
+.class-tier-tag.class-seasonal {
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.5);
+    color: #67e8f9;
+}
+
+.class-tier-tag.class-population_pressure {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+}
+
+.card-realm-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.card-var-title {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.card-var-val {
+    font-family: monospace;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
+.card-var-val.val-good {
+    color: #4ade80;
+}
+
+.card-var-val.val-warn {
+    color: #fbbf24;
+}
+
+.card-var-val.val-danger {
+    color: #f87171;
+}
+
+.card-meter-track {
+    width: 100%;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.card-meter-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.card-meter-fill.fill-green {
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.card-meter-fill.fill-yellow {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.card-meter-fill.fill-red {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.card-meta-notes {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    line-height: 1.35;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-top: 6px;
+    margin-top: 2px;
+}
+
+/* Scenario Injection & Fine Tuner */
+.admin-scenario-tuner-panel {
+    background: rgba(8, 14, 22, 0.7);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.scenario-tuner-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.scenario-tuner-title {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #ffd700;
+}
+
+.scenario-tuner-hint {
+    font-size: 0.72rem;
+    color: #94a3b8;
+}
+
+.scenario-presets-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.presets-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #cbd5e1;
+}
+
+.scenario-preset-btn {
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.debt-shock-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    color: #fca5a5;
+}
+
+.debt-shock-btn:hover {
+    background: rgba(239, 68, 68, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.winter-btn {
+    background: rgba(56, 189, 248, 0.2);
+    border: 1px solid rgba(56, 189, 248, 0.6);
+    color: #7dd3fc;
+}
+
+.winter-btn:hover {
+    background: rgba(56, 189, 248, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+}
+
+.golden-age-btn {
+    background: rgba(251, 191, 36, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.6);
+    color: #fde047;
+}
+
+.golden-age-btn:hover {
+    background: rgba(251, 191, 36, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.scenario-custom-tune-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.tune-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tune-field label {
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+}
+
+.admin-input-num {
+    background: #0b131e;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    color: #f8fafc;
+    font-family: monospace;
+    font-size: 0.82rem;
+    padding: 5px 8px;
+    border-radius: 4px;
+    outline: none;
+}
+
+.admin-input-num:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.4);
+}
+
+.admin-btn-action-primary {
+    background: linear-gradient(180deg, #854d0e 0%, #452606 100%);
+    border: 1px solid #eab308;
+    color: #fef08a;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.admin-btn-action-primary:hover {
+    background: linear-gradient(180deg, #a16207 0%, #593108 100%);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
+}
+
+.scenario-tune-feedback {
+    font-size: 0.75rem;
+    font-family: monospace;
+    min-height: 18px;
+    transition: all 0.2s ease;
+}
+
+
 
 
 

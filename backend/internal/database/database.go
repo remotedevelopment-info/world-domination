@@ -154,6 +154,8 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_s INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_e INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_w INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS entrepreneurial_pride DOUBLE PRECISION DEFAULT 100.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS military_delayed_costs BIGINT DEFAULT 0;
 	UPDATE countries SET troops_regular = troops WHERE troops > 0 AND (COALESCE(troops_levy, 0) + COALESCE(troops_regular, 0) + COALESCE(troops_elite, 0)) = 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
@@ -605,6 +607,8 @@ func ResetGameToYear1500(clearClaims bool) error {
 		    last_total_exp = 0,
 		    last_budget_balance = 0,
 		    last_migration = 0,
+		    entrepreneurial_pride = 100.0,
+		    military_delayed_costs = 0,
 		    updated_at = CURRENT_TIMESTAMP
 	`
 	if _, err := tx.Exec(blanketReset); err != nil {
@@ -783,6 +787,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
 		COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
+		COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
 		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
@@ -805,6 +810,7 @@ func GetCountries(era string) ([]models.Country, error) {
 			&c.LastTaxRevenue, &c.LastMarketIncome, &c.LastMilitaryExp,
 			&c.LastSocialExp, &c.LastInvestmentExp, &c.LastTotalExp,
 			&c.LastBudgetBalance, &c.LastMigration,
+			&c.EntrepreneurialPride, &c.MilitaryDelayedCosts,
 			&c.TerritoryType, &c.Borders, &c.IsIsland,
 		); err != nil {
 			return nil, err
@@ -1056,11 +1062,12 @@ func UpgradeBorderFortification(countryID int64, side string, cost int64) (int64
 	return nextLevel, nil
 }
 
-// UpdateCountryVitalsAndTroopLayers updates dynamic vitals (population, resources, troops, layers)
+// UpdateCountryVitalsAndTroopLayers updates dynamic vitals (population, resources, troops, layers, and internal states)
 // during intra-year simulation ticks without overwriting the completed annual budget ledger.
 func UpdateCountryVitalsAndTroopLayers(
 	countryID int64,
 	population, resources, troops, levy, regular, elite int64,
+	pride float64, delayedCosts int64,
 ) error {
 	if DB == nil {
 		return nil
@@ -1076,24 +1083,36 @@ func UpdateCountryVitalsAndTroopLayers(
 	}
 	if troops != (levy + regular + elite) {
 		troops = levy + regular + elite
+	}
+	if pride < 0 {
+		pride = 0
+	}
+	if pride > 100 {
+		pride = 100
+	}
+	if delayedCosts < 0 {
+		delayedCosts = 0
 	}
 	_, err := DB.Exec(`
 		UPDATE countries
 		SET population = $1, resources = $2, troops = $3,
 		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
+		    entrepreneurial_pride = $7, military_delayed_costs = $8,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $7`,
+		WHERE id = $9`,
 		population, resources, troops,
 		levy, regular, elite,
+		pride, delayedCosts,
 		countryID)
 	return err
 }
 
-// UpdateCountryVitalsBudgetAndTroopLayers atomically updates vitals, troop layers, and last year's budget ledger.
+// UpdateCountryVitalsBudgetAndTroopLayers atomically updates vitals, troop layers, internals, and last year's budget ledger.
 func UpdateCountryVitalsBudgetAndTroopLayers(
 	countryID int64,
 	population, resources, troops, levy, regular, elite int64,
 	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
+	pride float64, delayedCosts int64,
 ) error {
 	if DB == nil {
 		return nil
@@ -1109,6 +1128,15 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 	}
 	if troops != (levy + regular + elite) {
 		troops = levy + regular + elite
+	}
+	if pride < 0 {
+		pride = 0
+	}
+	if pride > 100 {
+		pride = 100
+	}
+	if delayedCosts < 0 {
+		delayedCosts = 0
 	}
 	_, err := DB.Exec(`
 		UPDATE countries
@@ -1117,12 +1145,49 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 		    last_tax_revenue = $7, last_market_income = $8, last_military_exp = $9,
 		    last_social_exp = $10, last_investment_exp = $11, last_total_exp = $12,
 		    last_budget_balance = $13, last_migration = $14,
+		    entrepreneurial_pride = $15, military_delayed_costs = $16,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $15`,
+		WHERE id = $17`,
 		population, resources, troops,
 		levy, regular, elite,
 		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
+		pride, delayedCosts,
 		countryID)
+	return err
+}
+
+// UpdateCountryInternalMetrics updates the hidden user state metrics (pride and delayed military liabilities)
+func UpdateCountryInternalMetrics(countryID int64, pride float64, delayedCosts int64) error {
+	if DB == nil {
+		return nil
+	}
+	if pride < 0 {
+		pride = 0
+	}
+	if pride > 100 {
+		pride = 100
+	}
+	if delayedCosts < 0 {
+		delayedCosts = 0
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET entrepreneurial_pride = $1, military_delayed_costs = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3`,
+		pride, delayedCosts, countryID)
+	return err
+}
+
+// AddMilitaryDelayedCost adds a lingering delayed liability to a country's ledger
+func AddMilitaryDelayedCost(countryID int64, additionalCost int64) error {
+	if DB == nil || additionalCost <= 0 {
+		return nil
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET military_delayed_costs = COALESCE(military_delayed_costs, 0) + $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2`,
+		additionalCost, countryID)
 	return err
 }
 
@@ -1194,6 +1259,8 @@ type KingdomDetailRow struct {
 	LastTotalExp      int64
 	LastBudgetBalance int64
 	LastMigration     int64
+	EntrepreneurialPride float64
+	MilitaryDelayedCosts int64
 	OwnerID           *int64
 	OwnerName         *string
 	CentralTroops     int64
@@ -1217,6 +1284,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		       COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
 		       COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
+		       COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
@@ -1230,6 +1298,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		&r.LastTaxRevenue, &r.LastMarketIncome, &r.LastMilitaryExp,
 		&r.LastSocialExp, &r.LastInvestmentExp, &r.LastTotalExp,
 		&r.LastBudgetBalance, &r.LastMigration,
+		&r.EntrepreneurialPride, &r.MilitaryDelayedCosts,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err

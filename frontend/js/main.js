@@ -10,6 +10,8 @@ import {
   apiGetMyCountry,
   apiAssignCountry,
   apiGetAdminDashboard,
+  apiGetAdminGameMonitor,
+  apiPostScenarioTune,
   apiAdminResetGame,
   readErrorMessage,
   onUnauthorized,
@@ -910,13 +912,25 @@ export async function refreshAdminDashboard() {
 
   const tbody = document.getElementById("admin-users-tbody");
   try {
-    const res = await apiGetAdminDashboard();
+    const [res, monRes] = await Promise.all([
+      apiGetAdminDashboard(),
+      apiGetAdminGameMonitor().catch((err) => {
+        console.warn("Failed to fetch game monitor telemetry:", err);
+        return null;
+      }),
+    ]);
     if (!res.ok) {
       throw new Error(await readErrorMessage(res, "Failed to load admin dashboard"));
     }
     const data = await res.json();
     currentAdminDashboardData = data;
     renderAdminDashboardData(data, tbody);
+
+    if (monRes && monRes.ok) {
+      const monData = await monRes.json();
+      currentMonitorData = monData;
+      renderGameMonitor(monData);
+    }
   } catch (err) {
     console.error("Error refreshing admin dashboard:", err);
     if (tbody && !currentAdminDashboardData) {
@@ -1198,6 +1212,462 @@ window.adminResetCheckInput = adminResetCheckInput;
 window.adminResetStage2Verify = adminResetStage2Verify;
 window.adminResetAbort = adminResetAbort;
 window.adminResetStage3Execute = adminResetStage3Execute;
+
+// ==========================================================================
+// Admin Game Monitor & 5-Tier Variable Classification Matrix Logic
+// ==========================================================================
+
+let currentMonitorData = null;
+let selectedMonitorClass = "all";
+let selectedMonitorRealm = "ALL";
+
+function renderGameMonitor(data) {
+  if (!data) return;
+
+  const syncTag = document.getElementById("admin-monitor-last-sync");
+  if (syncTag) {
+    const d = data.timestamp ? new Date(data.timestamp * 1000) : new Date();
+    syncTag.textContent = `Telemetry: ${d.toLocaleTimeString()}`;
+  }
+
+  // Render Seasonal & Climatic Atmospheric Gauge Bar
+  const season = data.seasonal_climatic;
+  if (season) {
+    const seasonBadge = document.getElementById("admin-climate-season");
+    const seasonName = document.getElementById("admin-climate-season-name");
+    if (seasonBadge && seasonName) {
+      seasonName.textContent = season.season || "Spring";
+      seasonBadge.className = "seasonal-pill season-badge";
+      const sLower = (season.season || "").toLowerCase();
+      const iconSpan = seasonBadge.querySelector(".pill-icon");
+      if (sLower.includes("spring")) {
+        seasonBadge.classList.add("season-spring");
+        if (iconSpan) iconSpan.textContent = "🌱";
+      } else if (sLower.includes("summer")) {
+        seasonBadge.classList.add("season-summer");
+        if (iconSpan) iconSpan.textContent = "☀️";
+      } else if (sLower.includes("autumn") || sLower.includes("harvest")) {
+        seasonBadge.classList.add("season-autumn");
+        if (iconSpan) iconSpan.textContent = "🌾";
+      } else if (sLower.includes("winter")) {
+        seasonBadge.classList.add("season-winter");
+        if (iconSpan) iconSpan.textContent = "❄️";
+      }
+    }
+
+    const phaseBox = document.getElementById("admin-climate-phase-box");
+    const phaseVal = document.getElementById("admin-climate-phase");
+    if (phaseVal) {
+      phaseVal.textContent = season.little_ice_age_phase || "Baseline Holocene";
+      if (phaseBox) {
+        if (season.is_little_ice_age) {
+          phaseBox.classList.add("little-ice-age-active");
+        } else {
+          phaseBox.classList.remove("little-ice-age-active");
+        }
+      }
+    }
+
+    const harvestVal = document.getElementById("admin-climate-harvest");
+    if (harvestVal) {
+      const hPct = Math.round((season.harvest_yield_factor || 1.0) * 100);
+      harvestVal.textContent = `${hPct}%`;
+      harvestVal.style.color = hPct < 95 ? "#f87171" : (hPct > 105 ? "#4ade80" : "#f8fafc");
+    }
+
+    const winterLogisticsVal = document.getElementById("admin-climate-winter-logistics");
+    if (winterLogisticsVal) {
+      const wMod = season.winter_logistics_modifier || 1.0;
+      winterLogisticsVal.textContent = `${wMod.toFixed(2)}x`;
+      winterLogisticsVal.style.color = wMod > 1.05 ? "#67e8f9" : "#f8fafc";
+    }
+
+    const velocityVal = document.getElementById("admin-climate-velocity");
+    if (velocityVal) {
+      const vMod = season.commercial_velocity || 1.0;
+      velocityVal.textContent = `${vMod.toFixed(2)}x`;
+      velocityVal.style.color = vMod < 0.9 ? "#fbbf24" : (vMod > 1.05 ? "#4ade80" : "#f8fafc");
+    }
+
+    const orbitalVal = document.getElementById("admin-climate-orbital");
+    if (orbitalVal) {
+      orbitalVal.textContent = season.orbital_forcing_description || "Neutral";
+    }
+  }
+
+  // Populate realm selects if empty or count changed
+  populateMonitorRealms(data.kingdoms || []);
+
+  // Render cards
+  renderGameMonitorCards();
+}
+
+function populateMonitorRealms(kingdoms) {
+  const selectFilter = document.getElementById("admin-monitor-realm-select");
+  const selectTune = document.getElementById("tune-realm-id");
+  if (!selectFilter || !selectTune) return;
+
+  const currentFilterVal = selectFilter.value;
+  const currentTuneVal = selectTune.value;
+
+  if (selectFilter.options.length > 1 && selectFilter.options.length === kingdoms.length + 1) {
+    return;
+  }
+
+  selectFilter.innerHTML = '<option value="ALL">🌐 All Realms Matrix</option>';
+  selectTune.innerHTML = '';
+
+  kingdoms.forEach(k => {
+    const realmName = k.name || k.country_name || "Realm";
+    const realmCode = k.code || k.country_id;
+    const realmVal = String(k.country_id);
+
+    const opt1 = document.createElement("option");
+    opt1.value = realmVal;
+    opt1.textContent = `${realmName} (${realmCode})`;
+    selectFilter.appendChild(opt1);
+
+    const opt2 = document.createElement("option");
+    opt2.value = realmVal;
+    opt2.textContent = `${realmName} (${realmCode})`;
+    selectTune.appendChild(opt2);
+  });
+
+  if (currentFilterVal && Array.from(selectFilter.options).some(o => o.value === currentFilterVal)) {
+    selectFilter.value = currentFilterVal;
+  }
+  if (currentTuneVal && Array.from(selectTune.options).some(o => o.value === currentTuneVal)) {
+    selectTune.value = currentTuneVal;
+  }
+}
+
+export function setMonitorClassFilter(cls) {
+  selectedMonitorClass = cls;
+  const buttons = document.querySelectorAll(".monitor-pill-btn");
+  buttons.forEach(btn => {
+    if (btn.getAttribute("data-class") === cls) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+  renderGameMonitorCards();
+}
+
+export function renderGameMonitorCards() {
+  const container = document.getElementById("admin-monitor-cards-container");
+  if (!container || !currentMonitorData) return;
+
+  const realmSelect = document.getElementById("admin-monitor-realm-select");
+  selectedMonitorRealm = realmSelect ? realmSelect.value : "ALL";
+
+  const cards = [];
+  const cls = selectedMonitorClass;
+  const data = currentMonitorData;
+
+  // 1. Game State (Global Macro)
+  if ((cls === "all" || cls === "game_state") && selectedMonitorRealm === "ALL") {
+    const macro = data.global_macro_metrics || {};
+    const gState = data.game_state || {};
+    const worldPop = macro.total_world_population || gState.global_population || 0;
+    const worldGold = macro.total_global_treasury || gState.global_treasury_gold || 0;
+    const stressRatio = macro.world_carrying_capacity_stress || 0.71;
+
+    cards.push(`
+      <div class="monitor-card">
+        <div class="card-header-bar">
+          <span class="class-tier-tag class-game_state">3. Game State</span>
+          <span class="card-realm-name">Global World State</span>
+        </div>
+        <div class="card-var-title">Global Carrying Capacity Stress</div>
+        <div class="card-var-val ${stressRatio > 0.85 ? 'val-danger' : (stressRatio > 0.65 ? 'val-warn' : 'val-good')}">
+          ${(stressRatio * 100).toFixed(1)}%
+        </div>
+        <div class="card-meter-track">
+          <div class="card-meter-fill ${stressRatio > 0.85 ? 'fill-red' : (stressRatio > 0.65 ? 'fill-yellow' : 'fill-green')}" style="width: ${Math.min(100, stressRatio * 100)}%;"></div>
+        </div>
+        <div class="card-meta-notes">
+          World Pop: ${Number(worldPop).toLocaleString()} across ${macro.total_realms || (data.kingdoms || []).length} sovereign territories.
+        </div>
+      </div>
+    `);
+
+    cards.push(`
+      <div class="monitor-card">
+        <div class="card-header-bar">
+          <span class="class-tier-tag class-game_state">3. Game State</span>
+          <span class="card-realm-name">Global World State</span>
+        </div>
+        <div class="card-var-title">Global Specie Liquidity &amp; Chrono</div>
+        <div class="card-var-val val-good">
+          $${Number(worldGold).toLocaleString()}
+        </div>
+        <div class="card-meta-notes">
+          Sim Year: ${data.sim_year ? Number(data.sim_year).toFixed(2) : (gState.sim_year ? Number(gState.sim_year).toFixed(2) : "1500.00")} | Era: ${data.era || gState.authoritative_era?.name || "Discovery"} | Pace: ${data.chrono_scale || gState.chrono_scale || "1s"}
+        </div>
+      </div>
+    `);
+  }
+
+  // 2. Seasonal Variables
+  if ((cls === "all" || cls === "seasonal") && selectedMonitorRealm === "ALL") {
+    const s = data.seasonal_climatic || data.seasonal_state || {};
+    const harvestPct = Math.round((s.harvest_yield_factor || s.HarvestYieldFactor || 1.0) * 100);
+    const winterMod = s.winter_logistics_modifier || s.WinterSeverity || 1.0;
+    const velocity = s.commercial_velocity || s.CommercialVelocity || 1.0;
+    const orbitalVal = s.milankovitch_eccentricity_factor || s.MilankovitchEccentricity || 1.0;
+    const forcing = s.orbital_forcing_description || s.OrbitalForcingDescription || "Neutral";
+
+    cards.push(`
+      <div class="monitor-card">
+        <div class="card-header-bar">
+          <span class="class-tier-tag class-seasonal">4. Seasonal Cycles</span>
+          <span class="card-realm-name">Milankovitch Orbital Forcing</span>
+        </div>
+        <div class="card-var-title">Eccentricity Oscillation Factor</div>
+        <div class="card-var-val">
+          ${Number(orbitalVal).toFixed(4)}
+        </div>
+        <div class="card-meta-notes">
+          Forcing state: ${escapeHTML(forcing)}. Drives multi-decadal solar irradiance and Little Ice Age vulnerability.
+        </div>
+      </div>
+    `);
+
+    cards.push(`
+      <div class="monitor-card">
+        <div class="card-header-bar">
+          <span class="class-tier-tag class-seasonal">4. Seasonal Cycles</span>
+          <span class="card-realm-name">${escapeHTML(s.season || s.SeasonName || "Spring")} Yield &amp; Logistics</span>
+        </div>
+        <div class="card-var-title">Harvest Yield vs Winter Attrition</div>
+        <div class="card-var-val ${harvestPct < 95 ? 'val-warn' : 'val-good'}">
+          ${harvestPct}% / ${Number(winterMod).toFixed(2)}x
+        </div>
+        <div class="card-meta-notes">
+          Trade velocity: ${Number(velocity).toFixed(2)}x. Winter logistics levies severe quarterly attrition unless border garrisons are fortified.
+        </div>
+      </div>
+    `);
+  }
+
+  // 3. Kingdom-Specific Variables (Classes 1, 2, 5)
+  const kingdoms = data.kingdoms || [];
+  kingdoms.forEach(k => {
+    const kIdStr = String(k.country_id);
+    const kCode = k.code || "";
+    if (selectedMonitorRealm !== "ALL" && selectedMonitorRealm !== kIdStr && selectedMonitorRealm !== kCode) return;
+
+    const realmName = k.name || k.country_name || "Realm";
+    const realmCode = k.code || k.country_id;
+
+    // Class 2: User State (Hidden)
+    if (cls === "all" || cls === "user_state") {
+      const pride = k.user_state?.entrepreneurial_pride ?? 100.0;
+      const prideColor = pride < 40 ? "val-danger" : (pride < 70 ? "val-warn" : "val-good");
+      const prideFill = pride < 40 ? "fill-red" : (pride < 70 ? "fill-yellow" : "fill-green");
+
+      cards.push(`
+        <div class="monitor-card">
+          <div class="card-header-bar">
+            <span class="class-tier-tag class-user_state">2. User State (Hidden)</span>
+            <span class="card-realm-name">${escapeHTML(realmName)} (${realmCode})</span>
+          </div>
+          <div class="card-var-title">Entrepreneurial Pride &amp; Risk Willingness</div>
+          <div class="card-var-val ${prideColor}">
+            ${Number(pride).toFixed(1)}%
+          </div>
+          <div class="card-meter-track">
+            <div class="card-meter-fill ${prideFill}" style="width: ${Math.min(100, Math.max(0, pride))}%;"></div>
+          </div>
+          <div class="card-meta-notes">
+            Intangible commercial vitality. Erodes when tax &gt; 40%. Recovers at lower rates. Blunts venture investment and risk appetite if depressed.
+          </div>
+        </div>
+      `);
+
+      const delayed = k.user_state?.military_delayed_costs ?? k.user_state?.military_delayed_liabilities ?? 0;
+      cards.push(`
+        <div class="monitor-card">
+          <div class="card-header-bar">
+            <span class="class-tier-tag class-user_state">2. User State (Hidden)</span>
+            <span class="card-realm-name">${escapeHTML(realmName)} (${realmCode})</span>
+          </div>
+          <div class="card-var-title">Delayed Military Tail Liabilities</div>
+          <div class="card-var-val ${delayed > 5000 ? 'val-danger' : (delayed > 1000 ? 'val-warn' : 'val-good')}">
+            $${Number(delayed).toLocaleString()}
+          </div>
+          <div class="card-meta-notes">
+            Long-tail liability incurred from prior military expansions. Decays smoothly at 20%/year (t½ ≈ 3.1 yrs) into the annual state budget.
+          </div>
+        </div>
+      `);
+    }
+
+    // Class 1: User Setting
+    if (cls === "all" || cls === "user_setting") {
+      const settings = k.user_settings || {};
+      const taxRate = settings.tax_rate_display ?? settings.tax_rate ?? 10;
+      const invRate = settings.investment_rate ?? settings.investment ?? 0;
+      const socRate = settings.social_costs_rate ?? settings.social_costs ?? 0;
+      const central = settings.troops_central ?? settings.mobilized_central_troops ?? 0;
+      const border = settings.troops_border ?? settings.mobilized_border_troops ?? 0;
+      const fortsCount = settings.fortified_borders_count ?? ((settings.fort_n?1:0)+(settings.fort_s?1:0)+(settings.fort_e?1:0)+(settings.fort_w?1:0));
+
+      cards.push(`
+        <div class="monitor-card">
+          <div class="card-header-bar">
+            <span class="class-tier-tag class-user_setting">1. User Setting</span>
+            <span class="card-realm-name">${escapeHTML(realmName)} (${realmCode})</span>
+          </div>
+          <div class="card-var-title">Fiscal &amp; Military Directives</div>
+          <div class="card-var-val">
+            ${Number(taxRate).toFixed(1)}% Tax
+          </div>
+          <div class="card-meta-notes">
+            Invest: ${Number(invRate).toFixed(1)}% | Social: ${Number(socRate).toFixed(1)}%<br>
+            Troops: ${Number(central).toLocaleString()} central / ${Number(border).toLocaleString()} border | ${fortsCount} forts
+          </div>
+        </div>
+      `);
+    }
+
+    // Class 5: Population Pressure
+    if (cls === "all" || cls === "population_pressure") {
+      const pop = k.population_pressure || {};
+      const discount = pop.manpower_recruitment_discount ?? 1.0;
+      const discountPct = Math.round((1 - discount) * 100);
+      const ratio = pop.carrying_capacity_ratio ?? pop.population_pressure_index ?? 0.5;
+      const ratioFill = ratio > 0.9 ? "fill-red" : (ratio > 0.75 ? "fill-yellow" : "fill-green");
+      const squalor = pop.welfare_squalor_burden ?? 0;
+      const popCount = pop.population ?? 0;
+
+      cards.push(`
+        <div class="monitor-card">
+          <div class="card-header-bar">
+            <span class="class-tier-tag class-population_pressure">5. Population Pressure</span>
+            <span class="card-realm-name">${escapeHTML(realmName)} (${realmCode})</span>
+          </div>
+          <div class="card-var-title">Manpower Discount vs Squalor Burden</div>
+          <div class="card-var-val ${discountPct > 20 ? 'val-good' : ''}">
+            -${discountPct}% Troop Cost
+          </div>
+          <div class="card-meter-track">
+            <div class="card-meter-fill ${ratioFill}" style="width: ${Math.min(100, ratio * 100)}%;"></div>
+          </div>
+          <div class="card-meta-notes">
+            Population: ${Number(popCount).toLocaleString()}<br>
+            Welfare Squalor Burden: $${Math.round(squalor).toLocaleString()}/yr | Manpower Cost Mod: ${(discount * 100).toFixed(0)}%
+          </div>
+        </div>
+      `);
+    }
+  });
+
+  if (cards.length === 0) {
+    container.innerHTML = `<div class="loading-cell" style="grid-column: 1 / -1; padding: 20px; text-align: center; color: #8da4b8;">No variables matching the selected filter criteria.</div>`;
+  } else {
+    container.innerHTML = cards.join("");
+  }
+}
+
+export async function applyScenarioPreset(presetName) {
+  const statusEl = document.getElementById("scenario-tune-status");
+  const tuneRealmSelect = document.getElementById("tune-realm-id");
+  const countryId = tuneRealmSelect ? tuneRealmSelect.value : "ENG";
+
+  if (!countryId) {
+    if (statusEl) {
+      statusEl.textContent = "Please select a target realm first.";
+      statusEl.style.color = "#f87171";
+    }
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = `Injecting preset '${presetName}' into ${countryId}...`;
+    statusEl.style.color = "#ffd700";
+  }
+
+  try {
+    const res = await apiPostScenarioTune({
+      country_id: countryId,
+      preset: presetName,
+    });
+    if (!res.ok) {
+      throw new Error(await readErrorMessage(res, "Preset injection failed"));
+    }
+    const result = await res.json();
+    if (statusEl) {
+      statusEl.textContent = `✓ ${result.message || "Scenario injected successfully"}`;
+      statusEl.style.color = "#4ade80";
+    }
+    await refreshAdminDashboard();
+  } catch (err) {
+    console.error("Scenario preset injection error:", err);
+    if (statusEl) {
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.style.color = "#f87171";
+    }
+  }
+}
+
+export async function submitCustomScenarioTune() {
+  const statusEl = document.getElementById("scenario-tune-status");
+  const realmSelect = document.getElementById("tune-realm-id");
+  const prideInput = document.getElementById("tune-pride");
+  const delayedInput = document.getElementById("tune-delayed-costs");
+  const resInput = document.getElementById("tune-resources");
+
+  const countryId = realmSelect ? realmSelect.value : "";
+  if (!countryId) {
+    if (statusEl) {
+      statusEl.textContent = "Please select a target realm.";
+      statusEl.style.color = "#f87171";
+    }
+    return;
+  }
+
+  const payload = { country_id: countryId };
+  if (prideInput && prideInput.value !== "") {
+    payload.entrepreneurial_pride = parseFloat(prideInput.value);
+  }
+  if (delayedInput && delayedInput.value !== "") {
+    payload.military_delayed_costs = parseInt(delayedInput.value, 10);
+  }
+  if (resInput && resInput.value !== "") {
+    payload.resources = parseInt(resInput.value, 10);
+  }
+
+  if (statusEl) {
+    statusEl.textContent = `Applying variable calibration to ${countryId}...`;
+    statusEl.style.color = "#ffd700";
+  }
+
+  try {
+    const res = await apiPostScenarioTune(payload);
+    if (!res.ok) {
+      throw new Error(await readErrorMessage(res, "Calibration failed"));
+    }
+    const result = await res.json();
+    if (statusEl) {
+      statusEl.textContent = `✓ ${result.message || "Calibration applied"}`;
+      statusEl.style.color = "#4ade80";
+    }
+    await refreshAdminDashboard();
+  } catch (err) {
+    console.error("Custom scenario tune error:", err);
+    if (statusEl) {
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.style.color = "#f87171";
+    }
+  }
+}
+
+window.setMonitorClassFilter = setMonitorClassFilter;
+window.renderGameMonitorCards = renderGameMonitorCards;
+window.applyScenarioPreset = applyScenarioPreset;
+window.submitCustomScenarioTune = submitCustomScenarioTune;
 
 // Initialize when DOM is ready
 async function initApp() {

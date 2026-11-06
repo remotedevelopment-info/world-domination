@@ -282,3 +282,72 @@ func TestComputeEconomyWithLayersAndSocialScaling(t *testing.T) {
 			highSoc.SocialExpenditure, midSoc.SocialExpenditure)
 	}
 }
+
+func TestSeasonalAndClimaticCycles(t *testing.T) {
+	// Verify 4 seasons across simulation year fractions
+	spring := GetClimaticAndSeasonalState(1500.10)
+	summer := GetClimaticAndSeasonalState(1500.35)
+	autumn := GetClimaticAndSeasonalState(1500.65)
+	winter := GetClimaticAndSeasonalState(1500.85)
+
+	if spring.Season != "Spring" {
+		t.Errorf("expected Spring at 1500.10, got %s", spring.Season)
+	}
+	if summer.Season != "Summer" {
+		t.Errorf("expected Summer at 1500.35, got %s", summer.Season)
+	}
+	if autumn.Season != "Autumn" {
+		t.Errorf("expected Autumn at 1500.65, got %s", autumn.Season)
+	}
+	if winter.Season != "Winter" {
+		t.Errorf("expected Winter at 1500.85, got %s", winter.Season)
+	}
+
+	// Autumn harvest yields should be greater than winter yields
+	if autumn.HarvestYieldFactor <= winter.HarvestYieldFactor {
+		t.Errorf("expected autumn harvest factor (%f) > winter harvest factor (%f)",
+			autumn.HarvestYieldFactor, winter.HarvestYieldFactor)
+	}
+
+	// Winter severity modifier increases military winter upkeep
+	if winter.WinterSeverity <= spring.WinterSeverity {
+		t.Errorf("expected winter severity (%f) > spring severity (%f)",
+			winter.WinterSeverity, spring.WinterSeverity)
+	}
+
+	// Little Ice Age solar minimums (Maunder Minimum 1645-1715)
+	maunderWinter := GetClimaticAndSeasonalState(1680.85)
+	if maunderWinter.WinterSeverity <= winter.WinterSeverity {
+		t.Errorf("expected Maunder minimum winter (%f) to be more severe than 1500 winter (%f)",
+			maunderWinter.WinterSeverity, winter.WinterSeverity)
+	}
+}
+
+func TestInternalStateEntrepreneurialPrideAndDelayedCosts(t *testing.T) {
+	// 1. Entrepreneurial Pride modulates market income
+	highPrideEcon := ComputeEconomyWithInternals(10000, 2000, 0, 30, 5, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.20)
+	crushedPrideEcon := ComputeEconomyWithInternals(10000, 2000, 0, 30, 5, 0, 0, 0, 0, 0, 0, 20.0, 0, 1500.20)
+
+	if crushedPrideEcon.MarketRevenue >= highPrideEcon.MarketRevenue {
+		t.Errorf("expected crushed pride market revenue (%d) to be lower than high pride revenue (%d)",
+			crushedPrideEcon.MarketRevenue, highPrideEcon.MarketRevenue)
+	}
+
+	// 2. Delayed Military Liabilities add to total military upkeep
+	noDelayedEcon := ComputeEconomyWithInternals(10000, 2000, 100, 30, 0, 0, 0, 0, 0, 100, 0, 100.0, 0, 1500.20)
+	withDelayedEcon := ComputeEconomyWithInternals(10000, 2000, 100, 30, 0, 0, 0, 0, 0, 100, 0, 100.0, 500, 1500.20)
+
+	if withDelayedEcon.MilitaryUpkeep != noDelayedEcon.MilitaryUpkeep+500 {
+		t.Errorf("expected total military upkeep to reflect delayed liabilities (%d vs %d)",
+			withDelayedEcon.MilitaryUpkeep, noDelayedEcon.MilitaryUpkeep+500)
+	}
+
+	// 3. Manpower Recruitment Discount scales with population size
+	smallPopEcon := ComputeEconomyWithInternals(500000, 2000, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.0)
+	largePopEcon := ComputeEconomyWithInternals(15000000, 2000, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.0)
+
+	if largePopEcon.ManpowerRecruitDiscount >= smallPopEcon.ManpowerRecruitDiscount {
+		t.Errorf("expected large kingdom manpower discount (%f) to be more generous than small kingdom (%f)",
+			largePopEcon.ManpowerRecruitDiscount, smallPopEcon.ManpowerRecruitDiscount)
+	}
+}

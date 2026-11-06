@@ -280,6 +280,34 @@ func TestTimelineHandlers(t *testing.T) {
 	if resetRes["era_id"] != "discovery" {
 		t.Errorf("Expected era_id discovery, got %v", resetRes["era_id"])
 	}
+
+	// 17. GET /api/admin/game-monitor with player -> 403, with admin -> 200
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/game-monitor", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "user", nonAdminToken))
+	rr = httptest.NewRecorder()
+	AdminGameMonitorHandler(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("AdminGameMonitorHandler non-admin status = %d, expected 403", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/game-monitor", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "user", newAdminToken))
+	rr = httptest.NewRecorder()
+	AdminGameMonitorHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("AdminGameMonitorHandler admin status = %d, expected 200", rr.Code)
+	}
+	var monitorRes map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &monitorRes)
+	if monitorRes["game_state"] == nil {
+		t.Errorf("Expected game_state in monitor response")
+	}
+	if monitorRes["seasonal_state"] == nil {
+		t.Errorf("Expected seasonal_state in monitor response")
+	}
+	if monitorRes["kingdoms"] == nil {
+		t.Errorf("Expected kingdoms in monitor response")
+	}
 }
 
 func TestActionHandlerMilitaryValidation(t *testing.T) {

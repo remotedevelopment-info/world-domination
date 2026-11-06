@@ -137,8 +137,76 @@ In **The Modern Age** (`year >= 1989`), globalized capital markets introduce hig
 Every macroeconomic layer must maintain 100% pass rates across `go test ./...` before advancing to the next layer:
 
 1. **Layer 1 Invariants (Current)**:
-   - `TestBalancedBudgetNoDeficit`: Verifies that when desired expenditure exceeds revenue, `EnforceBalancedBudget` caps discretionary outlays and ensures `BudgetBalance >= 0`.
+   - `TestBalancedBudgetNoDeficit`: Verifies that kingdoms with specie reserves can fund deficits from treasury reserves, while broke kingdoms (`resources == 0`) have outlays strictly capped to revenue.
    - `TestTaxDrivenMigration`: Verifies that punitive tax rates (`> 60%`) cause negative net migration (emigration), while low tax rates (`<= 30%`) with infrastructure attract positive immigration.
    - `TestPopulationPressure`: Verifies that high population density without infrastructure or excessive military mobilization raises `PopulationPressure`.
    - `TestLastYearExpenditureTracking`: Verifies that annual simulation ticks persist Last Year's actual revenue, expenditure breakdown, and migration for display in the player's Budget Ledger.
+
+---
+
+## 4. Administrative Variable Taxonomy & Internal Dynamic Rules
+
+To enable rigorous scenario tuning and simulation balance, all game mechanics adhere to a 5-tier variable classification accessible in real time via the **Admin Game Monitor Panel**:
+
+```mermaid
+flowchart LR
+    US["1. User Setting\n(Public Controls)"]
+    UST["2. User State\n(Internal / Intangible)"]
+    GS["3. Game State\n(Global Macro)"]
+    SE["4. Seasonal & Climatic\n(Orbital / Milankovitch)"]
+    PP["5. Population Pressure\n(Manpower vs Welfare)"]
+
+    US -->|"Sets Policy"| UST
+    GS -->|"Contextualizes"| UST
+    SE -->|"Modulates Harvest & Attrition"| UST
+    PP -->|"Scales Recruitment & Welfare"| US
+```
+
+### 1. The 5 Variable Classes
+
+| Class | Scope | Visibility | Key Variables | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **User Setting** | Kingdom | Public (Player Modal) | `Tax Rate (%)`, `Investment (%)`, `Social Costs (%)`, `Central/Border Troops`, `Fortifications (N/S/E/W)` | Direct policy levers controlled by sovereign rulers. |
+| **User State** | Kingdom | Internal (Admin Only) | `Entrepreneurial Pride (%)`, `Military Delayed Costs`, `Fiscal Stress Index`, `Specie Reserves`, `Real GDP`, `Inflation` | Hidden psychological and structural balance sheet variables altered by gameplay. |
+| **Game State** | Global | Universal | `Authoritative Era`, `Sim Year`, `Chrono Scale`, `Global Trade Liquidity`, `Active Wars`, `Fiscal Regime` | Macro-environmental constants and systemic financial infrastructure. |
+| **Seasonal & Climatic** | Global / Regional | Universal | `Season (Spring/Summer/Autumn/Winter)`, `Milankovitch Factor`, `Little Ice Age Phase`, `Harvest Yield Multiplier`, `Winter Severity Modifier` | Astronomical and climatological cycles that swing crop yields, trade velocity, and military winter logistics. |
+| **Population Pressure** | Kingdom / Regional | Telemetry | `Carrying Capacity Ratio`, `Manpower Recruitment Discount`, `Welfare Squalor Burden`, `Birth Growth Dampener` | Demographic balance: abundant labor cheapens troop recruitment but escalates mandatory civic welfare. |
+
+---
+
+### 2. Core Internal Dynamics (Feature/Internals)
+
+#### A. Entrepreneurial Pride & Risk-Taking Propensity
+- **Concept**: An intangible national index representing merchant confidence, civic ambition, and commercial vigor ($0\% \text{ to } 100\%$, initialized at $100\%$).
+- **Taxation Drag**: High tax rates ($> 40\%$, escalating above $60\%$) demoralize private enterprise, reducing Entrepreneurial Pride over multi-year periods.
+- **Economic Impact**:
+  - High Pride ($> 80\%$): Multiplies market profits and cushions commercial risk swings.
+  - Crushed Pride ($< 50\%$): Suppresses private trade output, accelerates capital flight, and raises commercial volatility.
+- **Recovery**: Recovers gradually ($+1.5\% \text{ to } +2.5\% \text{ annually}$) when taxes remain competitive ($\le 35\%$) and the treasury maintains positive specie reserves.
+
+#### B. Delayed Military Investment Tails & Pension Liabilities
+- **Concept**: When a player invests heavily in army expansion, recruitment, or fortifications, the fiscal burden does **not** vanish once recruits join the ranks.
+- **Mechanism**: Every troop recruitment batch and fortification expansion commits a **Delayed Military Liability** (munitions contracts, officer pensions, armory upkeep, supply depot maintenance).
+- **Decay Profile**: Delayed liabilities decay by $\sim 20\%$ annually ($t_{1/2} \approx 3.1 \text{ years}$).
+- **Gameplay Effect**: Overbuilding the military binds the crown's budget for years into the future; peacetime does not immediately alleviate accumulated defense commitments.
+
+#### C. Gradual Demographic Drag (Multi-Year Lag)
+- **Concept**: Confiscatory taxation ($> 60\%$) blunts population growth gradually rather than triggering unrealistic sudden depopulation.
+- **Mechanism**:
+  - Blunts natural birth growth from $+1.5\%$ toward zero or slight negative contraction (delayed family formation).
+  - Emigration compounds over $3\text{–}5$ years of sustained oppression, allowing players a window to correct punitive fiscal mistakes before demographic collapse occurs.
+
+#### D. Seasonal Milankovitch & Climatic Swings
+- **Astronomical Seasons**: Calculated from the fractional simulation year:
+  - `Spring [0.00 – 0.25)`: Sowing season, moderate trade recovery.
+  - `Summer [0.25 – 0.50)`: Campaigning peak, maximum maritime commerce velocity.
+  - `Autumn [0.50 – 0.75)`: Harvest cycle; `HarvestYieldMultiplier` applies a tax windfall or shortfall.
+  - `Winter [0.75 – 1.00)`: Winter freezing; applies `WinterSeverityModifier` increasing standing military logistics upkeep and front-line attrition.
+- **Little Ice Age & Solar Variations (1500–1850)**:
+  - Spörer Minimum ($\sim 1500$) and Maunder Minimum ($1645\text{–}1715$) apply long-wave cooling, increasing winter severity and elevating famine risks.
+
+#### E. Population Pressure: Manpower vs. Welfare Duality
+- **Manpower Recruitment Advantage**: Kingdoms with massive populations (e.g. France, Ottoman Empire) benefit from plentiful recruits; recruitment gold costs scale down by up to $50\%$.
+- **Welfare Squalor Burden**: Larger populations require proportionally higher baseline Cathedral and Social Welfare spending. If underfunded, urban squalor accelerates epidemic vulnerability and dampens economic productivity.
+
 

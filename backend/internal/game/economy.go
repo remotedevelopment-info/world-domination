@@ -1,6 +1,21 @@
 package game
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
+
+// SeasonalClimaticState tracks astronomical, orbital, and historical Little Ice Age conditions.
+type SeasonalClimaticState struct {
+	Season             string  `json:"season"`               // "Spring", "Summer", "Autumn", "Winter"
+	SeasonName         string  `json:"season_name"`          // e.g. "Autumn Harvest 1500"
+	YearPhase          float64 `json:"year_phase"`           // 0.00 to 0.99
+	MilankovitchFactor float64 `json:"milankovitch_factor"`  // Orbital drift variance (-0.05 to +0.05)
+	LittleIceAgePhase  string  `json:"little_ice_age_phase"` // e.g. "Spörer Minimum", "Maunder Minimum", "Temperate"
+	HarvestYieldFactor float64 `json:"harvest_yield_factor"` // Multiplier on agricultural output (0.80 - 1.25)
+	WinterSeverity     float64 `json:"winter_severity"`      // Winter logistics and military upkeep modifier (1.0 - 1.45)
+	CommercialVelocity float64 `json:"commercial_velocity"`  // Trade season velocity (0.85 - 1.25)
+}
 
 // EconomyState is the derived economic dashboard and annual budget ledger for one country.
 // It is recomputed from persisted state on every build, so clients always render
@@ -35,6 +50,18 @@ type EconomyState struct {
 	Infrastructure      int64   `json:"infrastructure"`
 	PopulationPressure  float64 `json:"population_pressure"`
 	NetMigration        int64   `json:"net_migration"`
+
+	// Feature/Internals: User State & Environmental Telemetry
+	EntrepreneurialPride    float64 `json:"entrepreneurial_pride"`
+	MilitaryDelayedCosts    int64   `json:"military_delayed_costs"`
+	SeasonalHarvestFactor   float64 `json:"seasonal_harvest_factor"`
+	WinterSeverityFactor    float64 `json:"winter_severity_factor"`
+	ManpowerRecruitDiscount float64 `json:"manpower_recruit_discount"`
+	WelfareSqualorBurden    int64   `json:"welfare_squalor_burden"`
+	Season                  string  `json:"season"`
+	SeasonName              string  `json:"season_name"`
+	LittleIceAgePhase       string  `json:"little_ice_age_phase"`
+
 	// Last Year's Actual Ledger
 	LastTaxRevenue      int64   `json:"last_tax_revenue"`
 	LastMarketIncome    int64   `json:"last_market_income"`
@@ -161,10 +188,92 @@ func ComputePopulationPressure(population, troops, infrastructure, socialCosts i
 	return math.Round(pressure*10) / 10
 }
 
-// ComputeMigration returns the net annual population migration for a kingdom.
-// Confiscatory taxation (> 60%) triggers tax flight (negative migration / emigration).
-// Low taxation (<= 35%) paired with infrastructure and social welfare attracts immigrants.
-func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) int64 {
+// GetClimaticAndSeasonalState derives astronomical, orbital, and Little Ice Age climatic modifiers.
+func GetClimaticAndSeasonalState(simYear float64) SeasonalClimaticState {
+	yearInt := int64(math.Floor(simYear))
+	phase := simYear - float64(yearInt)
+	if phase < 0 {
+		phase = 0
+	}
+	if phase >= 1.0 {
+		phase = 0.999
+	}
+
+	var season string
+	var commVelocity, harvestFactor, winterSeverity float64
+
+	switch {
+	case phase < 0.25:
+		season = "Spring"
+		commVelocity = 1.05
+		harvestFactor = 1.00
+		winterSeverity = 1.00
+	case phase < 0.50:
+		season = "Summer"
+		commVelocity = 1.20
+		harvestFactor = 1.05
+		winterSeverity = 1.00
+	case phase < 0.75:
+		season = "Autumn"
+		commVelocity = 1.10
+		harvestFactor = 1.18 // Harvest bounty
+		winterSeverity = 1.05
+	default:
+		season = "Winter"
+		commVelocity = 0.85 // Sea freezing, mountain passes closed
+		harvestFactor = 0.90
+		winterSeverity = 1.25 // Heavy logistics and winter upkeep
+	}
+
+	// Historical Little Ice Age & Solar Minimums (1500-1850)
+	var liaPhase string
+	switch {
+	case yearInt >= 1645 && yearInt <= 1715:
+		liaPhase = "Maunder Minimum (Severe Little Ice Age Cold)"
+		winterSeverity += 0.20
+		harvestFactor -= 0.12
+	case yearInt >= 1480 && yearInt <= 1550:
+		liaPhase = "Spörer Minimum (Little Ice Age Cold)"
+		winterSeverity += 0.12
+		harvestFactor -= 0.08
+	case yearInt >= 1790 && yearInt <= 1830:
+		liaPhase = "Dalton Minimum (Volcanic Perturbation)"
+		winterSeverity += 0.10
+		harvestFactor -= 0.10
+	case yearInt < 1860:
+		liaPhase = "Little Ice Age (Cool)"
+		winterSeverity += 0.05
+	default:
+		liaPhase = "Temperate Modern Epoch"
+	}
+
+	// Milankovitch orbital eccentricity oscillation (quasi-periodic astronomical drift)
+	milan := 0.035 * math.Sin(float64(yearInt)*2.0*math.Pi/41.0) * math.Cos(float64(yearInt)*2.0*math.Pi/93.0)
+	harvestFactor += milan
+	harvestFactor = math.Round(harvestFactor*100) / 100
+	winterSeverity = math.Round(winterSeverity*100) / 100
+
+	seasonName := fmt.Sprintf("%s %d", season, yearInt)
+	if season == "Autumn" {
+		seasonName = fmt.Sprintf("Autumn Harvest %d", yearInt)
+	}
+
+	return SeasonalClimaticState{
+		Season:             season,
+		SeasonName:         seasonName,
+		YearPhase:          math.Round(phase*100) / 100,
+		MilankovitchFactor: math.Round(milan*1000) / 1000,
+		LittleIceAgePhase:  liaPhase,
+		HarvestYieldFactor: harvestFactor,
+		WinterSeverity:     winterSeverity,
+		CommercialVelocity: commVelocity,
+	}
+}
+
+// ComputeMigrationWithPride calculates net population migration considering tax rates and merchant confidence.
+// High taxes blunts birth growth and produces steady, gradual emigration.
+// Low taxes and high entrepreneurial pride attract ambitious merchants and immigrants.
+func ComputeMigrationWithPride(population, taxRate, socialCosts, infrastructure int64, pride float64) int64 {
 	if population <= 0 {
 		return 0
 	}
@@ -175,8 +284,10 @@ func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) in
 		if effExcess <= 0 {
 			return 0
 		}
-		// Quadratic tax flight up to ~3.5% of population per year at 100% tax
-		rate := (effExcess / 40.0) * (effExcess / 40.0) * 0.035
+		// Gradual tax flight: capped around 1.0% to 1.5% per year,
+		// worsened if entrepreneurial pride is broken
+		prideDrag := 1.0 + (1.0-pride/100.0)*0.5
+		rate := (effExcess / 40.0) * 0.015 * prideDrag
 		loss := int64(math.Ceil(float64(population) * rate))
 		if loss < 1 {
 			loss = 1
@@ -187,7 +298,8 @@ func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) in
 		taxAdvantage := float64(36-taxRate) / 36.0
 		civicFactor := 1.0 + float64(infrastructure)*0.20 + float64(socialCosts)*0.015
 		damping := 1.0 - float64(population)/float64(carryingCapacity)
-		rate := 0.002 * taxAdvantage * civicFactor * damping
+		prideBonus := 0.70 + 0.30*(pride/100.0)
+		rate := 0.002 * taxAdvantage * civicFactor * damping * prideBonus
 		gain := int64(math.Round(float64(population) * rate))
 		if gain < 1 && (infrastructure > 0 || socialCosts >= 20 || taxRate <= 25) {
 			gain = 1
@@ -197,51 +309,99 @@ func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) in
 	return 0
 }
 
+// ComputeMigration returns the net annual population migration for a kingdom.
+func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) int64 {
+	return ComputeMigrationWithPride(population, taxRate, socialCosts, infrastructure, 100.0)
+}
+
 // ComputeEconomy derives all dashboard and annual budget indicators from persisted state.
 func ComputeEconomy(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64) EconomyState {
 	return ComputeEconomyWithLayers(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts, 0, troops, 0)
 }
 
 // ComputeEconomyWithLayers derives all economic, budget, and military ledger indicators
-// incorporating tiered military units (levies, regulars, elites) and scaled civic/cathedral investments.
+// incorporating tiered military units (levies, regulars, elites) with baseline internals.
 func ComputeEconomyWithLayers(
 	population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64,
 	levy, regular, elite int64,
 ) EconomyState {
+	return ComputeEconomyWithInternals(
+		population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts,
+		levy, regular, elite, 100.0, 0, 1500.0,
+	)
+}
+
+// ComputeEconomyWithInternals incorporates all user settings, internal states (entrepreneurial pride, delayed military liabilities),
+// and environmental factors (seasonal harvest and winter logistics modifiers).
+func ComputeEconomyWithInternals(
+	population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64,
+	levy, regular, elite int64,
+	pride float64, delayedCosts int64, simYear float64,
+) EconomyState {
+	if pride < 0 {
+		pride = 0
+	}
+	if pride > 100 {
+		pride = 100
+	}
+	if delayedCosts < 0 {
+		delayedCosts = 0
+	}
+
+	season := GetClimaticAndSeasonalState(simYear)
+
 	gdp := gdpValue(population, troops, taxRate, markets, infrastructure)
-	// Investment compounds GDP in future periods (a perennial productivity lever).
-	gdp *= 1.0 + investmentBoost*float64(investment)
+	// Investment compounds GDP; harvest factor modulates seasonal agricultural GDP output
+	gdp *= (1.0 + investmentBoost*float64(investment)) * season.HarvestYieldFactor
 	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
-	marketRev := int64(markets * 12)
+
+	// Entrepreneurial Pride & Seasonal Trade Velocity modulate market revenue
+	prideFactor := 0.40 + 0.60*(pride/100.0)
+	marketRev := int64(float64(markets*12) * prideFactor * season.CommercialVelocity)
 	totalRev := revenue + marketRev
 	if totalRev < 0 {
 		totalRev = 0
 	}
 
-	// Multi-tiered military upkeep:
+	// Standing troop upkeep:
 	// Levy: 2.0 gold/troop (peasant militia, cheap upkeep)
 	// Regular: 6.0 gold/troop (disciplined standing footmen, arms, armor)
 	// Elite: 18.0 gold/troop (royal tercios, knightly retinues, high maintenance)
-	var milUpkeep int64
+	var standingMilUpkeep int64
 	if (levy + regular + elite) > 0 {
-		milUpkeep = int64(math.Round(float64(levy)*2.0 + float64(regular)*6.0 + float64(elite)*18.0))
+		standingMilUpkeep = int64(math.Round(float64(levy)*2.0 + float64(regular)*6.0 + float64(elite)*18.0))
 	} else {
-		milUpkeep = int64(float64(troops)*troopUpkeep + 0.5)
+		standingMilUpkeep = int64(float64(troops)*troopUpkeep + 0.5)
 	}
 
+	// Winter severity applies winter logistics burden to standing military
+	if season.Season == "Winter" && standingMilUpkeep > 0 {
+		standingMilUpkeep = int64(math.Round(float64(standingMilUpkeep) * season.WinterSeverity))
+	}
+
+	// Total military upkeep includes standing upkeep PLUS lingering delayed liabilities from past military campaigns/recruitment
+	milUpkeep := standingMilUpkeep + delayedCosts
+
 	// Cathedral tithes, civic administration, and court justice:
-	// Scales with realm GDP capacity, reflecting real fiscal burdens of monumental building and national institutions.
 	socialSpend := int64(math.Round(float64(socialCosts)*2.0 + float64(gdp)*(float64(socialCosts)/100.0)*0.08))
 	// Colonial expeditions, trading ventures, and infrastructure investment:
 	investmentSpend := int64(math.Round(float64(investment)*2.0 + float64(gdp)*(float64(investment)/100.0)*0.08))
 	expenditure := milUpkeep + socialSpend + investmentSpend
 	balance := totalRev - expenditure
 
+	// Population pressure & welfare burden:
+	// High population requires higher baseline Cathedral & Guild welfare to avoid squalor
+	baseWelfareNeed := int64(float64(population) * 0.0008)
+	popPressure := ComputePopulationPressure(population, troops, infrastructure, socialCosts)
+	if socialSpend < baseWelfareNeed && baseWelfareNeed > 0 {
+		squalor := (float64(baseWelfareNeed-socialSpend) / float64(baseWelfareNeed)) * 20.0
+		popPressure = math.Min(100.0, popPressure+squalor)
+	}
+
+	// Manpower recruitment discount: abundant population makes recruiting cheaper (up to 50%)
+	manpowerDiscount := math.Max(0.50, 1.0-(float64(population)/20000000.0)*0.50)
+
 	// Enforce Layer 1 Hard-Specie Fiscal Rules:
-	// As long as the kingdom has gold reserves in its treasury (resources > 0),
-	// it can spend down its specie reserves to fund deficits.
-	// Once the treasury is exhausted (resources <= 0), sovereign borrowing is unavailable
-	// in Era 1, so outlays are strictly capped to annual revenue.
 	var effMil, effSoc, effInv int64
 	var capped bool
 	fiscalRegime := "BALANCED_SPECIE"
@@ -263,21 +423,15 @@ func ComputeEconomyWithLayers(
 	effTotalExp := effMil + effSoc + effInv
 	effBalance := totalRev - effTotalExp
 
-	// The currency is gold-backed: its value tracks the reserve-to-GDP
-	// ratio, nudged up or down by the budget trajectory.
 	value := 1.0
 	if gdp > 0 {
 		value = (float64(resources) / gdp) / currencyBackingRatio
 	}
-	// Inflation is the forward-looking currency pressure: a persistent deficit
-	// and above-target social spending dilute the gold-backed ledger.
 	inflation := 0.0
 	if balance < 0 {
 		inflation = -float64(balance) * inflationDrift
 	}
-	// Social spending adds monetary pressure proportionally.
 	inflation += float64(socialCosts) * inflationSocial
-	// Investment adds mild dilution while the gilt is being built.
 	inflation += float64(investment) * inflationInvestment
 	if inflation < 0 {
 		inflation = 0
@@ -286,39 +440,47 @@ func ComputeEconomyWithLayers(
 		inflation = 100
 	}
 
-	popPressure := ComputePopulationPressure(population, troops, infrastructure, socialCosts)
-	netMig := ComputeMigration(population, taxRate, socialCosts, infrastructure)
+	netMig := ComputeMigrationWithPride(population, taxRate, socialCosts, infrastructure, pride)
 
 	return EconomyState{
-		TaxRate:                taxRate,
-		GDP:                    int64(gdp + 0.5),
-		TaxRevenue:             revenue,
-		MarketRevenue:          marketRev,
-		TotalRevenue:           totalRev,
-		MilitaryUpkeep:         milUpkeep,
-		SocialExpenditure:      socialSpend,
-		InvestmentExpenditure:  investmentSpend,
-		MilitaryExpenditure:    expenditure,
-		TroopsLevy:             levy,
-		TroopsRegular:          regular,
-		TroopsElite:            elite,
-		BudgetBalance:          balance,
-		EffectiveMilitaryExp:   effMil,
-		EffectiveSocialExp:     effSoc,
-		EffectiveInvestmentExp: effInv,
-		EffectiveTotalExp:      effTotalExp,
-		EffectiveBalance:       effBalance,
-		DeficitCapped:          capped,
-		FiscalRegime:           fiscalRegime,
-		GoldReserve:            resources,
-		CurrencyValue:          value,
-		InflationRate:          inflation,
-		Investment:             investment,
-		SocialCosts:            socialCosts,
-		Markets:                markets,
-		Infrastructure:         infrastructure,
-		PopulationPressure:     popPressure,
-		NetMigration:           netMig,
+		TaxRate:                 taxRate,
+		GDP:                     int64(gdp + 0.5),
+		TaxRevenue:              revenue,
+		MarketRevenue:           marketRev,
+		TotalRevenue:            totalRev,
+		MilitaryUpkeep:          milUpkeep,
+		SocialExpenditure:       socialSpend,
+		InvestmentExpenditure:   investmentSpend,
+		MilitaryExpenditure:     expenditure,
+		TroopsLevy:              levy,
+		TroopsRegular:           regular,
+		TroopsElite:             elite,
+		BudgetBalance:           balance,
+		EffectiveMilitaryExp:    effMil,
+		EffectiveSocialExp:      effSoc,
+		EffectiveInvestmentExp:  effInv,
+		EffectiveTotalExp:       effTotalExp,
+		EffectiveBalance:        effBalance,
+		DeficitCapped:           capped,
+		FiscalRegime:            fiscalRegime,
+		GoldReserve:             resources,
+		CurrencyValue:           value,
+		InflationRate:           inflation,
+		Investment:              investment,
+		SocialCosts:             socialCosts,
+		Markets:                 markets,
+		Infrastructure:          infrastructure,
+		PopulationPressure:      popPressure,
+		NetMigration:            netMig,
+		EntrepreneurialPride:    pride,
+		MilitaryDelayedCosts:    delayedCosts,
+		SeasonalHarvestFactor:   season.HarvestYieldFactor,
+		WinterSeverityFactor:    season.WinterSeverity,
+		ManpowerRecruitDiscount: manpowerDiscount,
+		WelfareSqualorBurden:    baseWelfareNeed,
+		Season:                  season.Season,
+		SeasonName:              season.SeasonName,
+		LittleIceAgePhase:       season.LittleIceAgePhase,
 	}
 }
 
@@ -367,6 +529,13 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	perCapita := gdpValue(population, 0, taxRate, markets, infrastructure) / float64(population)
 	growth := float64(population) * 0.005 * (perCapita / baseProductivity)
 	growth += float64(investment+socialCosts) * 0.0005
+
+	// Gradual demographic drag: high taxation blunts family formation and birth rates over multi-year periods
+	if taxRate > 50 {
+		blunt := math.Max(0.15, 1.0-float64(taxRate-50)/50.0)
+		growth *= blunt
+	}
+
 	// Logistic damping: the closer the kingdom is to its carrying capacity, the
 	// slower it grows. Without this the growth term is proportional to the
 	// population itself, and budget balances grow unbounded.
