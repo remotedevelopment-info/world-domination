@@ -23,6 +23,12 @@ export async function readErrorMessage(res, fallback) {
   return fallback;
 }
 
+let unauthorizedHandler = null;
+
+export function onUnauthorized(handler) {
+  unauthorizedHandler = handler;
+}
+
 export async function apiFetch(endpoint, options = {}) {
   const headers = { ...options.headers };
   if (state.token && !headers["Authorization"]) {
@@ -36,6 +42,13 @@ export async function apiFetch(endpoint, options = {}) {
     ...options,
     headers,
   });
+
+  // Automatically recognize expired or invalid sessions on protected routes
+  if (res.status === 401 && endpoint !== "/login" && endpoint !== "/register") {
+    if (typeof unauthorizedHandler === "function") {
+      unauthorizedHandler(endpoint, res);
+    }
+  }
 
   return res;
 }
@@ -78,8 +91,9 @@ export async function apiAssignCountry(countryId) {
   });
 }
 
-export async function apiGetKingdomDetail() {
-  return apiFetch("/kingdom-detail");
+export async function apiGetKingdomDetail(countryId = null) {
+  const query = countryId ? `?country_id=${encodeURIComponent(countryId)}` : "";
+  return apiFetch(`/kingdom-detail${query}`);
 }
 
 export async function apiGetDiplomacy() {
@@ -113,6 +127,45 @@ export async function apiSetEconomySettings(economyRate, investment, socialCosts
       economy_rate: economyRate,
       investment: investment,
       social_costs: socialCosts,
+    }),
+  });
+}
+
+export async function apiGetTimeline() {
+  return apiFetch("/timeline");
+}
+
+export async function apiJumpTimeline(year) {
+  return apiFetch("/timeline/jump", {
+    method: "POST",
+    body: JSON.stringify({ year: parseFloat(year) }),
+  });
+}
+
+export async function apiSetChronoScale(scale) {
+  return apiFetch("/timeline/scale", {
+    method: "POST",
+    body: JSON.stringify({ scale }),
+  });
+}
+
+export async function apiSetTimelinePause(paused) {
+  return apiFetch("/timeline/pause", {
+    method: "POST",
+    body: JSON.stringify({ paused: Boolean(paused) }),
+  });
+}
+
+export async function apiGetAdminDashboard() {
+  return apiFetch("/admin/dashboard");
+}
+
+export async function apiAdminResetGame(confirmation, clearClaims = true) {
+  return apiFetch("/admin/reset-game", {
+    method: "POST",
+    body: JSON.stringify({
+      confirmation: confirmation,
+      clear_claims: Boolean(clearClaims),
     }),
   });
 }

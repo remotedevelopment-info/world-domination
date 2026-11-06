@@ -7,14 +7,22 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
 
 	"kingdom-conquest/backend/internal/models"
+	"kingdom-conquest/backend/pkg/auth"
 )
 
 var DB *sql.DB
+
+// IsAdminIdentifier returns true if the email or username matches recognized administrative identities.
+func IsAdminIdentifier(identifier string) bool {
+	id := strings.ToLower(strings.TrimSpace(identifier))
+	return id == "admin@sfsw.net" || id == "admin" || id == "nalex@sfsw.net" || id == "nalex"
+}
 
 // ErrUserExists is returned by CreateUser when the username or email is
 // already taken (Postgres unique-constraint violation 23505).
@@ -88,6 +96,7 @@ func InitSchema() error {
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS base_color VARCHAR(7) DEFAULT '#FF6B6B';
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS home_territory_id INTEGER;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(32) DEFAULT 'player';
 
 	CREATE TABLE IF NOT EXISTS eras (
 		id SERIAL PRIMARY KEY,
@@ -130,6 +139,22 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS infrastructure INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS investment INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS social_costs INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_tax_revenue BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_market_income BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_military_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_social_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_investment_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_total_exp BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_budget_balance BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS last_migration BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops_levy BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops_regular BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS troops_elite BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_n INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_s INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_e INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_w INTEGER DEFAULT 0;
+	UPDATE countries SET troops_regular = troops WHERE troops > 0 AND (COALESCE(troops_levy, 0) + COALESCE(troops_regular, 0) + COALESCE(troops_elite, 0)) = 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
 		id SERIAL PRIMARY KEY,
@@ -224,238 +249,263 @@ func InitSchema() error {
 		return fmt.Errorf("error creating schema: %v", err)
 	}
 
+	// Promote any existing admin or nalex accounts to admin role and reset their password to 'admin' for easy access
+	hashedAdmin, errAdmin := auth.HashPassword("admin")
+	if errAdmin == nil {
+		_, _ = DB.Exec(`
+			UPDATE users 
+			SET role = 'admin', password = $1 
+			WHERE LOWER(email) IN ('admin@sfsw.net', 'nalex@sfsw.net')
+			   OR LOWER(username) IN ('admin', 'admin@sfsw.net', 'nalex', 'nalex@sfsw.net')
+		`, hashedAdmin)
+	}
+
+	// Ensure dedicated admin user exists with login admin@sfsw.net (password: admin)
+	var adminExists bool
+	_ = DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(email) = 'admin@sfsw.net' OR LOWER(username) = 'admin')").Scan(&adminExists)
+	if !adminExists {
+		if errAdmin == nil {
+			_, _ = DB.Exec(`
+				INSERT INTO users (username, password, email, base_color, role) 
+				VALUES ($1, $2, $3, $4, $5) 
+				ON CONFLICT DO NOTHING`,
+				"admin", hashedAdmin, "admin@sfsw.net", "#D4AF37", "admin")
+			log.Println("Seeded default admin user: admin@sfsw.net / admin")
+		}
+	}
+
 	log.Println("Database schema initialized successfully")
 	return nil
+}
+
+type InitialKingdom struct {
+	Name        string
+	Code        string
+	Color       string
+	Population  int64
+	Resources   int64
+	IsIsland    bool
+	BordersJSON string
+}
+
+var InitialKingdomList = []InitialKingdom{
+	{"Crown of Spain", "ESP", "#D35400", 8500000, 750, false, "{\"borders\": [\"POR\", \"FRA\", \"MAR\", \"ALG\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kingdom of Portugal", "POR", "#16A085", 2200000, 450, false, "{\"borders\": [\"ESP\", \"MAR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kingdom of France", "FRA", "#2980B9", 16000000, 850, false, "{\"borders\": [\"ESP\", \"HRE\", \"ENG\", \"NED\", \"ITA\", \"ALG\", \"BEL\", \"SWI\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, true, "{\"borders\": [\"FRA\", \"SCO\", \"IRL\", \"NED\", \"NOR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Holy Roman Empire", "HRE", "#D4AC0D", 14000000, 900, false, "{\"borders\": [\"FRA\", \"VEN\", \"POL\", \"KAL\", \"NED\", \"PRU\", \"ITA\", \"AUT\", \"CZE\", \"SWI\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Ottoman Empire", "OTT", "#1B4F72", 12000000, 1000, false, "{\"borders\": [\"VEN\", \"POL\", \"GRE\", \"ROM\", \"SRB\", \"EGY\", \"TUR\", \"SYR\", \"IRQ\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Republic of Venice", "VEN", "#00A8FF", 1800000, 700, false, "{\"borders\": [\"HRE\", \"OTT\", \"PAP\", \"ITA\", \"AUT\", \"SRB\", \"CRO\", \"GRE\"], \"birth_year\": 1500, \"death_year\": 1797, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Papal States", "PAP", "#A569BD", 1500000, 500, false, "{\"borders\": [\"VEN\", \"ITA\", \"GRE\", \"TUN\", \"NAP\"], \"birth_year\": 1500, \"death_year\": 1870, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Poland-Lithuania", "POL", "#8E44AD", 6500000, 650, false, "{\"borders\": [\"HRE\", \"OTT\", \"RUS\", \"PRU\", \"AUT\", \"ROM\", \"HUN\", \"UKR\", \"BLT\", \"CZE\"], \"birth_year\": 1500, \"death_year\": 1795, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Tsardom of Muscovy", "RUS", "#795548", 5000000, 500, false, "{\"borders\": [\"POL\", \"KAL\", \"SWE\", \"ROM\", \"FIN\", \"UKR\", \"BLT\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kalmar Union", "KAL", "#34495E", 2000000, 400, false, "{\"borders\": [\"HRE\", \"RUS\", \"SWE\", \"PRU\", \"NOR\", \"DEN\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kingdom of Scotland", "SCO", "#2E86C1", 1300000, 350, true, "{\"borders\": [\"ENG\", \"IRL\", \"NOR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Dutch Republic", "NED", "#E67E22", 2100000, 650, false, "{\"borders\": [\"FRA\", \"HRE\", \"ENG\", \"BEL\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
+	{"Kingdom of Prussia", "PRU", "#2C3E50", 5400000, 700, false, "{\"borders\": [\"HRE\", \"POL\", \"KAL\", \"SWE\", \"BLT\", \"CZE\", \"SAX\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
+	{"Kingdom of Sweden", "SWE", "#F1C40F", 2400000, 520, false, "{\"borders\": [\"KAL\", \"NOR\", \"RUS\", \"PRU\", \"FIN\", \"BLT\", \"DEN\"], \"birth_year\": 1523, \"unlock_era\": \"discovery\", \"parent\": \"KAL\"}"},
+	{"Kingdom of Denmark", "DEN", "#C0392B", 1200000, 410, false, "{\"borders\": [\"HRE\", \"SWE\", \"NOR\", \"KAL\"], \"birth_year\": 1523, \"unlock_era\": \"discovery\", \"parent\": \"KAL\"}"},
+	{"Hellenic Republic", "GRE", "#3498DB", 1600000, 420, false, "{\"borders\": [\"OTT\", \"VEN\", \"PAP\", \"SRB\", \"EGY\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"OTT\"}"},
+	{"Swiss Confederacy", "SWI", "#E74C3C", 1500000, 480, false, "{\"borders\": [\"FRA\", \"HRE\", \"ITA\", \"AUT\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
+	{"Republic of Genoa", "GEN", "#1ABC9C", 900000, 450, false, "{\"borders\": [\"FRA\", \"HRE\", \"PAP\", \"ITA\"], \"birth_year\": 1750, \"death_year\": 1815, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
+	{"Kingdom of Naples", "NAP", "#D35400", 3800000, 520, false, "{\"borders\": [\"PAP\", \"ITA\", \"GRE\", \"TUN\"], \"birth_year\": 1750, \"death_year\": 1860, \"unlock_era\": \"revolt\", \"parent\": \"ESP\"}"},
+	{"Electorate of Bavaria", "BAV", "#5DADE2", 1800000, 460, false, "{\"borders\": [\"HRE\", \"AUT\", \"SWI\", \"CZE\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
+	{"Electorate of Saxony", "SAX", "#AF7AC5", 1600000, 440, false, "{\"borders\": [\"HRE\", \"PRU\", \"CZE\", \"POL\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
+	{"Sultanate of Morocco", "MOR", "#A93226", 3200000, 430, false, "{\"borders\": [\"ESP\", \"POR\", \"ALG\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"ESP\"}"},
+	{"Safavid Persia", "PER_EM", "#138D75", 7000000, 650, false, "{\"borders\": [\"OTT\", \"RUS\", \"AFG\", \"PAK\", \"IRQ\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"OTT\"}"},
+	{"Mughal Empire", "MUG", "#B7950B", 25000000, 950, false, "{\"borders\": [\"PER_EM\", \"AFG\", \"IND\", \"PAK\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"OTT\"}"},
+	{"Kingdom of Italy", "ITA", "#27AE60", 25000000, 750, false, "{\"borders\": [\"FRA\", \"HRE\", \"VEN\", \"PAP\", \"AUT\", \"CRO\", \"TUN\", \"SWI\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"HRE\"}"},
+	{"Austria-Hungary", "AUH", "#B03A2E", 36000000, 820, false, "{\"borders\": [\"HRE\", \"ITA\", \"VEN\", \"POL\", \"ROM\", \"SRB\", \"HUN\", \"CZE\", \"CRO\", \"SWI\"], \"birth_year\": 1860, \"death_year\": 1918, \"unlock_era\": \"independence\", \"parent\": \"HRE\"}"},
+	{"Republic of Austria", "AUT", "#C0392B", 6500000, 680, false, "{\"borders\": [\"DEU\", \"HRE\", \"ITA\", \"SWI\", \"CZE\", \"CZE_SLO\", \"SVK\", \"HUN\", \"SVN\", \"YUG\"], \"birth_year\": 1918, \"unlock_era\": \"decolonisation\", \"parent\": \"AUH\"}"},
+	{"Federal Republic of Germany", "DEU", "#2C3E50", 65000000, 950, false, "{\"borders\": [\"FRA\", \"BEL\", \"NED\", \"DEN\", \"POL_REP\", \"CZE\", \"AUT\", \"SWI\"], \"birth_year\": 1871, \"unlock_era\": \"independence\", \"parent\": \"PRU\"}"},
+	{"Kingdom of Romania", "ROM", "#F39C12", 6500000, 580, false, "{\"borders\": [\"POL\", \"RUS\", \"OTT\", \"AUT\", \"SRB\", \"HUN\", \"UKR\", \"BUL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"OTT\"}"},
+	{"Kingdom of Serbia", "SRB", "#922B21", 3100000, 460, false, "{\"borders\": [\"OTT\", \"VEN\", \"AUT\", \"ROM\", \"GRE\", \"HUN\", \"CRO\", \"BUL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"OTT\"}"},
+	{"Kingdom of Norway", "NOR", "#BA4A00", 2200000, 490, false, "{\"borders\": [\"SWE\", \"KAL\", \"ENG\", \"SCO\", \"FIN\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"KAL\"}"},
+	{"Kingdom of Belgium", "BEL", "#F4D03F", 4800000, 620, false, "{\"borders\": [\"FRA\", \"NED\", \"HRE\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"NED\"}"},
+	{"Principality of Bulgaria", "BUL", "#117864", 3500000, 480, false, "{\"borders\": [\"OTT\", \"ROM\", \"SRB\", \"GRE\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"OTT\"}"},
+	{"United States of America", "USA", "#1F618D", 31000000, 1100, false, "{\"borders\": [\"CAN\", \"MEX\", \"CUB\", \"BHS\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ENG\"}"},
+	{"Dominion of Canada", "CAN", "#C0392B", 3400000, 750, false, "{\"borders\": [\"USA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ENG\"}"},
+	{"Mexican Republic", "MEX", "#27AE60", 8400000, 680, false, "{\"borders\": [\"USA\", \"GUA\", \"BLZ\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Captaincy of Cuba", "CUB", "#E67E22", 1400000, 500, true, "{\"borders\": [\"USA\", \"HAI\", \"JAM\", \"MEX\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Haiti", "HAI", "#8E44AD", 950000, 380, true, "{\"borders\": [\"DOM\", \"CUB\", \"JAM\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"FRA\"}"},
+	{"Dominican Republic", "DOM", "#2980B9", 300000, 350, true, "{\"borders\": [\"HAI\", \"PUR\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Guatemala", "GUA", "#5DADE2", 1200000, 420, false, "{\"borders\": [\"MEX\", \"HON\", \"SLV\", \"BLZ\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
+	{"Republic of Honduras", "HON", "#2874A6", 400000, 360, false, "{\"borders\": [\"GUA\", \"SLV\", \"NIC\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
+	{"Republic of El Salvador", "SLV", "#1B4F72", 600000, 370, false, "{\"borders\": [\"GUA\", \"HON\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
+	{"Republic of Nicaragua", "NIC", "#48C9B0", 500000, 380, false, "{\"borders\": [\"HON\", \"CRI\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
+	{"Republic of Costa Rica", "CRI", "#16A085", 200000, 350, false, "{\"borders\": [\"NIC\", \"PAN\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
+	{"Isthmus of Panama", "PAN", "#D4AC0D", 250000, 440, false, "{\"borders\": [\"CRI\", \"COL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"COL\"}"},
+	{"Empire of Brazil", "BRA", "#229954", 10000000, 950, false, "{\"borders\": [\"ARG\", \"COL\", \"VEN_SA\", \"PER\", \"BOL\", \"PAR\", \"URY\", \"GUY\", \"SUR\", \"GUF\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"POR\"}"},
+	{"Argentine Republic", "ARG", "#5DADE2", 1800000, 720, false, "{\"borders\": [\"BRA\", \"CHL\", \"BOL\", \"PAR\", \"URY\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"United States of Colombia", "COL", "#F1C40F", 2900000, 640, false, "{\"borders\": [\"PAN\", \"VEN_SA\", \"ECU\", \"PER\", \"BRA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Venezuela", "VEN_SA", "#E74C3C", 1700000, 600, false, "{\"borders\": [\"COL\", \"BRA\", \"GUY\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Peru", "PER", "#C0392B", 2500000, 650, false, "{\"borders\": [\"ECU\", \"COL\", \"BRA\", \"BOL\", \"CHL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Chile", "CHL", "#2980B9", 1700000, 580, false, "{\"borders\": [\"PER\", \"BOL\", \"ARG\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Bolivia", "BOL", "#F39C12", 1500000, 540, false, "{\"borders\": [\"PER\", \"BRA\", \"PAR\", \"ARG\", \"CHL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Ecuador", "ECU", "#F4D03F", 900000, 420, false, "{\"borders\": [\"COL\", \"PER\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Republic of Paraguay", "PAR", "#D35400", 450000, 480, false, "{\"borders\": [\"ARG\", \"BRA\", \"BOL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"Oriental Republic of Uruguay", "URY", "#3498DB", 250000, 410, false, "{\"borders\": [\"ARG\", \"BRA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
+	{"British Guiana", "GUY", "#C0392B", 150000, 360, false, "{\"borders\": [\"VEN_SA\", \"BRA\", \"SUR\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ENG\"}"},
+	{"Dutch Surinam", "SUR", "#E67E22", 60000, 340, false, "{\"borders\": [\"GUY\", \"BRA\", \"GUF\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"NED\"}"},
+	{"French Guiana", "GUF", "#2471A3", 30000, 320, false, "{\"borders\": [\"SUR\", \"BRA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"FRA\"}"},
+	{"Commonwealth of Australia", "AUS", "#117864", 5400000, 850, true, "{\"borders\": [\"NZL\", \"PNG\", \"IDN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Dominion of New Zealand", "NZL", "#1ABC9C", 1250000, 580, true, "{\"borders\": [\"AUS\", \"FJI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Territory of Papua", "PNG", "#7D6608", 1100000, 420, true, "{\"borders\": [\"IDN\", \"AUS\", \"SLB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"AUS\"}"},
+	{"Kingdom of Ireland", "IRL", "#2ECC71", 3000000, 480, true, "{\"borders\": [\"ENG\", \"SCO\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Republic of Finland", "FIN", "#5DADE2", 3150000, 520, false, "{\"borders\": [\"SWE\", \"NOR\", \"RUS\", \"BLT\", \"EST\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
+	{"Republic of Hungary", "HUN", "#1E8449", 7900000, 560, false, "{\"borders\": [\"AUT\", \"ROM\", \"SRB\", \"CRO\", \"CZE\", \"UKR\", \"SVK\"], \"birth_year\": 1918, \"unlock_era\": \"decolonisation\", \"parent\": \"AUH\"}"},
+	{"Republic of Poland", "POL_REP", "#8E44AD", 27000000, 780, false, "{\"borders\": [\"PRU\", \"CZE\", \"ROM\", \"RUS\", \"BLR\", \"UKR\", \"LTU\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
+	{"Union of Soviet Socialist Republics", "USSR", "#C0392B", 180000000, 1200, false, "{\"borders\": [\"POL_REP\", \"FIN\", \"ROM\", \"TUR\", \"PER_EM\", \"AFG\", \"CHN\", \"MNG\", \"PRK\", \"NOR\", \"SWE\"], \"birth_year\": 1920, \"death_year\": 1989, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
+	{"Czechoslovakia", "CZE_SLO", "#6C3483", 13500000, 720, false, "{\"borders\": [\"HRE\", \"AUT\", \"HUN\", \"POL_REP\", \"ROM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"AUT\"}"},
+	{"Kingdom of Yugoslavia", "YUG", "#78281F", 12000000, 650, false, "{\"borders\": [\"ITA\", \"AUT\", \"HUN\", \"ROM\", \"BUL\", \"GRE\", \"ALB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"SRB\"}"},
+	{"Republic of Turkey", "TUR", "#C0392B", 13000000, 780, false, "{\"borders\": [\"GRE\", \"BUL\", \"SYR\", \"IRQ\", \"PER_EM\", \"ARM\", \"GEO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
+	{"Kingdom of Egypt", "EGY", "#B7950B", 13500000, 720, false, "{\"borders\": [\"LBY\", \"SDN\", \"ISR\", \"SAU\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
+	{"State of Syria", "SYR", "#1E8449", 1500000, 480, false, "{\"borders\": [\"TUR\", \"IRQ\", \"JOR\", \"LBN\", \"ISR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
+	{"Kingdom of Iraq", "IRQ", "#2874A6", 3000000, 620, false, "{\"borders\": [\"TUR\", \"PER_EM\", \"KWT\", \"SAU\", \"JOR\", \"SYR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
+	{"Greater Lebanon", "LBN", "#E74C3C", 600000, 380, false, "{\"borders\": [\"SYR\", \"ISR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Emirate of Transjordan", "JOR", "#9A7D0A", 400000, 360, false, "{\"borders\": [\"SYR\", \"IRQ\", \"SAU\", \"ISR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Kingdom of Saudi Arabia", "SAU", "#145A32", 2500000, 800, false, "{\"borders\": [\"JOR\", \"IRQ\", \"KWT\", \"ARE\", \"OMN\", \"YEM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
+	{"State of Israel", "ISR", "#2980B9", 800000, 520, false, "{\"borders\": [\"LBN\", \"SYR\", \"JOR\", \"EGY\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Dominion of India", "IND", "#D35400", 320000000, 1200, false, "{\"borders\": [\"PAK\", \"BGD\", \"CHN\", \"NPL\", \"MMR\", \"BTN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Dominion of Pakistan", "PAK", "#117864", 35000000, 750, false, "{\"borders\": [\"IND\", \"AFG\", \"PER_EM\", \"CHN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"East Bengal / Bangladesh", "BGD", "#1E8449", 42000000, 620, false, "{\"borders\": [\"IND\", \"MMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"PAK\"}"},
+	{"Republic of Indonesia", "IDN", "#C0392B", 60000000, 950, true, "{\"borders\": [\"MYS\", \"PNG\", \"TLS\", \"AUS\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"NED\"}"},
+	{"Commonwealth of the Philippines", "PHL", "#2980B9", 10500000, 680, true, "{\"borders\": [\"TWN\", \"MYS\", \"IDN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"USA\"}"},
+	{"Empire of Vietnam", "VNM", "#D4AC0D", 18000000, 700, false, "{\"borders\": [\"CHN\", \"LAO\", \"KHM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Kingdom of Thailand", "THA", "#8E44AD", 9500000, 660, false, "{\"borders\": [\"MMR\", \"LAO\", \"KHM\", \"MYS\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
+	{"Union of Burma", "MMR", "#F39C12", 13000000, 640, false, "{\"borders\": [\"IND\", \"BGD\", \"CHN\", \"LAO\", \"THA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Federation of Malaya", "MYS", "#27AE60", 3300000, 680, false, "{\"borders\": [\"THA\", \"IDN\", \"SGP\", \"BRN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of China", "CHN", "#E74C3C", 450000000, 1300, false, "{\"borders\": [\"RUS\", \"MNG\", \"KOR\", \"IND\", \"MMR\", \"VNM\", \"LAO\", \"PAK\", \"AFG\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
+	{"Empire of Japan", "JPN", "#C0392B", 56000000, 1050, true, "{\"borders\": [\"RUS\", \"KOR\", \"USA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
+	{"Korean Peninsula", "KOR", "#3498DB", 17000000, 650, false, "{\"borders\": [\"CHN\", \"RUS\", \"JPN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"JPN\"}"},
+	{"Kingdom of Afghanistan", "AFG", "#795548", 6000000, 520, false, "{\"borders\": [\"PER_EM\", \"PAK\", \"CHN\", \"RUS\", \"TJK\", \"UZB\", \"TKM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Kingdom of Nepal", "NPL", "#C0392B", 4500000, 440, false, "{\"borders\": [\"IND\", \"CHN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Dominion of Ceylon / Sri Lanka", "LKA", "#D4AC0D", 4500000, 480, true, "{\"borders\": [\"IND\", \"MDV\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Kingdom of Cambodia", "KHM", "#16A085", 2500000, 460, false, "{\"borders\": [\"THA\", \"LAO\", \"VNM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Kingdom of Laos", "LAO", "#2980B9", 1200000, 420, false, "{\"borders\": [\"CHN\", \"VNM\", \"KHM\", \"THA\", \"MMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"State of Mongolia", "MNG", "#2C3E50", 700000, 450, false, "{\"borders\": [\"RUS\", \"CHN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"CHN\"}"},
+	{"Kingdom of Morocco", "MAR", "#A93226", 5200000, 520, false, "{\"borders\": [\"ESP\", \"POR\", \"ALG\", \"MRT\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Algeria", "ALG", "#229954", 6800000, 640, false, "{\"borders\": [\"MAR\", \"ESP\", \"FRA\", \"TUN\", \"LBY\", \"NER\", \"MLI\", \"MRT\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Tunisia", "TUN", "#D68910", 2200000, 480, false, "{\"borders\": [\"ALG\", \"ITA\", \"PAP\", \"LBY\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Kingdom of Libya", "LBY", "#117864", 1100000, 580, false, "{\"borders\": [\"TUN\", \"ALG\", \"NER\", \"TCD\", \"SDN\", \"EGY\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ITA\"}"},
+	{"Republic of the Sudan", "SDN", "#78281F", 5500000, 560, false, "{\"borders\": [\"EGY\", \"LBY\", \"TCD\", \"CAF\", \"SSD\", \"ETH\", \"ERI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Ethiopian Empire", "ETH", "#1E8449", 11000000, 650, false, "{\"borders\": [\"SDN\", \"SSD\", \"KEN\", \"SOM\", \"DJI\", \"ERI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
+	{"Federation of Nigeria", "NGA", "#27AE60", 18000000, 780, false, "{\"borders\": [\"BEN\", \"NER\", \"TCD\", \"CMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Ghana", "GHA", "#F1C40F", 3200000, 520, false, "{\"borders\": [\"CIV\", \"BFA\", \"TGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Kenya", "KEN", "#C0392B", 3800000, 580, false, "{\"borders\": [\"ETH\", \"SSD\", \"UGA\", \"TZA\", \"SOM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Union of South Africa", "ZAF", "#D35400", 7000000, 820, false, "{\"borders\": [\"NAM\", \"BWA\", \"ZWE\", \"MOZ\", \"LSO\", \"SWZ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of the Congo", "COD", "#2980B9", 10000000, 750, false, "{\"borders\": [\"COG\", \"CAF\", \"SSD\", \"UGA\", \"RWA\", \"BDI\", \"TZA\", \"ZMB\", \"AGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"BEL\"}"},
+	{"Republic of Tanzania", "TZA", "#138D75", 4800000, 580, false, "{\"borders\": [\"KEN\", \"UGA\", \"RWA\", \"BDI\", \"COD\", \"ZMB\", \"MWI\", \"MOZ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Uganda", "UGA", "#F39C12", 3100000, 480, false, "{\"borders\": [\"SSD\", \"KEN\", \"TZA\", \"RWA\", \"COD\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"People's Republic of Angola", "AGO", "#B03A2E", 3600000, 620, false, "{\"borders\": [\"COG\", \"COD\", \"ZMB\", \"NAM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"POR\"}"},
+	{"Republic of Mozambique", "MOZ", "#16A085", 3500000, 560, false, "{\"borders\": [\"TZA\", \"MWI\", \"ZMB\", \"ZWE\", \"ZAF\", \"SWZ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"POR\"}"},
+	{"Republic of Zimbabwe", "ZWE", "#D4AC0D", 1600000, 500, false, "{\"borders\": [\"ZMB\", \"MOZ\", \"ZAF\", \"BWA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Zambia", "ZMB", "#2ECC71", 1400000, 520, false, "{\"borders\": [\"COD\", \"TZA\", \"MWI\", \"MOZ\", \"ZWE\", \"BWA\", \"NAM\", \"AGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Senegal", "SEN", "#27AE60", 1300000, 460, false, "{\"borders\": [\"MRT\", \"MLI\", \"GIN\", \"GNB\", \"GMB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Côte d'Ivoire", "CIV", "#E67E22", 1800000, 520, false, "{\"borders\": [\"LBR\", \"GIN\", \"MLI\", \"BFA\", \"GHA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Cameroon", "CMR", "#117864", 2500000, 520, false, "{\"borders\": [\"NGA\", \"TCD\", \"CAF\", \"COG\", \"GAB\", \"GNQ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Malagasy Republic", "MDG", "#8E44AD", 3400000, 520, true, "{\"borders\": [\"MOZ\", \"MUS\", \"COM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Mali", "MLI", "#F4D03F", 2600000, 480, false, "{\"borders\": [\"MRT\", \"ALG\", \"NER\", \"BFA\", \"CIV\", \"GIN\", \"SEN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Niger", "NER", "#E67E22", 1600000, 460, false, "{\"borders\": [\"ALG\", \"LBY\", \"TCD\", \"NGA\", \"BEN\", \"BFA\", \"MLI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Chad", "TCD", "#2980B9", 1500000, 450, false, "{\"borders\": [\"LBY\", \"SDN\", \"CAF\", \"CMR\", \"NGA\", \"NER\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Somali Republic", "SOM", "#3498DB", 1200000, 420, false, "{\"borders\": [\"DJI\", \"ETH\", \"KEN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ITA\"}"},
+	{"Republic of Guinea", "GIN", "#C0392B", 1500000, 440, false, "{\"borders\": [\"GNB\", \"SEN\", \"MLI\", \"CIV\", \"LBR\", \"SLE\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Burkina Faso", "BFA", "#D35400", 2800000, 440, false, "{\"borders\": [\"MLI\", \"NER\", \"BEN\", \"TGO\", \"GHA\", \"CIV\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Benin", "BEN", "#16A085", 1100000, 400, false, "{\"borders\": [\"TGO\", \"BFA\", \"NER\", \"NGA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Republic of Sierra Leone", "SLE", "#27AE60", 1400000, 420, false, "{\"borders\": [\"GIN\", \"LBR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Liberia", "LBR", "#1F618D", 700000, 410, false, "{\"borders\": [\"SLE\", \"GIN\", \"CIV\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"USA\"}"},
+	{"Republic of Malawi", "MWI", "#8E44AD", 1200000, 390, false, "{\"borders\": [\"TZA\", \"MOZ\", \"ZMB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Republic of Botswana", "BWA", "#5DADE2", 250000, 480, false, "{\"borders\": [\"NAM\", \"ZMB\", \"ZWE\", \"ZAF\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
+	{"Territory of Namibia", "NAM", "#E67E22", 300000, 460, false, "{\"borders\": [\"AGO\", \"ZMB\", \"BWA\", \"ZAF\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ZAF\"}"},
+	{"Republic of Rwanda", "RWA", "#117864", 1500000, 380, false, "{\"borders\": [\"UGA\", \"TZA\", \"BDI\", \"COD\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"BEL\"}"},
+	{"Republic of Burundi", "BDI", "#A93226", 1300000, 370, false, "{\"borders\": [\"RWA\", \"TZA\", \"COD\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"BEL\"}"},
+	{"Republic of the Congo-Brazzaville", "COG", "#27AE60", 800000, 440, false, "{\"borders\": [\"GAB\", \"CMR\", \"CAF\", \"COD\", \"AGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
+	{"Ukraine", "UKR", "#2874A6", 48000000, 920, false, "{\"borders\": [\"RUS\", \"POL_REP\", \"ROM\", \"HUN\", \"BLR\", \"MDA\", \"SVK\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Belarus", "BLR", "#117864", 10000000, 680, false, "{\"borders\": [\"RUS\", \"POL_REP\", \"UKR\", \"LTU\", \"LVA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Kazakhstan", "KAZ", "#1F618D", 16500000, 950, false, "{\"borders\": [\"RUS\", \"CHN\", \"KGZ\", \"UZB\", \"TKM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Uzbekistan", "UZB", "#16A085", 20000000, 750, false, "{\"borders\": [\"KAZ\", \"KGZ\", \"TJK\", \"AFG\", \"TKM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Turkmenistan", "TKM", "#27AE60", 3700000, 720, false, "{\"borders\": [\"KAZ\", \"UZB\", \"AFG\", \"PER_EM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Kyrgyz Republic", "KGZ", "#C0392B", 4400000, 520, false, "{\"borders\": [\"KAZ\", \"CHN\", \"TJK\", \"UZB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Tajikistan", "TJK", "#D35400", 5200000, 510, false, "{\"borders\": [\"UZB\", \"KGZ\", \"CHN\", \"AFG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Georgia", "GEO", "#C0392B", 5400000, 560, false, "{\"borders\": [\"RUS\", \"AZE\", \"ARM\", \"TUR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Armenia", "ARM", "#E67E22", 3500000, 480, false, "{\"borders\": [\"GEO\", \"AZE\", \"TUR\", \"PER_EM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Azerbaijan", "AZE", "#2980B9", 7100000, 780, false, "{\"borders\": [\"RUS\", \"GEO\", \"ARM\", \"PER_EM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Moldova", "MDA", "#F39C12", 4300000, 460, false, "{\"borders\": [\"ROM\", \"UKR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Estonia", "EST", "#3498DB", 1500000, 520, false, "{\"borders\": [\"RUS\", \"LVA\", \"FIN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Latvia", "LVA", "#78281F", 2600000, 510, false, "{\"borders\": [\"EST\", \"RUS\", \"BLR\", \"LTU\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Lithuania", "LTU", "#D4AC0D", 3700000, 540, false, "{\"borders\": [\"LVA\", \"BLR\", \"POL_REP\", \"RUS\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
+	{"Republic of Croatia", "CRO", "#CB4335", 4700000, 580, false, "{\"borders\": [\"SVN\", \"HUN\", \"SRB\", \"BIH\", \"MNE\", \"ITA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
+	{"Republic of Slovenia", "SVN", "#1E8449", 2000000, 560, false, "{\"borders\": [\"ITA\", \"AUT\", \"HUN\", \"CRO\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
+	{"Bosnia and Herzegovina", "BIH", "#2874A6", 4400000, 510, false, "{\"borders\": [\"CRO\", \"SRB\", \"MNE\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
+	{"North Macedonia", "MKD", "#D35400", 2000000, 460, false, "{\"borders\": [\"SRB\", \"KOS\", \"BUL\", \"GRE\", \"ALB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
+	{"Montenegro", "MNE", "#922B21", 620000, 440, false, "{\"borders\": [\"BIH\", \"SRB\", \"KOS\", \"ALB\", \"CRO\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
+	{"Republic of Kosovo", "KOS", "#1B4F72", 1800000, 420, false, "{\"borders\": [\"SRB\", \"MKD\", \"ALB\", \"MNE\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"SRB\"}"},
+	{"Slovak Republic", "SVK", "#2E86C1", 5300000, 620, false, "{\"borders\": [\"CZE\", \"POL_REP\", \"UKR\", \"HUN\", \"AUT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"CZE_SLO\"}"},
+	{"Czech Republic", "CZE", "#6C3483", 10300000, 780, false, "{\"borders\": [\"HRE\", \"POL_REP\", \"SVK\", \"AUT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"CZE_SLO\"}"},
+	{"United Arab Emirates", "ARE", "#117864", 1800000, 920, false, "{\"borders\": [\"SAU\", \"OMN\", \"QAT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"State of Qatar", "QAT", "#78281F", 470000, 880, false, "{\"borders\": [\"SAU\", \"ARE\", \"BHR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"State of Kuwait", "KWT", "#1E8449", 2100000, 890, false, "{\"borders\": [\"IRQ\", \"SAU\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Sultanate of Oman", "OMN", "#D4AC0D", 1800000, 720, false, "{\"borders\": [\"ARE\", \"SAU\", \"YEM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Yemen", "YEM", "#A93226", 11500000, 560, false, "{\"borders\": [\"SAU\", \"OMN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"OTT\"}"},
+	{"Kingdom of Bahrain", "BHR", "#C0392B", 500000, 650, true, "{\"borders\": [\"SAU\", \"QAT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Cyprus", "CYP", "#E67E22", 750000, 540, true, "{\"borders\": [\"TUR\", \"GRE\", \"SYR\", \"LBN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Singapore", "SGP", "#C0392B", 3000000, 950, true, "{\"borders\": [\"MYS\", \"IDN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"MYS\"}"},
+	{"Democratic People's Republic of Korea", "PRK", "#922B21", 20000000, 580, false, "{\"borders\": [\"CHN\", \"RUS\", \"KOR_S\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"KOR\"}"},
+	{"Republic of Korea", "KOR_S", "#2980B9", 43000000, 1050, false, "{\"borders\": [\"PRK\", \"JPN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"KOR\"}"},
+	{"Taiwan", "TWN", "#27AE60", 20000000, 920, true, "{\"borders\": [\"CHN\", \"PHL\", \"JPN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"CHN\"}"},
+	{"Brunei Darussalam", "BRN", "#F1C40F", 260000, 780, false, "{\"borders\": [\"MYS\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Timor-Leste", "TLS", "#D35400", 750000, 480, true, "{\"borders\": [\"IDN\", \"AUS\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"IDN\"}"},
+	{"Kingdom of Bhutan", "BTN", "#E67E22", 550000, 440, false, "{\"borders\": [\"IND\", \"CHN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"IND\"}"},
+	{"Republic of Maldives", "MDV", "#1ABC9C", 220000, 460, true, "{\"borders\": [\"IND\", \"LKA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Fiji", "FJI", "#3498DB", 730000, 480, true, "{\"borders\": [\"TON\", \"VUT\", \"NZL\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Solomon Islands", "SLB", "#27AE60", 320000, 420, true, "{\"borders\": [\"PNG\", \"VUT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Vanuatu", "VUT", "#117864", 150000, 400, true, "{\"borders\": [\"SLB\", \"FJI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Independent State of Samoa", "WSM", "#C0392B", 160000, 390, true, "{\"borders\": [\"TON\", \"FJI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"NZL\"}"},
+	{"Kingdom of Tonga", "TON", "#922B21", 95000, 380, true, "{\"borders\": [\"FJI\", \"WSM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Federated States of Micronesia", "FSM", "#2980B9", 100000, 380, true, "{\"borders\": [\"PHL\", \"PNG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USA\"}"},
+	{"State of Eritrea", "ERI", "#117864", 3000000, 480, false, "{\"borders\": [\"SDN\", \"ETH\", \"DJI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ETH\"}"},
+	{"Republic of South Sudan", "SSD", "#1E8449", 7500000, 580, false, "{\"borders\": [\"SDN\", \"ETH\", \"KEN\", \"UGA\", \"COD\", \"CAF\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"SDN\"}"},
+	{"Gabonese Republic", "GAB", "#27AE60", 950000, 650, false, "{\"borders\": [\"GNQ\", \"CMR\", \"COG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
+	{"Republic of Equatorial Guinea", "GNQ", "#D4AC0D", 400000, 620, false, "{\"borders\": [\"CMR\", \"GAB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ESP\"}"},
+	{"Republic of Djibouti", "DJI", "#2980B9", 500000, 450, false, "{\"borders\": [\"ERI\", \"ETH\", \"SOM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
+	{"Islamic Republic of Mauritania", "MRT", "#16A085", 2000000, 490, false, "{\"borders\": [\"MAR\", \"ALG\", \"MLI\", \"SEN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
+	{"Togolese Republic", "TGO", "#F39C12", 3500000, 440, false, "{\"borders\": [\"GHA\", \"BFA\", \"BEN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
+	{"Republic of The Gambia", "GMB", "#C0392B", 900000, 380, false, "{\"borders\": [\"SEN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Guinea-Bissau", "GNB", "#117864", 980000, 400, false, "{\"borders\": [\"SEN\", \"GIN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"POR\"}"},
+	{"Kingdom of Lesotho", "LSO", "#2980B9", 1600000, 420, false, "{\"borders\": [\"ZAF\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Kingdom of Eswatini", "SWZ", "#D35400", 850000, 430, false, "{\"borders\": [\"ZAF\", \"MOZ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Mauritius", "MUS", "#D4AC0D", 1050000, 560, true, "{\"borders\": [\"MDG\", \"SYC\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Union of the Comoros", "COM", "#16A085", 460000, 360, true, "{\"borders\": [\"MOZ\", \"MDG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
+	{"Republic of Cabo Verde", "CPV", "#2874A6", 360000, 410, true, "{\"borders\": [\"SEN\", \"MRT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"POR\"}"},
+	{"São Tomé and Príncipe", "STP", "#1E8449", 115000, 350, true, "{\"borders\": [\"GAB\", \"GNQ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"POR\"}"},
+	{"Republic of Seychelles", "SYC", "#E74C3C", 70000, 480, true, "{\"borders\": [\"MUS\", \"MDG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Jamaica", "JAM", "#229954", 2400000, 520, true, "{\"borders\": [\"CUB\", \"HAI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Trinidad and Tobago", "TTO", "#C0392B", 1250000, 620, true, "{\"borders\": [\"VEN_SA\", \"GRD\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Commonwealth of The Bahamas", "BHS", "#1ABC9C", 255000, 560, true, "{\"borders\": [\"USA\", \"CUB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Barbados", "BRB", "#2980B9", 260000, 480, true, "{\"borders\": [\"VCT\", \"LCA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Saint Lucia", "LCA", "#F1C40F", 140000, 420, true, "{\"borders\": [\"BRB\", \"VCT\", \"MTQ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Saint Vincent and the Grenadines", "VCT", "#27AE60", 110000, 410, true, "{\"borders\": [\"LCA\", \"GRD\", \"BRB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Grenada", "GRD", "#E67E22", 95000, 400, true, "{\"borders\": [\"VCT\", \"TTO\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Antigua and Barbuda", "ATG", "#C0392B", 65000, 420, true, "{\"borders\": [\"KNA\", \"GLP\", \"MSR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Commonwealth of Dominica", "DMA", "#1E8449", 70000, 390, true, "{\"borders\": [\"GLP\", \"MTQ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Saint Kitts and Nevis", "KNA", "#D4AC0D", 42000, 380, true, "{\"borders\": [\"ATG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Belize", "BLZ", "#16A085", 185000, 420, false, "{\"borders\": [\"MEX\", \"GUA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Republic of Iceland", "ISL", "#2980B9", 255000, 560, true, "{\"borders\": [\"NOR\", \"ENG\", \"CAN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"DEN\"}"},
+	{"Republic of Malta", "MLT", "#C0392B", 355000, 510, true, "{\"borders\": [\"ITA\", \"TUN\", \"LBY\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
 }
 
 // SeedInitialData populates the database with initial kingdoms and ensures
 // border/island metadata and any missing kingdoms (such as IRL and ITA) exist.
 func SeedInitialData() error {
-	type kingdom struct {
-		name        string
-		code        string
-		color       string
-		population  int64
-		resources   int64
-		isIsland    bool
-		bordersJSON string
-	}
-
-	kingdoms := []kingdom{
-		{"Crown of Spain", "ESP", "#D35400", 8500000, 750, false, "{\"borders\": [\"POR\", \"FRA\", \"MAR\", \"ALG\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Kingdom of Portugal", "POR", "#16A085", 2200000, 450, false, "{\"borders\": [\"ESP\", \"MAR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Kingdom of France", "FRA", "#2980B9", 16000000, 850, false, "{\"borders\": [\"ESP\", \"HRE\", \"ENG\", \"NED\", \"ITA\", \"ALG\", \"BEL\", \"SWI\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, true, "{\"borders\": [\"FRA\", \"SCO\", \"IRL\", \"NED\", \"NOR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Holy Roman Empire", "HRE", "#D4AC0D", 14000000, 900, false, "{\"borders\": [\"FRA\", \"VEN\", \"POL\", \"KAL\", \"NED\", \"PRU\", \"ITA\", \"AUT\", \"CZE\", \"SWI\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Ottoman Empire", "OTT", "#1B4F72", 12000000, 1000, false, "{\"borders\": [\"VEN\", \"POL\", \"GRE\", \"ROM\", \"SRB\", \"EGY\", \"TUR\", \"SYR\", \"IRQ\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Republic of Venice", "VEN", "#00A8FF", 1800000, 700, false, "{\"borders\": [\"HRE\", \"OTT\", \"PAP\", \"ITA\", \"AUT\", \"SRB\", \"CRO\", \"GRE\"], \"birth_year\": 1500, \"death_year\": 1797, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Papal States", "PAP", "#A569BD", 1500000, 500, false, "{\"borders\": [\"VEN\", \"ITA\", \"GRE\", \"TUN\", \"NAP\"], \"birth_year\": 1500, \"death_year\": 1870, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Poland-Lithuania", "POL", "#8E44AD", 6500000, 650, false, "{\"borders\": [\"HRE\", \"OTT\", \"RUS\", \"PRU\", \"AUT\", \"ROM\", \"HUN\", \"UKR\", \"BLT\", \"CZE\"], \"birth_year\": 1500, \"death_year\": 1795, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Tsardom of Muscovy", "RUS", "#795548", 5000000, 500, false, "{\"borders\": [\"POL\", \"KAL\", \"SWE\", \"ROM\", \"FIN\", \"UKR\", \"BLT\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Kalmar Union", "KAL", "#34495E", 2000000, 400, false, "{\"borders\": [\"HRE\", \"RUS\", \"SWE\", \"PRU\", \"NOR\", \"DEN\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-		{"Kingdom of Scotland", "SCO", "#2E86C1", 1300000, 350, true, "{\"borders\": [\"ENG\", \"IRL\", \"NOR\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"ENG\"}"},
-		{"Dutch Republic", "NED", "#E67E22", 2100000, 650, false, "{\"borders\": [\"FRA\", \"HRE\", \"ENG\", \"BEL\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
-		{"Kingdom of Prussia", "PRU", "#2C3E50", 5400000, 700, false, "{\"borders\": [\"HRE\", \"POL\", \"KAL\", \"SWE\", \"BLT\", \"CZE\", \"SAX\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
-		{"Kingdom of Sweden", "SWE", "#F1C40F", 2400000, 520, false, "{\"borders\": [\"KAL\", \"NOR\", \"RUS\", \"PRU\", \"FIN\", \"BLT\", \"DEN\"], \"birth_year\": 1523, \"unlock_era\": \"discovery\", \"parent\": \"KAL\"}"},
-		{"Kingdom of Denmark", "DEN", "#C0392B", 1200000, 410, false, "{\"borders\": [\"HRE\", \"SWE\", \"NOR\", \"KAL\"], \"birth_year\": 1523, \"unlock_era\": \"discovery\", \"parent\": \"KAL\"}"},
-		{"Hellenic Republic", "GRE", "#3498DB", 1600000, 420, false, "{\"borders\": [\"OTT\", \"VEN\", \"PAP\", \"SRB\", \"EGY\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"OTT\"}"},
-		{"Swiss Confederacy", "SWI", "#E74C3C", 1500000, 480, false, "{\"borders\": [\"FRA\", \"HRE\", \"ITA\", \"AUT\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
-		{"Republic of Genoa", "GEN", "#1ABC9C", 900000, 450, false, "{\"borders\": [\"FRA\", \"HRE\", \"PAP\", \"ITA\"], \"birth_year\": 1750, \"death_year\": 1815, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
-		{"Kingdom of Naples", "NAP", "#D35400", 3800000, 520, false, "{\"borders\": [\"PAP\", \"ITA\", \"GRE\", \"TUN\"], \"birth_year\": 1750, \"death_year\": 1860, \"unlock_era\": \"revolt\", \"parent\": \"ESP\"}"},
-		{"Electorate of Bavaria", "BAV", "#5DADE2", 1800000, 460, false, "{\"borders\": [\"HRE\", \"AUT\", \"SWI\", \"CZE\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
-		{"Electorate of Saxony", "SAX", "#AF7AC5", 1600000, 440, false, "{\"borders\": [\"HRE\", \"PRU\", \"CZE\", \"POL\"], \"birth_year\": 1750, \"death_year\": 1871, \"unlock_era\": \"revolt\", \"parent\": \"HRE\"}"},
-		{"Sultanate of Morocco", "MOR", "#A93226", 3200000, 430, false, "{\"borders\": [\"ESP\", \"POR\", \"ALG\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"ESP\"}"},
-		{"Safavid Persia", "PER_EM", "#138D75", 7000000, 650, false, "{\"borders\": [\"OTT\", \"RUS\", \"AFG\", \"PAK\", \"IRQ\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"OTT\"}"},
-		{"Mughal Empire", "MUG", "#B7950B", 25000000, 950, false, "{\"borders\": [\"PER_EM\", \"AFG\", \"IND\", \"PAK\"], \"birth_year\": 1750, \"unlock_era\": \"revolt\", \"parent\": \"OTT\"}"},
-		{"Kingdom of Italy", "ITA", "#27AE60", 25000000, 750, false, "{\"borders\": [\"FRA\", \"HRE\", \"VEN\", \"PAP\", \"AUT\", \"CRO\", \"TUN\", \"SWI\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"HRE\"}"},
-		{"Austria-Hungary", "AUH", "#B03A2E", 36000000, 820, false, "{\"borders\": [\"HRE\", \"ITA\", \"VEN\", \"POL\", \"ROM\", \"SRB\", \"HUN\", \"CZE\", \"CRO\", \"SWI\"], \"birth_year\": 1860, \"death_year\": 1918, \"unlock_era\": \"independence\", \"parent\": \"HRE\"}"},
-		{"Republic of Austria", "AUT", "#C0392B", 6500000, 680, false, "{\"borders\": [\"DEU\", \"HRE\", \"ITA\", \"SWI\", \"CZE\", \"CZE_SLO\", \"SVK\", \"HUN\", \"SVN\", \"YUG\"], \"birth_year\": 1918, \"unlock_era\": \"decolonisation\", \"parent\": \"AUH\"}"},
-		{"Federal Republic of Germany", "DEU", "#2C3E50", 65000000, 950, false, "{\"borders\": [\"FRA\", \"BEL\", \"NED\", \"DEN\", \"POL_REP\", \"CZE\", \"AUT\", \"SWI\"], \"birth_year\": 1871, \"unlock_era\": \"independence\", \"parent\": \"PRU\"}"},
-		{"Kingdom of Romania", "ROM", "#F39C12", 6500000, 580, false, "{\"borders\": [\"POL\", \"RUS\", \"OTT\", \"AUT\", \"SRB\", \"HUN\", \"UKR\", \"BUL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"OTT\"}"},
-		{"Kingdom of Serbia", "SRB", "#922B21", 3100000, 460, false, "{\"borders\": [\"OTT\", \"VEN\", \"AUT\", \"ROM\", \"GRE\", \"HUN\", \"CRO\", \"BUL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"OTT\"}"},
-		{"Kingdom of Norway", "NOR", "#BA4A00", 2200000, 490, false, "{\"borders\": [\"SWE\", \"KAL\", \"ENG\", \"SCO\", \"FIN\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"KAL\"}"},
-		{"Kingdom of Belgium", "BEL", "#F4D03F", 4800000, 620, false, "{\"borders\": [\"FRA\", \"NED\", \"HRE\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"NED\"}"},
-		{"Principality of Bulgaria", "BUL", "#117864", 3500000, 480, false, "{\"borders\": [\"OTT\", \"ROM\", \"SRB\", \"GRE\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"OTT\"}"},
-		{"United States of America", "USA", "#1F618D", 31000000, 1100, false, "{\"borders\": [\"CAN\", \"MEX\", \"CUB\", \"BHS\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ENG\"}"},
-		{"Dominion of Canada", "CAN", "#C0392B", 3400000, 750, false, "{\"borders\": [\"USA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ENG\"}"},
-		{"Mexican Republic", "MEX", "#27AE60", 8400000, 680, false, "{\"borders\": [\"USA\", \"GUA\", \"BLZ\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Captaincy of Cuba", "CUB", "#E67E22", 1400000, 500, true, "{\"borders\": [\"USA\", \"HAI\", \"JAM\", \"MEX\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Haiti", "HAI", "#8E44AD", 950000, 380, true, "{\"borders\": [\"DOM\", \"CUB\", \"JAM\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"FRA\"}"},
-		{"Dominican Republic", "DOM", "#2980B9", 300000, 350, true, "{\"borders\": [\"HAI\", \"PUR\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Guatemala", "GUA", "#5DADE2", 1200000, 420, false, "{\"borders\": [\"MEX\", \"HON\", \"SLV\", \"BLZ\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
-		{"Republic of Honduras", "HON", "#2874A6", 400000, 360, false, "{\"borders\": [\"GUA\", \"SLV\", \"NIC\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
-		{"Republic of El Salvador", "SLV", "#1B4F72", 600000, 370, false, "{\"borders\": [\"GUA\", \"HON\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
-		{"Republic of Nicaragua", "NIC", "#48C9B0", 500000, 380, false, "{\"borders\": [\"HON\", \"CRI\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
-		{"Republic of Costa Rica", "CRI", "#16A085", 200000, 350, false, "{\"borders\": [\"NIC\", \"PAN\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"MEX\"}"},
-		{"Isthmus of Panama", "PAN", "#D4AC0D", 250000, 440, false, "{\"borders\": [\"CRI\", \"COL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"COL\"}"},
-		{"Empire of Brazil", "BRA", "#229954", 10000000, 950, false, "{\"borders\": [\"ARG\", \"COL\", \"VEN_SA\", \"PER\", \"BOL\", \"PAR\", \"URY\", \"GUY\", \"SUR\", \"GUF\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"POR\"}"},
-		{"Argentine Republic", "ARG", "#5DADE2", 1800000, 720, false, "{\"borders\": [\"BRA\", \"CHL\", \"BOL\", \"PAR\", \"URY\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"United States of Colombia", "COL", "#F1C40F", 2900000, 640, false, "{\"borders\": [\"PAN\", \"VEN_SA\", \"ECU\", \"PER\", \"BRA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Venezuela", "VEN_SA", "#E74C3C", 1700000, 600, false, "{\"borders\": [\"COL\", \"BRA\", \"GUY\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Peru", "PER", "#C0392B", 2500000, 650, false, "{\"borders\": [\"ECU\", \"COL\", \"BRA\", \"BOL\", \"CHL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Chile", "CHL", "#2980B9", 1700000, 580, false, "{\"borders\": [\"PER\", \"BOL\", \"ARG\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Bolivia", "BOL", "#F39C12", 1500000, 540, false, "{\"borders\": [\"PER\", \"BRA\", \"PAR\", \"ARG\", \"CHL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Ecuador", "ECU", "#F4D03F", 900000, 420, false, "{\"borders\": [\"COL\", \"PER\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Republic of Paraguay", "PAR", "#D35400", 450000, 480, false, "{\"borders\": [\"ARG\", \"BRA\", \"BOL\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"Oriental Republic of Uruguay", "URY", "#3498DB", 250000, 410, false, "{\"borders\": [\"ARG\", \"BRA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ESP\"}"},
-		{"British Guiana", "GUY", "#C0392B", 150000, 360, false, "{\"borders\": [\"VEN_SA\", \"BRA\", \"SUR\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"ENG\"}"},
-		{"Dutch Surinam", "SUR", "#E67E22", 60000, 340, false, "{\"borders\": [\"GUY\", \"BRA\", \"GUF\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"NED\"}"},
-		{"French Guiana", "GUF", "#2471A3", 30000, 320, false, "{\"borders\": [\"SUR\", \"BRA\"], \"birth_year\": 1860, \"unlock_era\": \"independence\", \"parent\": \"FRA\"}"},
-		{"Commonwealth of Australia", "AUS", "#117864", 5400000, 850, true, "{\"borders\": [\"NZL\", \"PNG\", \"IDN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Dominion of New Zealand", "NZL", "#1ABC9C", 1250000, 580, true, "{\"borders\": [\"AUS\", \"FJI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Territory of Papua", "PNG", "#7D6608", 1100000, 420, true, "{\"borders\": [\"IDN\", \"AUS\", \"SLB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"AUS\"}"},
-		{"Irish Free State", "IRL", "#2ECC71", 3000000, 480, true, "{\"borders\": [\"ENG\", \"SCO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Finland", "FIN", "#5DADE2", 3150000, 520, false, "{\"borders\": [\"SWE\", \"NOR\", \"RUS\", \"BLT\", \"EST\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
-		{"Republic of Hungary", "HUN", "#1E8449", 7900000, 560, false, "{\"borders\": [\"AUT\", \"ROM\", \"SRB\", \"CRO\", \"CZE\", \"UKR\", \"SVK\"], \"birth_year\": 1918, \"unlock_era\": \"decolonisation\", \"parent\": \"AUH\"}"},
-		{"Republic of Poland", "POL_REP", "#8E44AD", 27000000, 780, false, "{\"borders\": [\"PRU\", \"CZE\", \"ROM\", \"RUS\", \"BLR\", \"UKR\", \"LTU\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
-		{"Union of Soviet Socialist Republics", "USSR", "#C0392B", 180000000, 1200, false, "{\"borders\": [\"POL_REP\", \"FIN\", \"ROM\", \"TUR\", \"PER_EM\", \"AFG\", \"CHN\", \"MNG\", \"PRK\", \"NOR\", \"SWE\"], \"birth_year\": 1920, \"death_year\": 1989, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
-		{"Czechoslovakia", "CZE_SLO", "#6C3483", 13500000, 720, false, "{\"borders\": [\"HRE\", \"AUT\", \"HUN\", \"POL_REP\", \"ROM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"AUT\"}"},
-		{"Kingdom of Yugoslavia", "YUG", "#78281F", 12000000, 650, false, "{\"borders\": [\"ITA\", \"AUT\", \"HUN\", \"ROM\", \"BUL\", \"GRE\", \"ALB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"SRB\"}"},
-		{"Republic of Turkey", "TUR", "#C0392B", 13000000, 780, false, "{\"borders\": [\"GRE\", \"BUL\", \"SYR\", \"IRQ\", \"PER_EM\", \"ARM\", \"GEO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
-		{"Kingdom of Egypt", "EGY", "#B7950B", 13500000, 720, false, "{\"borders\": [\"LBY\", \"SDN\", \"ISR\", \"SAU\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
-		{"State of Syria", "SYR", "#1E8449", 1500000, 480, false, "{\"borders\": [\"TUR\", \"IRQ\", \"JOR\", \"LBN\", \"ISR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
-		{"Kingdom of Iraq", "IRQ", "#2874A6", 3000000, 620, false, "{\"borders\": [\"TUR\", \"PER_EM\", \"KWT\", \"SAU\", \"JOR\", \"SYR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
-		{"Greater Lebanon", "LBN", "#E74C3C", 600000, 380, false, "{\"borders\": [\"SYR\", \"ISR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Emirate of Transjordan", "JOR", "#9A7D0A", 400000, 360, false, "{\"borders\": [\"SYR\", \"IRQ\", \"SAU\", \"ISR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Kingdom of Saudi Arabia", "SAU", "#145A32", 2500000, 800, false, "{\"borders\": [\"JOR\", \"IRQ\", \"KWT\", \"ARE\", \"OMN\", \"YEM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"OTT\"}"},
-		{"State of Israel", "ISR", "#2980B9", 800000, 520, false, "{\"borders\": [\"LBN\", \"SYR\", \"JOR\", \"EGY\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Dominion of India", "IND", "#D35400", 320000000, 1200, false, "{\"borders\": [\"PAK\", \"BGD\", \"CHN\", \"NPL\", \"MMR\", \"BTN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Dominion of Pakistan", "PAK", "#117864", 35000000, 750, false, "{\"borders\": [\"IND\", \"AFG\", \"PER_EM\", \"CHN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"East Bengal / Bangladesh", "BGD", "#1E8449", 42000000, 620, false, "{\"borders\": [\"IND\", \"MMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"PAK\"}"},
-		{"Republic of Indonesia", "IDN", "#C0392B", 60000000, 950, true, "{\"borders\": [\"MYS\", \"PNG\", \"TLS\", \"AUS\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"NED\"}"},
-		{"Commonwealth of the Philippines", "PHL", "#2980B9", 10500000, 680, true, "{\"borders\": [\"TWN\", \"MYS\", \"IDN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"USA\"}"},
-		{"Empire of Vietnam", "VNM", "#D4AC0D", 18000000, 700, false, "{\"borders\": [\"CHN\", \"LAO\", \"KHM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Kingdom of Thailand", "THA", "#8E44AD", 9500000, 660, false, "{\"borders\": [\"MMR\", \"LAO\", \"KHM\", \"MYS\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
-		{"Union of Burma", "MMR", "#F39C12", 13000000, 640, false, "{\"borders\": [\"IND\", \"BGD\", \"CHN\", \"LAO\", \"THA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Federation of Malaya", "MYS", "#27AE60", 3300000, 680, false, "{\"borders\": [\"THA\", \"IDN\", \"SGP\", \"BRN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of China", "CHN", "#E74C3C", 450000000, 1300, false, "{\"borders\": [\"RUS\", \"MNG\", \"KOR\", \"IND\", \"MMR\", \"VNM\", \"LAO\", \"PAK\", \"AFG\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
-		{"Empire of Japan", "JPN", "#C0392B", 56000000, 1050, true, "{\"borders\": [\"RUS\", \"KOR\", \"USA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
-		{"Korean Peninsula", "KOR", "#3498DB", 17000000, 650, false, "{\"borders\": [\"CHN\", \"RUS\", \"JPN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"JPN\"}"},
-		{"Kingdom of Afghanistan", "AFG", "#795548", 6000000, 520, false, "{\"borders\": [\"PER_EM\", \"PAK\", \"CHN\", \"RUS\", \"TJK\", \"UZB\", \"TKM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Kingdom of Nepal", "NPL", "#C0392B", 4500000, 440, false, "{\"borders\": [\"IND\", \"CHN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Dominion of Ceylon / Sri Lanka", "LKA", "#D4AC0D", 4500000, 480, true, "{\"borders\": [\"IND\", \"MDV\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Kingdom of Cambodia", "KHM", "#16A085", 2500000, 460, false, "{\"borders\": [\"THA\", \"LAO\", \"VNM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Kingdom of Laos", "LAO", "#2980B9", 1200000, 420, false, "{\"borders\": [\"CHN\", \"VNM\", \"KHM\", \"THA\", \"MMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"State of Mongolia", "MNG", "#2C3E50", 700000, 450, false, "{\"borders\": [\"RUS\", \"CHN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"CHN\"}"},
-		{"Kingdom of Morocco", "MAR", "#A93226", 5200000, 520, false, "{\"borders\": [\"ESP\", \"POR\", \"ALG\", \"MRT\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Algeria", "ALG", "#229954", 6800000, 640, false, "{\"borders\": [\"MAR\", \"ESP\", \"FRA\", \"TUN\", \"LBY\", \"NER\", \"MLI\", \"MRT\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Tunisia", "TUN", "#D68910", 2200000, 480, false, "{\"borders\": [\"ALG\", \"ITA\", \"PAP\", \"LBY\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Kingdom of Libya", "LBY", "#117864", 1100000, 580, false, "{\"borders\": [\"TUN\", \"ALG\", \"NER\", \"TCD\", \"SDN\", \"EGY\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ITA\"}"},
-		{"Republic of the Sudan", "SDN", "#78281F", 5500000, 560, false, "{\"borders\": [\"EGY\", \"LBY\", \"TCD\", \"CAF\", \"SSD\", \"ETH\", \"ERI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Ethiopian Empire", "ETH", "#1E8449", 11000000, 650, false, "{\"borders\": [\"SDN\", \"SSD\", \"KEN\", \"SOM\", \"DJI\", \"ERI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"\"}"},
-		{"Federation of Nigeria", "NGA", "#27AE60", 18000000, 780, false, "{\"borders\": [\"BEN\", \"NER\", \"TCD\", \"CMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Ghana", "GHA", "#F1C40F", 3200000, 520, false, "{\"borders\": [\"CIV\", \"BFA\", \"TGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Kenya", "KEN", "#C0392B", 3800000, 580, false, "{\"borders\": [\"ETH\", \"SSD\", \"UGA\", \"TZA\", \"SOM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Union of South Africa", "ZAF", "#D35400", 7000000, 820, false, "{\"borders\": [\"NAM\", \"BWA\", \"ZWE\", \"MOZ\", \"LSO\", \"SWZ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of the Congo", "COD", "#2980B9", 10000000, 750, false, "{\"borders\": [\"COG\", \"CAF\", \"SSD\", \"UGA\", \"RWA\", \"BDI\", \"TZA\", \"ZMB\", \"AGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"BEL\"}"},
-		{"Republic of Tanzania", "TZA", "#138D75", 4800000, 580, false, "{\"borders\": [\"KEN\", \"UGA\", \"RWA\", \"BDI\", \"COD\", \"ZMB\", \"MWI\", \"MOZ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Uganda", "UGA", "#F39C12", 3100000, 480, false, "{\"borders\": [\"SSD\", \"KEN\", \"TZA\", \"RWA\", \"COD\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"People's Republic of Angola", "AGO", "#B03A2E", 3600000, 620, false, "{\"borders\": [\"COG\", \"COD\", \"ZMB\", \"NAM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"POR\"}"},
-		{"Republic of Mozambique", "MOZ", "#16A085", 3500000, 560, false, "{\"borders\": [\"TZA\", \"MWI\", \"ZMB\", \"ZWE\", \"ZAF\", \"SWZ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"POR\"}"},
-		{"Republic of Zimbabwe", "ZWE", "#D4AC0D", 1600000, 500, false, "{\"borders\": [\"ZMB\", \"MOZ\", \"ZAF\", \"BWA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Zambia", "ZMB", "#2ECC71", 1400000, 520, false, "{\"borders\": [\"COD\", \"TZA\", \"MWI\", \"MOZ\", \"ZWE\", \"BWA\", \"NAM\", \"AGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Senegal", "SEN", "#27AE60", 1300000, 460, false, "{\"borders\": [\"MRT\", \"MLI\", \"GIN\", \"GNB\", \"GMB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Côte d'Ivoire", "CIV", "#E67E22", 1800000, 520, false, "{\"borders\": [\"LBR\", \"GIN\", \"MLI\", \"BFA\", \"GHA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Cameroon", "CMR", "#117864", 2500000, 520, false, "{\"borders\": [\"NGA\", \"TCD\", \"CAF\", \"COG\", \"GAB\", \"GNQ\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Malagasy Republic", "MDG", "#8E44AD", 3400000, 520, true, "{\"borders\": [\"MOZ\", \"MUS\", \"COM\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Mali", "MLI", "#F4D03F", 2600000, 480, false, "{\"borders\": [\"MRT\", \"ALG\", \"NER\", \"BFA\", \"CIV\", \"GIN\", \"SEN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Niger", "NER", "#E67E22", 1600000, 460, false, "{\"borders\": [\"ALG\", \"LBY\", \"TCD\", \"NGA\", \"BEN\", \"BFA\", \"MLI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Chad", "TCD", "#2980B9", 1500000, 450, false, "{\"borders\": [\"LBY\", \"SDN\", \"CAF\", \"CMR\", \"NGA\", \"NER\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Somali Republic", "SOM", "#3498DB", 1200000, 420, false, "{\"borders\": [\"DJI\", \"ETH\", \"KEN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ITA\"}"},
-		{"Republic of Guinea", "GIN", "#C0392B", 1500000, 440, false, "{\"borders\": [\"GNB\", \"SEN\", \"MLI\", \"CIV\", \"LBR\", \"SLE\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Burkina Faso", "BFA", "#D35400", 2800000, 440, false, "{\"borders\": [\"MLI\", \"NER\", \"BEN\", \"TGO\", \"GHA\", \"CIV\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Benin", "BEN", "#16A085", 1100000, 400, false, "{\"borders\": [\"TGO\", \"BFA\", \"NER\", \"NGA\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Republic of Sierra Leone", "SLE", "#27AE60", 1400000, 420, false, "{\"borders\": [\"GIN\", \"LBR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Liberia", "LBR", "#1F618D", 700000, 410, false, "{\"borders\": [\"SLE\", \"GIN\", \"CIV\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"USA\"}"},
-		{"Republic of Malawi", "MWI", "#8E44AD", 1200000, 390, false, "{\"borders\": [\"TZA\", \"MOZ\", \"ZMB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Republic of Botswana", "BWA", "#5DADE2", 250000, 480, false, "{\"borders\": [\"NAM\", \"ZMB\", \"ZWE\", \"ZAF\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
-		{"Territory of Namibia", "NAM", "#E67E22", 300000, 460, false, "{\"borders\": [\"AGO\", \"ZMB\", \"BWA\", \"ZAF\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ZAF\"}"},
-		{"Republic of Rwanda", "RWA", "#117864", 1500000, 380, false, "{\"borders\": [\"UGA\", \"TZA\", \"BDI\", \"COD\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"BEL\"}"},
-		{"Republic of Burundi", "BDI", "#A93226", 1300000, 370, false, "{\"borders\": [\"RWA\", \"TZA\", \"COD\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"BEL\"}"},
-		{"Republic of the Congo-Brazzaville", "COG", "#27AE60", 800000, 440, false, "{\"borders\": [\"GAB\", \"CMR\", \"CAF\", \"COD\", \"AGO\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
-		{"Ukraine", "UKR", "#2874A6", 48000000, 920, false, "{\"borders\": [\"RUS\", \"POL_REP\", \"ROM\", \"HUN\", \"BLR\", \"MDA\", \"SVK\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Belarus", "BLR", "#117864", 10000000, 680, false, "{\"borders\": [\"RUS\", \"POL_REP\", \"UKR\", \"LTU\", \"LVA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Kazakhstan", "KAZ", "#1F618D", 16500000, 950, false, "{\"borders\": [\"RUS\", \"CHN\", \"KGZ\", \"UZB\", \"TKM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Uzbekistan", "UZB", "#16A085", 20000000, 750, false, "{\"borders\": [\"KAZ\", \"KGZ\", \"TJK\", \"AFG\", \"TKM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Turkmenistan", "TKM", "#27AE60", 3700000, 720, false, "{\"borders\": [\"KAZ\", \"UZB\", \"AFG\", \"PER_EM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Kyrgyz Republic", "KGZ", "#C0392B", 4400000, 520, false, "{\"borders\": [\"KAZ\", \"CHN\", \"TJK\", \"UZB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Tajikistan", "TJK", "#D35400", 5200000, 510, false, "{\"borders\": [\"UZB\", \"KGZ\", \"CHN\", \"AFG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Georgia", "GEO", "#C0392B", 5400000, 560, false, "{\"borders\": [\"RUS\", \"AZE\", \"ARM\", \"TUR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Armenia", "ARM", "#E67E22", 3500000, 480, false, "{\"borders\": [\"GEO\", \"AZE\", \"TUR\", \"PER_EM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Azerbaijan", "AZE", "#2980B9", 7100000, 780, false, "{\"borders\": [\"RUS\", \"GEO\", \"ARM\", \"PER_EM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Moldova", "MDA", "#F39C12", 4300000, 460, false, "{\"borders\": [\"ROM\", \"UKR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Estonia", "EST", "#3498DB", 1500000, 520, false, "{\"borders\": [\"RUS\", \"LVA\", \"FIN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Latvia", "LVA", "#78281F", 2600000, 510, false, "{\"borders\": [\"EST\", \"RUS\", \"BLR\", \"LTU\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Lithuania", "LTU", "#D4AC0D", 3700000, 540, false, "{\"borders\": [\"LVA\", \"BLR\", \"POL_REP\", \"RUS\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USSR\"}"},
-		{"Republic of Croatia", "CRO", "#CB4335", 4700000, 580, false, "{\"borders\": [\"SVN\", \"HUN\", \"SRB\", \"BIH\", \"MNE\", \"ITA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
-		{"Republic of Slovenia", "SVN", "#1E8449", 2000000, 560, false, "{\"borders\": [\"ITA\", \"AUT\", \"HUN\", \"CRO\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
-		{"Bosnia and Herzegovina", "BIH", "#2874A6", 4400000, 510, false, "{\"borders\": [\"CRO\", \"SRB\", \"MNE\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
-		{"North Macedonia", "MKD", "#D35400", 2000000, 460, false, "{\"borders\": [\"SRB\", \"KOS\", \"BUL\", \"GRE\", \"ALB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
-		{"Montenegro", "MNE", "#922B21", 620000, 440, false, "{\"borders\": [\"BIH\", \"SRB\", \"KOS\", \"ALB\", \"CRO\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"YUG\"}"},
-		{"Republic of Kosovo", "KOS", "#1B4F72", 1800000, 420, false, "{\"borders\": [\"SRB\", \"MKD\", \"ALB\", \"MNE\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"SRB\"}"},
-		{"Slovak Republic", "SVK", "#2E86C1", 5300000, 620, false, "{\"borders\": [\"CZE\", \"POL_REP\", \"UKR\", \"HUN\", \"AUT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"CZE_SLO\"}"},
-		{"Czech Republic", "CZE", "#6C3483", 10300000, 780, false, "{\"borders\": [\"HRE\", \"POL_REP\", \"SVK\", \"AUT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"CZE_SLO\"}"},
-		{"United Arab Emirates", "ARE", "#117864", 1800000, 920, false, "{\"borders\": [\"SAU\", \"OMN\", \"QAT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"State of Qatar", "QAT", "#78281F", 470000, 880, false, "{\"borders\": [\"SAU\", \"ARE\", \"BHR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"State of Kuwait", "KWT", "#1E8449", 2100000, 890, false, "{\"borders\": [\"IRQ\", \"SAU\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Sultanate of Oman", "OMN", "#D4AC0D", 1800000, 720, false, "{\"borders\": [\"ARE\", \"SAU\", \"YEM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Yemen", "YEM", "#A93226", 11500000, 560, false, "{\"borders\": [\"SAU\", \"OMN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"OTT\"}"},
-		{"Kingdom of Bahrain", "BHR", "#C0392B", 500000, 650, true, "{\"borders\": [\"SAU\", \"QAT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Cyprus", "CYP", "#E67E22", 750000, 540, true, "{\"borders\": [\"TUR\", \"GRE\", \"SYR\", \"LBN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Singapore", "SGP", "#C0392B", 3000000, 950, true, "{\"borders\": [\"MYS\", \"IDN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"MYS\"}"},
-		{"Democratic People's Republic of Korea", "PRK", "#922B21", 20000000, 580, false, "{\"borders\": [\"CHN\", \"RUS\", \"KOR_S\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"KOR\"}"},
-		{"Republic of Korea", "KOR_S", "#2980B9", 43000000, 1050, false, "{\"borders\": [\"PRK\", \"JPN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"KOR\"}"},
-		{"Taiwan", "TWN", "#27AE60", 20000000, 920, true, "{\"borders\": [\"CHN\", \"PHL\", \"JPN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"CHN\"}"},
-		{"Brunei Darussalam", "BRN", "#F1C40F", 260000, 780, false, "{\"borders\": [\"MYS\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Timor-Leste", "TLS", "#D35400", 750000, 480, true, "{\"borders\": [\"IDN\", \"AUS\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"IDN\"}"},
-		{"Kingdom of Bhutan", "BTN", "#E67E22", 550000, 440, false, "{\"borders\": [\"IND\", \"CHN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"IND\"}"},
-		{"Republic of Maldives", "MDV", "#1ABC9C", 220000, 460, true, "{\"borders\": [\"IND\", \"LKA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Fiji", "FJI", "#3498DB", 730000, 480, true, "{\"borders\": [\"TON\", \"VUT\", \"NZL\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Solomon Islands", "SLB", "#27AE60", 320000, 420, true, "{\"borders\": [\"PNG\", \"VUT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Vanuatu", "VUT", "#117864", 150000, 400, true, "{\"borders\": [\"SLB\", \"FJI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Independent State of Samoa", "WSM", "#C0392B", 160000, 390, true, "{\"borders\": [\"TON\", \"FJI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"NZL\"}"},
-		{"Kingdom of Tonga", "TON", "#922B21", 95000, 380, true, "{\"borders\": [\"FJI\", \"WSM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Federated States of Micronesia", "FSM", "#2980B9", 100000, 380, true, "{\"borders\": [\"PHL\", \"PNG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"USA\"}"},
-		{"State of Eritrea", "ERI", "#117864", 3000000, 480, false, "{\"borders\": [\"SDN\", \"ETH\", \"DJI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ETH\"}"},
-		{"Republic of South Sudan", "SSD", "#1E8449", 7500000, 580, false, "{\"borders\": [\"SDN\", \"ETH\", \"KEN\", \"UGA\", \"COD\", \"CAF\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"SDN\"}"},
-		{"Gabonese Republic", "GAB", "#27AE60", 950000, 650, false, "{\"borders\": [\"GNQ\", \"CMR\", \"COG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
-		{"Republic of Equatorial Guinea", "GNQ", "#D4AC0D", 400000, 620, false, "{\"borders\": [\"CMR\", \"GAB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ESP\"}"},
-		{"Republic of Djibouti", "DJI", "#2980B9", 500000, 450, false, "{\"borders\": [\"ERI\", \"ETH\", \"SOM\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
-		{"Islamic Republic of Mauritania", "MRT", "#16A085", 2000000, 490, false, "{\"borders\": [\"MAR\", \"ALG\", \"MLI\", \"SEN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
-		{"Togolese Republic", "TGO", "#F39C12", 3500000, 440, false, "{\"borders\": [\"GHA\", \"BFA\", \"BEN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
-		{"Republic of The Gambia", "GMB", "#C0392B", 900000, 380, false, "{\"borders\": [\"SEN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Guinea-Bissau", "GNB", "#117864", 980000, 400, false, "{\"borders\": [\"SEN\", \"GIN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"POR\"}"},
-		{"Kingdom of Lesotho", "LSO", "#2980B9", 1600000, 420, false, "{\"borders\": [\"ZAF\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Kingdom of Eswatini", "SWZ", "#D35400", 850000, 430, false, "{\"borders\": [\"ZAF\", \"MOZ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Mauritius", "MUS", "#D4AC0D", 1050000, 560, true, "{\"borders\": [\"MDG\", \"SYC\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Union of the Comoros", "COM", "#16A085", 460000, 360, true, "{\"borders\": [\"MOZ\", \"MDG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"FRA\"}"},
-		{"Republic of Cabo Verde", "CPV", "#2874A6", 360000, 410, true, "{\"borders\": [\"SEN\", \"MRT\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"POR\"}"},
-		{"São Tomé and Príncipe", "STP", "#1E8449", 115000, 350, true, "{\"borders\": [\"GAB\", \"GNQ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"POR\"}"},
-		{"Republic of Seychelles", "SYC", "#E74C3C", 70000, 480, true, "{\"borders\": [\"MUS\", \"MDG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Jamaica", "JAM", "#229954", 2400000, 520, true, "{\"borders\": [\"CUB\", \"HAI\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Trinidad and Tobago", "TTO", "#C0392B", 1250000, 620, true, "{\"borders\": [\"VEN_SA\", \"GRD\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Commonwealth of The Bahamas", "BHS", "#1ABC9C", 255000, 560, true, "{\"borders\": [\"USA\", \"CUB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Barbados", "BRB", "#2980B9", 260000, 480, true, "{\"borders\": [\"VCT\", \"LCA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Saint Lucia", "LCA", "#F1C40F", 140000, 420, true, "{\"borders\": [\"BRB\", \"VCT\", \"MTQ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Saint Vincent and the Grenadines", "VCT", "#27AE60", 110000, 410, true, "{\"borders\": [\"LCA\", \"GRD\", \"BRB\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Grenada", "GRD", "#E67E22", 95000, 400, true, "{\"borders\": [\"VCT\", \"TTO\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Antigua and Barbuda", "ATG", "#C0392B", 65000, 420, true, "{\"borders\": [\"KNA\", \"GLP\", \"MSR\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Commonwealth of Dominica", "DMA", "#1E8449", 70000, 390, true, "{\"borders\": [\"GLP\", \"MTQ\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Saint Kitts and Nevis", "KNA", "#D4AC0D", 42000, 380, true, "{\"borders\": [\"ATG\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Belize", "BLZ", "#16A085", 185000, 420, false, "{\"borders\": [\"MEX\", \"GUA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-		{"Republic of Iceland", "ISL", "#2980B9", 255000, 560, true, "{\"borders\": [\"NOR\", \"ENG\", \"CAN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"DEN\"}"},
-		{"Republic of Malta", "MLT", "#C0392B", 355000, 510, true, "{\"borders\": [\"ITA\", \"TUN\", \"LBY\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
-	}
-
 	tx, err := DB.Begin()
 	if err != nil {
 		return err
 	}
 
-	for _, k := range kingdoms {
+	for _, k := range InitialKingdomList {
 		res, err := tx.Exec(
 			`UPDATE countries SET name = $1, color = $2, is_island = $3, borders = $4::jsonb WHERE code = $5 AND era = 'medieval'`,
-			k.name, k.color, k.isIsland, k.bordersJSON, k.code,
+			k.Name, k.Color, k.IsIsland, k.BordersJSON, k.Code,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -469,7 +519,7 @@ func SeedInitialData() error {
 		if rowsAffected == 0 {
 			if _, err := tx.Exec(
 				`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7::jsonb)`,
-				k.name, k.code, k.color, k.population, k.resources, k.isIsland, k.bordersJSON,
+				k.Name, k.Code, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON,
 			); err != nil {
 				tx.Rollback()
 				return err
@@ -477,7 +527,152 @@ func SeedInitialData() error {
 		}
 	}
 
-	log.Printf("Seeded/synced %d medieval kingdoms with border data", len(kingdoms))
+	log.Printf("Seeded/synced %d medieval kingdoms with border data", len(InitialKingdomList))
+	return tx.Commit()
+}
+
+// ResetGameToYear1500 restores the world to Year 1500 base date:
+// 1. Purges all in-flight troop movements
+// 2. Purges all border deployments
+// 3. Purges all game actions/chronicles
+// 4. Purges all game states snapshots
+// 5. If clearClaims is true:
+//      - Clears player_countries
+//      - Sets users.home_territory_id = NULL
+//      - Sets countries.owner_id = NULL
+// 6. Resets all countries' demographic, military, fiscal, and economic values
+//    to their baseline 1500 values (troops=0, 50% tax, 0% inv, 0% social,
+//    0 markets, 0 infrastructure, all last_* budget metrics = 0).
+func ResetGameToYear1500(clearClaims bool) error {
+	if DB == nil {
+		return nil
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin reset transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Purge transient tactical and chronicle tables
+	if _, err := tx.Exec("DELETE FROM troop_movements"); err != nil {
+		return fmt.Errorf("failed to clear troop movements: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM troop_deployments"); err != nil {
+		return fmt.Errorf("failed to clear troop deployments: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM game_actions"); err != nil {
+		return fmt.Errorf("failed to clear game actions: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM game_states"); err != nil {
+		return fmt.Errorf("failed to clear game states: %w", err)
+	}
+
+	// 2. Clear player territory claims if requested
+	if clearClaims {
+		if _, err := tx.Exec("DELETE FROM player_countries"); err != nil {
+			return fmt.Errorf("failed to clear player country assignments: %w", err)
+		}
+		if _, err := tx.Exec("UPDATE users SET home_territory_id = NULL"); err != nil {
+			return fmt.Errorf("failed to reset user home territories: %w", err)
+		}
+		if _, err := tx.Exec("UPDATE countries SET owner_id = NULL"); err != nil {
+			return fmt.Errorf("failed to reset country owners: %w", err)
+		}
+	}
+
+	// 3. Blanket reset of all countries' tactical, military, and economic parameters
+	blanketReset := `
+		UPDATE countries 
+		SET troops = 0,
+		    troops_levy = 0,
+		    troops_regular = 0,
+		    troops_elite = 0,
+		    fort_n = 0,
+		    fort_s = 0,
+		    fort_e = 0,
+		    fort_w = 0,
+		    economy_rate = 50,
+		    markets = 0,
+		    infrastructure = 0,
+		    investment = 0,
+		    social_costs = 0,
+		    last_tax_revenue = 0,
+		    last_market_income = 0,
+		    last_military_exp = 0,
+		    last_social_exp = 0,
+		    last_investment_exp = 0,
+		    last_total_exp = 0,
+		    last_budget_balance = 0,
+		    last_migration = 0,
+		    updated_at = CURRENT_TIMESTAMP
+	`
+	if _, err := tx.Exec(blanketReset); err != nil {
+		return fmt.Errorf("failed blanket country vitals reset: %w", err)
+	}
+
+	// 4. Restore exact baseline starting population, resources, and attributes
+	for _, k := range InitialKingdomList {
+		var updateQuery string
+		if clearClaims {
+			updateQuery = `
+				UPDATE countries 
+				SET name = $1,
+				    color = $2,
+				    population = $3,
+				    resources = $4,
+				    is_island = $5,
+				    borders = $6::jsonb,
+				    owner_id = NULL,
+				    troops = 0,
+				    economy_rate = 50,
+				    markets = 0,
+				    infrastructure = 0,
+				    investment = 0,
+				    social_costs = 0,
+				    last_tax_revenue = 0,
+				    last_market_income = 0,
+				    last_military_exp = 0,
+				    last_social_exp = 0,
+				    last_investment_exp = 0,
+				    last_total_exp = 0,
+				    last_budget_balance = 0,
+				    last_migration = 0,
+				    updated_at = CURRENT_TIMESTAMP
+				WHERE code = $7 AND era = 'medieval'
+			`
+		} else {
+			updateQuery = `
+				UPDATE countries 
+				SET name = $1,
+				    color = $2,
+				    population = $3,
+				    resources = $4,
+				    is_island = $5,
+				    borders = $6::jsonb,
+				    troops = 0,
+				    economy_rate = 50,
+				    markets = 0,
+				    infrastructure = 0,
+				    investment = 0,
+				    social_costs = 0,
+				    last_tax_revenue = 0,
+				    last_market_income = 0,
+				    last_military_exp = 0,
+				    last_social_exp = 0,
+				    last_investment_exp = 0,
+				    last_total_exp = 0,
+				    last_budget_balance = 0,
+				    last_migration = 0,
+				    updated_at = CURRENT_TIMESTAMP
+				WHERE code = $7 AND era = 'medieval'
+			`
+		}
+		if _, err := tx.Exec(updateQuery, k.Name, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, k.Code); err != nil {
+			return fmt.Errorf("failed to restore country baseline for %s: %w", k.Code, err)
+		}
+	}
+
 	return tx.Commit()
 }
 
@@ -488,35 +683,71 @@ func GetNextGameDate() (time.Time, error) {
 }
 
 func SaveGameState(gameDate time.Time, data string) error {
+	if DB == nil {
+		return nil
+	}
 	_, err := DB.Exec("INSERT INTO game_states (game_date, data) VALUES ($1, $2)", gameDate, data)
 	return err
 }
 
-func GetUserByUsername(username string) (*struct {
-	ID, Population            int64
-	Username, Password, Email string
-	IsActive                  bool
-}, error) {
-	user := &struct {
-		ID, Population            int64
-		Username, Password, Email string
-		IsActive                  bool
-	}{}
-	err := DB.QueryRow("SELECT id, username, password, email, is_active FROM users WHERE username = $1", username).
-		Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.IsActive)
+func GetLatestGameState() (string, int64, error) {
+	if DB == nil {
+		return "", 0, errors.New("database not connected")
+	}
+	var data string
+	var tick int64
+	err := DB.QueryRow("SELECT data, tick FROM game_states ORDER BY id DESC LIMIT 1").Scan(&data, &tick)
+	if err == sql.ErrNoRows {
+		return "", 0, nil
+	}
+	return data, tick, err
+}
+
+type UserRecord struct {
+	ID, Population                  int64
+	Username, Password, Email, Role string
+	IsActive                        bool
+}
+
+func GetUserByUsername(loginIdentifier string) (*UserRecord, error) {
+	if DB == nil {
+		return nil, nil
+	}
+	user := &UserRecord{}
+	err := DB.QueryRow(`
+		SELECT id, username, password, email, COALESCE(role, 'player'), is_active 
+		FROM users 
+		WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1)
+		LIMIT 1`, loginIdentifier).
+		Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.Role, &user.IsActive)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if IsAdminIdentifier(user.Email) || IsAdminIdentifier(user.Username) {
+		user.Role = "admin"
+		go func(uid int64) {
+			if DB != nil {
+				_, _ = DB.Exec("UPDATE users SET role = 'admin' WHERE id = $1", uid)
+			}
+		}(user.ID)
+	}
 	return user, nil
 }
 
 func CreateUser(username, password, email, baseColor string) (int64, error) {
+	if DB == nil {
+		return 0, nil
+	}
+	role := "player"
+	if IsAdminIdentifier(email) || IsAdminIdentifier(username) {
+		role = "admin"
+	}
 	var id int64
-	err := DB.QueryRow("INSERT INTO users (username, password, email, base_color) VALUES ($1, $2, $3, $4) RETURNING id",
-		username, password, email, baseColor).Scan(&id)
+	err := DB.QueryRow("INSERT INTO users (username, password, email, base_color, role) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		username, password, email, baseColor, role).Scan(&id)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -528,6 +759,9 @@ func CreateUser(username, password, email, baseColor string) (int64, error) {
 }
 
 func GetCountries(era string) ([]models.Country, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	if era == "" || era == "discovery" || era == "1500" {
 		era = "medieval"
 	}
@@ -542,7 +776,14 @@ func GetCountries(era string) ([]models.Country, error) {
 		   JOIN users u ON u.id = pc.user_id
 		  WHERE pc.country_id = c.id AND pc.is_active = true
 		  LIMIT 1) AS owner_name,
-		c.population, c.resources, c.troops, c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs, c.territory_type, c.borders, c.is_island
+		c.population, c.resources, c.troops,
+		COALESCE(c.troops_levy, 0), COALESCE(c.troops_regular, 0), COALESCE(c.troops_elite, 0),
+		COALESCE(c.fort_n, 0), COALESCE(c.fort_s, 0), COALESCE(c.fort_e, 0), COALESCE(c.fort_w, 0),
+		c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
+		COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
+		COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
+		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
+		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
 		ORDER BY c.id ASC`, era)
@@ -555,7 +796,17 @@ func GetCountries(era string) ([]models.Country, error) {
 	for rows.Next() {
 		var c models.Country
 		var ownerID, ownerName sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName, &c.Population, &c.Resources, &c.Troops, &c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts, &c.TerritoryType, &c.Borders, &c.IsIsland); err != nil {
+		if err := rows.Scan(
+			&c.ID, &c.Name, &c.Code, &c.Color, &ownerID, &ownerName,
+			&c.Population, &c.Resources, &c.Troops,
+			&c.TroopsLevy, &c.TroopsRegular, &c.TroopsElite,
+			&c.FortN, &c.FortS, &c.FortE, &c.FortW,
+			&c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts,
+			&c.LastTaxRevenue, &c.LastMarketIncome, &c.LastMilitaryExp,
+			&c.LastSocialExp, &c.LastInvestmentExp, &c.LastTotalExp,
+			&c.LastBudgetBalance, &c.LastMigration,
+			&c.TerritoryType, &c.Borders, &c.IsIsland,
+		); err != nil {
 			return nil, err
 		}
 		if ownerID.Valid {
@@ -607,10 +858,13 @@ func ClaimCountry(userID, countryID int64) error {
 }
 
 func GetPlayerCountry(userID int64) (*models.PlayerCountry, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	var pc models.PlayerCountry
-	err := DB.QueryRow(`SELECT pc.id, pc.user_id, pc.country_id, c.name, pc.assigned_at, pc.is_active, pc.last_active FROM player_countries pc
+	err := DB.QueryRow(`SELECT pc.id, pc.user_id, pc.country_id, c.name, c.code, pc.assigned_at, pc.is_active, pc.last_active FROM player_countries pc
 		JOIN countries c ON pc.country_id = c.id
-		WHERE pc.user_id = $1 AND pc.is_active = true`, userID).Scan(&pc.ID, &pc.UserID, &pc.CountryID, &pc.Name, &pc.AssignedAt, &pc.IsActive, &pc.LastActive)
+		WHERE pc.user_id = $1 AND pc.is_active = true`, userID).Scan(&pc.ID, &pc.UserID, &pc.CountryID, &pc.Name, &pc.Code, &pc.AssignedAt, &pc.IsActive, &pc.LastActive)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -701,6 +955,184 @@ func UpdateCountryPopulation(countryID int64, population int64) error {
 	return err
 }
 
+// UpdateCountryVitals atomically updates population, resources, and troops for a kingdom.
+func UpdateCountryVitals(countryID int64, population, resources, troops int64) error {
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4`,
+		population, resources, troops, countryID)
+	return err
+}
+
+// UpdateCountryVitalsAndBudget atomically updates population, resources, troops, and last year's budget ledger.
+func UpdateCountryVitalsAndBudget(
+	countryID int64,
+	population, resources, troops int64,
+	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
+) error {
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3,
+		    last_tax_revenue = $4, last_market_income = $5, last_military_exp = $6,
+		    last_social_exp = $7, last_investment_exp = $8, last_total_exp = $9,
+		    last_budget_balance = $10, last_migration = $11,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $12`,
+		population, resources, troops,
+		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
+		countryID)
+	return err
+}
+
+// UpdateCountryTroopLayers updates levy, regular, and elite troop counts and keeps total troops in sync.
+func UpdateCountryTroopLayers(countryID int64, levy, regular, elite int64) error {
+	if DB == nil {
+		return nil
+	}
+	if levy < 0 {
+		levy = 0
+	}
+	if regular < 0 {
+		regular = 0
+	}
+	if elite < 0 {
+		elite = 0
+	}
+	total := levy + regular + elite
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET troops_levy = $1, troops_regular = $2, troops_elite = $3, troops = $4, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $5`,
+		levy, regular, elite, total, countryID)
+	return err
+}
+
+// UpgradeBorderFortification reinforces a frontier (N, S, E, W), charging the cost from resources and incrementing fort tier.
+func UpgradeBorderFortification(countryID int64, side string, cost int64) (int64, error) {
+	if DB == nil {
+		return 0, nil
+	}
+	col := ""
+	switch strings.ToUpper(strings.TrimSpace(side)) {
+	case "N", "NORTH":
+		col = "fort_n"
+	case "S", "SOUTH":
+		col = "fort_s"
+	case "E", "EAST":
+		col = "fort_e"
+	case "W", "WEST":
+		col = "fort_w"
+	default:
+		return 0, fmt.Errorf("invalid border side %s (must be N, S, E, or W)", side)
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var resources int64
+	var currentLevel int64
+	query := fmt.Sprintf(`SELECT resources, COALESCE(%s, 0) FROM countries WHERE id = $1 FOR UPDATE`, col)
+	if err := tx.QueryRow(query, countryID).Scan(&resources, &currentLevel); err != nil {
+		return 0, err
+	}
+
+	if resources < cost {
+		return 0, fmt.Errorf("insufficient resources in treasury: fortifying %s frontier requires %d Ducats, but treasury holds %d Ducats", side, cost, resources)
+	}
+
+	nextLevel := currentLevel + 1
+	updateQuery := fmt.Sprintf(`UPDATE countries SET resources = resources - $1, %s = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`, col)
+	if _, err := tx.Exec(updateQuery, cost, nextLevel, countryID); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return nextLevel, nil
+}
+
+// UpdateCountryVitalsAndTroopLayers updates dynamic vitals (population, resources, troops, layers)
+// during intra-year simulation ticks without overwriting the completed annual budget ledger.
+func UpdateCountryVitalsAndTroopLayers(
+	countryID int64,
+	population, resources, troops, levy, regular, elite int64,
+) error {
+	if DB == nil {
+		return nil
+	}
+	if levy < 0 {
+		levy = 0
+	}
+	if regular < 0 {
+		regular = 0
+	}
+	if elite < 0 {
+		elite = 0
+	}
+	if troops != (levy + regular + elite) {
+		troops = levy + regular + elite
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3,
+		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $7`,
+		population, resources, troops,
+		levy, regular, elite,
+		countryID)
+	return err
+}
+
+// UpdateCountryVitalsBudgetAndTroopLayers atomically updates vitals, troop layers, and last year's budget ledger.
+func UpdateCountryVitalsBudgetAndTroopLayers(
+	countryID int64,
+	population, resources, troops, levy, regular, elite int64,
+	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
+) error {
+	if DB == nil {
+		return nil
+	}
+	if levy < 0 {
+		levy = 0
+	}
+	if regular < 0 {
+		regular = 0
+	}
+	if elite < 0 {
+		elite = 0
+	}
+	if troops != (levy + regular + elite) {
+		troops = levy + regular + elite
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET population = $1, resources = $2, troops = $3,
+		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
+		    last_tax_revenue = $7, last_market_income = $8, last_military_exp = $9,
+		    last_social_exp = $10, last_investment_exp = $11, last_total_exp = $12,
+		    last_budget_balance = $13, last_migration = $14,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $15`,
+		population, resources, troops,
+		levy, regular, elite,
+		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
+		countryID)
+	return err
+}
+
+// IsCountryOwnedByUser checks whether the given country is owned by the specified user.
+func IsCountryOwnedByUser(countryID, userID int64) (bool, error) {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM countries WHERE id = $1 AND owner_id = $2", countryID, userID).Scan(&count)
+	return count > 0, err
+}
+
 // GetTroops returns the central troop count and per-border deployment counts
 // for a country.
 func GetTroops(countryID int64) (central int64, borders map[string]int64, err error) {
@@ -736,43 +1168,68 @@ func GetTroops(countryID int64) (central int64, borders map[string]int64, err er
 
 // KingdomDetailRow consolidates all data needed for the command center view.
 type KingdomDetailRow struct {
-	CountryID      int64
-	Name           string
-	Code           string
-	Population     int64
-	Resources      int64
-	Troops         int64
-	EconomyRate    int64
-	Markets        int64
-	Infrastructure int64
-	Investment     int64
-	SocialCosts    int64
-	OwnerID        *int64
-	OwnerName      *string
-	CentralTroops  int64
-	BorderTroops   map[string]int64
-	GDP            int64
-	CurrencyValue  float64
-	InflationRate  float64
+	CountryID         int64
+	Name              string
+	Code              string
+	Population        int64
+	Resources         int64
+	Troops            int64
+	TroopsLevy        int64
+	TroopsRegular     int64
+	TroopsElite       int64
+	FortN             int64
+	FortS             int64
+	FortE             int64
+	FortW             int64
+	EconomyRate       int64
+	Markets           int64
+	Infrastructure    int64
+	Investment        int64
+	SocialCosts       int64
+	LastTaxRevenue    int64
+	LastMarketIncome  int64
+	LastMilitaryExp   int64
+	LastSocialExp     int64
+	LastInvestmentExp int64
+	LastTotalExp      int64
+	LastBudgetBalance int64
+	LastMigration     int64
+	OwnerID           *int64
+	OwnerName         *string
+	CentralTroops     int64
+	BorderTroops      map[string]int64
+	GDP               int64
+	CurrencyValue     float64
+	InflationRate     float64
 }
 
 // GetKingdomDetail returns all command-center data for a country: basic info,
-// central troop count, and per-border deployment counts.
+// central troop count, per-border deployment counts, and last year's budget ledger.
 func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 	var r KingdomDetailRow
 	r.BorderTroops = map[string]int64{"N": 0, "S": 0, "E": 0, "W": 0}
 
 	err := DB.QueryRow(
-		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops, c.economy_rate,
-		       c.markets, c.infrastructure, c.investment, c.social_costs,
+		`SELECT c.id, c.name, c.code, c.population, c.resources, c.troops,
+		       COALESCE(c.troops_levy, 0), COALESCE(c.troops_regular, 0), COALESCE(c.troops_elite, 0),
+		       COALESCE(c.fort_n, 0), COALESCE(c.fort_s, 0), COALESCE(c.fort_e, 0), COALESCE(c.fort_w, 0),
+		       c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
+		       COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
+		       COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
+		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
 		 LEFT JOIN users u ON u.id = pc.user_id
 		 WHERE c.id = $1`,
 		countryID,
-	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops, &r.EconomyRate,
-		&r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
+	).Scan(&r.CountryID, &r.Name, &r.Code, &r.Population, &r.Resources, &r.Troops,
+		&r.TroopsLevy, &r.TroopsRegular, &r.TroopsElite,
+		&r.FortN, &r.FortS, &r.FortE, &r.FortW,
+		&r.EconomyRate, &r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
+		&r.LastTaxRevenue, &r.LastMarketIncome, &r.LastMilitaryExp,
+		&r.LastSocialExp, &r.LastInvestmentExp, &r.LastTotalExp,
+		&r.LastBudgetBalance, &r.LastMigration,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err
@@ -829,6 +1286,41 @@ func GetDiplomaticRelations(countryID int64) ([]DiplomaticRelationRow, error) {
 		result = append(result, r)
 	}
 	return result, rows.Err()
+}
+
+// GetActiveWars returns a map of country IDs that are currently engaged in active warfare.
+// A country is at war if its most recent diplomatic interaction with another country was a war declaration.
+func GetActiveWars() (map[int64]bool, error) {
+	if DB == nil {
+		return make(map[int64]bool), nil
+	}
+	query := `
+		WITH latest_diplomacy AS (
+			SELECT DISTINCT ON (LEAST(country_id, target_country_id), GREATEST(country_id, target_country_id))
+				country_id, target_country_id, description
+			FROM game_actions
+			WHERE action_type = 'diplomacy' AND target_country_id IS NOT NULL
+			ORDER BY LEAST(country_id, target_country_id), GREATEST(country_id, target_country_id), id DESC
+		)
+		SELECT country_id, target_country_id
+		FROM latest_diplomacy
+		WHERE LOWER(description) LIKE '%war%'`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	activeWars := make(map[int64]bool)
+	for rows.Next() {
+		var c1, c2 int64
+		if err := rows.Scan(&c1, &c2); err != nil {
+			return nil, err
+		}
+		activeWars[c1] = true
+		activeWars[c2] = true
+	}
+	return activeWars, rows.Err()
 }
 
 // EconomyRateRow describes the economic rate setting for a country.
@@ -968,6 +1460,9 @@ type ActivePlayerRow struct {
 
 // GetActivePlayers returns every player with an active kingdom.
 func GetActivePlayers() ([]ActivePlayerRow, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	rows, err := DB.Query(
 		`SELECT pc.user_id, u.username, pc.country_id, pc.last_active
 		 FROM player_countries pc
@@ -1004,6 +1499,9 @@ type ActionRow struct {
 
 // GetRecentActions returns the most recent actions, newest first.
 func GetRecentActions(limit int) ([]ActionRow, error) {
+	if DB == nil {
+		return nil, nil
+	}
 	rows, err := DB.Query(
 		`SELECT user_id, country_id, action_type, description,
 		       target_country_id, direction, speed, movement_type
@@ -1023,6 +1521,72 @@ func GetRecentActions(limit int) ([]ActionRow, error) {
 			return nil, err
 		}
 		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+type AdminUserOverview struct {
+	ID           int64      `json:"id"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	Role         string     `json:"role"`
+	IsActive     bool       `json:"is_active"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastLogin    *time.Time `json:"last_login"`
+	CountryID    *int64     `json:"country_id"`
+	CountryName  *string    `json:"country_name"`
+	CountryCode  *string    `json:"country_code"`
+	CountryColor *string    `json:"country_color"`
+	Population   int64      `json:"population"`
+	Resources    int64      `json:"resources"`
+	Troops       int64      `json:"troops"`
+	EconomyRate  float64    `json:"economy_rate"`
+}
+
+func GetAdminDashboardUsers() ([]AdminUserOverview, error) {
+	if DB == nil {
+		return nil, nil
+	}
+	rows, err := DB.Query(`
+		SELECT 
+			u.id, u.username, u.email, COALESCE(u.role, 'player') AS role, u.is_active, u.created_at, u.last_login,
+			c.id, c.name, c.code, c.color, COALESCE(c.population, 0), COALESCE(c.resources, 0), COALESCE(c.troops, 0), COALESCE(c.economy_rate, 50)
+		FROM users u
+		LEFT JOIN player_countries pc ON pc.user_id = u.id AND pc.is_active = true
+		LEFT JOIN countries c ON c.id = pc.country_id
+		ORDER BY u.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []AdminUserOverview
+	for rows.Next() {
+		var u AdminUserOverview
+		var cid sql.NullInt64
+		var cname, ccode, ccolor sql.NullString
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.Email, &u.Role, &u.IsActive, &u.CreatedAt, &u.LastLogin,
+			&cid, &cname, &ccode, &ccolor, &u.Population, &u.Resources, &u.Troops, &u.EconomyRate,
+		); err != nil {
+			return nil, err
+		}
+		if cid.Valid {
+			u.CountryID = &cid.Int64
+		}
+		if cname.Valid {
+			u.CountryName = &cname.String
+		}
+		if ccode.Valid {
+			u.CountryCode = &ccode.String
+		}
+		if ccolor.Valid {
+			u.CountryColor = &ccolor.String
+		}
+		if IsAdminIdentifier(u.Email) || IsAdminIdentifier(u.Username) {
+			u.Role = "admin"
+		}
+		result = append(result, u)
 	}
 	return result, rows.Err()
 }

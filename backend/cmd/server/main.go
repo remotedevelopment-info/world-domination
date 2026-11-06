@@ -92,9 +92,17 @@ func setupRouter() *mux.Router {
 	r.HandleFunc("/api/login", handlers.LoginHandler).Methods("POST")
 	r.HandleFunc("/api/countries", handlers.GetCountriesHandler).Methods("GET")
 
+	// Global timeline read endpoint (authoritative server clock, public)
+	r.HandleFunc("/api/timeline", handlers.GetTimelineHandler).Methods("GET")
+
 	// Protected routes
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(auth.AuthMiddleware)
+	api.HandleFunc("/timeline/jump", handlers.JumpTimelineHandler).Methods("POST")
+	api.HandleFunc("/timeline/scale", handlers.SetTimelineScaleHandler).Methods("POST")
+	api.HandleFunc("/timeline/pause", handlers.SetTimelinePauseHandler).Methods("POST")
+	api.HandleFunc("/admin/dashboard", handlers.GetAdminDashboardHandler).Methods("GET")
+	api.HandleFunc("/admin/reset-game", handlers.AdminResetGameHandler).Methods("POST")
 	api.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 	api.HandleFunc("/assign-country", handlers.AssignCountryHandler).Methods("POST")
 	api.HandleFunc("/my-country", handlers.GetPlayerCountryHandler).Methods("GET")
@@ -142,11 +150,29 @@ func main() {
 		log.Fatalf("Failed to seed initial data: %v", err)
 	}
 
-	// Start game engine (date-based, real-time gameplay)
+	// Start game engine (date-based, real-time gameplay with authoritative timeline)
 	engine := game.GetEngine()
 	engine.Start()
 
-	// Economy simulation: one 15-second cycle per owned kingdom, broadcast to
+	// Restore last persisted timeline and tick state across restarts
+	if data, tick, err := database.GetLatestGameState(); err == nil && data != "" {
+		var savedState game.GameState
+		if err := json.Unmarshal([]byte(data), &savedState); err == nil {
+			engine.ResumeState(tick, savedState.SimYear, savedState.ChronoScale, savedState.IsPaused)
+			log.Printf("Resumed authoritative timeline at year %.2f (%s, scale %s)", savedState.SimYear, savedState.EraID, savedState.ChronoScale)
+		}
+	}
+
+	// 1. Authoritative Timeline Ticker: ticks every 1 second based on active ChronoScale.
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			engine.TickTimeline()
+		}
+	}()
+
+	// 2. Economy simulation: one 15-second cycle per owned kingdom, broadcast to
 	// all clients so the treasury dashboard constantly updates.
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)

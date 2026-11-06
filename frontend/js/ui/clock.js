@@ -2,6 +2,14 @@
 
 import { TICK_INTERVAL_S } from "../config.js";
 import { state } from "../state.js";
+import {
+  apiGetTimeline,
+  apiJumpTimeline,
+  apiSetChronoScale,
+  apiSetTimelinePause,
+  readErrorMessage,
+} from "../api.js";
+import { showToast } from "./toast.js";
 
 export const CHRONO_SCALES = {
   "1s": { id: "1s", seconds: 1, label: "1s = 1 yr", name: "1 Second = 1 Year (Warp Speed)" },
@@ -24,42 +32,56 @@ export const HISTORICAL_ERAS = [
   { id: "modern", name: "THE MODERN AGE", startYear: 1989, endYear: 9999 },
 ];
 
+export const DEFAULT_TIMELINE_ADMIN = "admin@sfsw.net";
+let timelineAdminEmail = DEFAULT_TIMELINE_ADMIN;
+
+export const ADMIN_IDENTIFIERS = new Set([
+  "admin@sfsw.net",
+  "admin",
+  "nalex@sfsw.net",
+  "nalex",
+]);
+
+export function isTimelineAdmin(user = state.currentUser) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const currentEmail = user.email?.toLowerCase().trim();
+  const currentUsername = user.username?.toLowerCase().trim();
+  if (currentEmail && ADMIN_IDENTIFIERS.has(currentEmail)) return true;
+  if (currentUsername && ADMIN_IDENTIFIERS.has(currentUsername)) return true;
+  const adminTarget = (timelineAdminEmail || DEFAULT_TIMELINE_ADMIN).toLowerCase().trim();
+  return currentEmail === adminTarget || currentUsername === adminTarget;
+}
+
+export function isPureOverseer(user = state.currentUser) {
+  if (!user) return false;
+  const currentEmail = user.email?.toLowerCase().trim();
+  const currentUsername = user.username?.toLowerCase().trim();
+  return currentEmail === "admin@sfsw.net" || currentUsername === "admin";
+}
+
 let currentScaleKey = "1d";
-let startYear = BASE_YEAR;
-let accumulatedYears = 0;
-let manualYearOffset = 0;
-let lastTickWallTime = null;
 let devDrawerOpen = false;
 let clockTimer = null;
-let persistCounter = 0;
 let lastSyncedEraId = null;
 let eraChangeCallback = null;
+
+// Authoritative server timeline state - the single source of truth across all clients
+let serverSimYear = BASE_YEAR;
+let serverReceivedWallTime = null;
+let serverIsPaused = false;
+let hasReceivedServerTimeline = false;
 
 export function onEraChange(callback) {
   eraChangeCallback = callback;
 }
 
-// Initialize persisted dev scale, start year, and offsets from localStorage
+// Purge any legacy client-side timeline overrides from localStorage so the server is strictly authoritative
 if (typeof localStorage !== "undefined") {
-  const savedScale = localStorage.getItem("world_domination_chrono_scale");
-  if (savedScale && CHRONO_SCALES[savedScale]) {
-    currentScaleKey = savedScale;
-  }
-  const savedStartYear = localStorage.getItem("world_domination_start_year");
-  if (savedStartYear !== null) {
-    const parsed = parseInt(savedStartYear, 10);
-    if (!isNaN(parsed)) startYear = parsed;
-  }
-  const savedAccum = localStorage.getItem("world_domination_accum_years");
-  if (savedAccum !== null) {
-    const parsed = parseFloat(savedAccum);
-    if (!isNaN(parsed)) accumulatedYears = parsed;
-  }
-  const savedOffset = localStorage.getItem("world_domination_year_offset");
-  if (savedOffset !== null) {
-    const parsed = parseFloat(savedOffset);
-    if (!isNaN(parsed)) manualYearOffset = parsed;
-  }
+  localStorage.removeItem("world_domination_chrono_scale");
+  localStorage.removeItem("world_domination_start_year");
+  localStorage.removeItem("world_domination_accum_years");
+  localStorage.removeItem("world_domination_year_offset");
 }
 
 function getTimerInterval() {
@@ -71,7 +93,6 @@ function getTimerInterval() {
 
 export function startClock() {
   if (clockTimer) clearInterval(clockTimer);
-  lastTickWallTime = Date.now();
   tickClock();
   clockTimer = setInterval(tickClock, getTimerInterval());
 }
@@ -84,31 +105,23 @@ export function stopClock() {
 }
 
 /**
- * Computes current game year continuously and monotonically.
- * Uses positive delta-time integration so it NEVER resets on WebSocket packets or server ticks.
+ * Computes current game year continuously and monotonically based strictly on the authoritative server timeline.
+ * Extrapolates from serverSimYear using elapsed real wall-clock seconds divided by the server's ChronoScale.
+ * No client-side start years or offsets are ever permitted to desynchronize this timeline.
  */
 export function computeGameTime() {
   const scale = CHRONO_SCALES[currentScaleKey] || CHRONO_SCALES["1d"];
   const now = Date.now();
 
-  if (lastTickWallTime === null) {
-    lastTickWallTime = now;
-  }
-  const deltaMs = Math.max(0, now - lastTickWallTime);
-  lastTickWallTime = now;
-
-  // Monotonically accumulate elapsed game years
-  if (deltaMs > 0 && scale.seconds > 0) {
-    accumulatedYears += (deltaMs / 1000) / scale.seconds;
-    // Persist to localStorage every 10 ticks
-    persistCounter++;
-    if (persistCounter >= 10 && typeof localStorage !== "undefined") {
-      persistCounter = 0;
-      localStorage.setItem("world_domination_accum_years", String(accumulatedYears));
-    }
+  let currentYearFrac;
+  if (serverReceivedWallTime !== null) {
+    const elapsedSec = serverIsPaused ? 0 : Math.max(0, (now - serverReceivedWallTime) / 1000);
+    const progression = scale.seconds > 0 ? (elapsedSec / scale.seconds) : 0;
+    currentYearFrac = serverSimYear + progression;
+  } else {
+    currentYearFrac = serverSimYear;
   }
 
-  const currentYearFrac = startYear + manualYearOffset + accumulatedYears;
   const yearInt = Math.floor(currentYearFrac);
   const yearFrac = Math.max(0, Math.min(1, currentYearFrac - yearInt));
 
@@ -213,7 +226,8 @@ export function tickClock() {
   // 2. Synchronize Era Chronometer Bar Plaques
   updateHistoricalEraBar(time.currentEra, time.yearInt);
 
-  // 3. Update Dev Drawer Telemetry (Month, Day, Next Tick, Offsets)
+  // 3. Update Dev Drawer Telemetry & Restrict Rate Button to Admin Only
+  updateChronoControlVisibility();
   updateDevDrawerTelemetry(time);
 
   // 4. Notify listeners when the Historical Era changes (spawning new era nations)
@@ -242,11 +256,14 @@ function updateHistoricalEraBar(activeEra, yearInt) {
 
   const eraOrder = ["discovery", "revolt", "independence", "decolonisation", "modern"];
   const activeIdx = eraOrder.indexOf(activeEra.id);
+  const isAdmin = isTimelineAdmin();
 
   plaques.forEach((plaque) => {
     const eraId = plaque.dataset.era;
     const idx = eraOrder.indexOf(eraId);
     const badge = plaque.querySelector(".plaque-badge");
+
+    plaque.style.cursor = isAdmin ? "pointer" : "default";
 
     if (idx === activeIdx) {
       plaque.classList.add("active");
@@ -277,13 +294,11 @@ function updateHistoricalEraBar(activeEra, yearInt) {
  * Updates live telemetry inside the Dev Chrono Drawer
  */
 function updateDevDrawerTelemetry(time) {
-  // Calendar month/day in dev drawer
   const monthDayEl = document.getElementById("dev-live-month-day") || document.getElementById("legend-month-day");
   if (monthDayEl) {
     monthDayEl.textContent = `Month ${time.monthNum} (${time.monthShort}) · Day ${time.dayOfYear} · ${time.season}`;
   }
 
-  // Next engine tick in dev drawer
   const nextTickEl = document.getElementById("dev-live-next-tick") || document.getElementById("legend-urgency-tick");
   if (nextTickEl) {
     nextTickEl.textContent = `Next Tick in ${time.remainTickSec}s`;
@@ -304,13 +319,16 @@ function updateDevDrawerTelemetry(time) {
 
   const offsetDisp = document.getElementById("dev-offset-display");
   if (offsetDisp) {
-    const sign = manualYearOffset >= 0 ? "+" : "";
-    offsetDisp.textContent = `Offset: ${sign}${manualYearOffset.toFixed(1)} years`;
+    const isAdmin = isTimelineAdmin();
+    offsetDisp.textContent = isAdmin
+      ? `👑 Admin Active`
+      : `🔒 Server-Controlled Timeline`;
   }
 
   const startInput = document.getElementById("dev-start-year-input");
   if (startInput && document.activeElement !== startInput) {
-    startInput.value = startYear;
+    startInput.value = Math.floor(serverSimYear);
+    startInput.disabled = !isTimelineAdmin();
   }
 }
 
@@ -319,19 +337,109 @@ function updateDevDrawerTelemetry(time) {
  */
 function syncRadioCardUI() {
   const cards = document.querySelectorAll(".chrono-scales-grid .scale-card");
+  const isAdmin = isTimelineAdmin();
   cards.forEach((card) => {
     const isSelected = card.dataset.scale === currentScaleKey;
     card.classList.toggle("active", isSelected);
     const radio = card.querySelector("input[type='radio']");
-    if (radio) radio.checked = isSelected;
+    if (radio) {
+      radio.checked = isSelected;
+      radio.disabled = !isAdmin;
+    }
   });
 }
 
 // -------------------------------------------------------------
-// DEVELOPMENT CONTROL ACTIONS
+// AUTHORITATIVE SERVER TIMELINE SYNCHRONIZATION
 // -------------------------------------------------------------
 
+/**
+ * Synchronizes client chronometer and era with authoritative server timeline.
+ * Called automatically on WebSocket messages, after timeline mutations, and on initial page load.
+ */
+export function syncTimelineFromServer(data) {
+  if (!data) return;
+
+  const rawYear =
+    typeof data.sim_year === "number"
+      ? data.sim_year
+      : typeof data.year === "number"
+      ? data.year
+      : null;
+
+  if (rawYear === null || isNaN(rawYear)) return;
+
+  serverSimYear = rawYear;
+  serverReceivedWallTime = Date.now();
+  hasReceivedServerTimeline = true;
+
+  if (typeof data.is_paused === "boolean") {
+    serverIsPaused = data.is_paused;
+  }
+
+  if (data.admin_email) {
+    timelineAdminEmail = data.admin_email;
+  }
+
+  // Synchronize chrono scale if provided
+  if (data.chrono_scale && CHRONO_SCALES[data.chrono_scale]) {
+    if (currentScaleKey !== data.chrono_scale) {
+      currentScaleKey = data.chrono_scale;
+      syncRadioCardUI();
+      if (clockTimer) {
+        clearInterval(clockTimer);
+        clockTimer = setInterval(tickClock, getTimerInterval());
+      }
+    }
+  }
+
+  tickClock();
+}
+
+/**
+ * Initial fetch of authoritative timeline over REST so the clock is accurate immediately
+ * on page load before the first WebSocket packet arrives.
+ */
+export async function initServerTimelineSync() {
+  try {
+    const res = await apiGetTimeline();
+    if (res && res.ok) {
+      const data = await res.json();
+      syncTimelineFromServer(data);
+    }
+  } catch (err) {
+    console.warn("Initial timeline sync deferred to WebSocket:", err);
+  }
+}
+
+// -------------------------------------------------------------
+// DEVELOPMENT & PLAYER TIMELINE CONTROL ACTIONS
+// -------------------------------------------------------------
+
+export function updateChronoControlVisibility() {
+  const btn = document.getElementById("dev-chrono-toggle-btn");
+  const drawer = document.getElementById("dev-chrono-drawer");
+  const isAdmin = isTimelineAdmin();
+  if (btn) {
+    btn.classList.toggle("hidden", !isAdmin);
+  }
+  if (!isAdmin && drawer) {
+    devDrawerOpen = false;
+    drawer.classList.add("hidden");
+    drawer.classList.remove("open");
+  }
+}
+
 export function toggleDevChronoControl() {
+  if (!isTimelineAdmin()) {
+    devDrawerOpen = false;
+    const drawer = document.getElementById("dev-chrono-drawer");
+    if (drawer) {
+      drawer.classList.add("hidden");
+      drawer.classList.remove("open");
+    }
+    return;
+  }
   devDrawerOpen = !devDrawerOpen;
   const drawer = document.getElementById("dev-chrono-drawer");
   if (drawer) {
@@ -341,36 +449,40 @@ export function toggleDevChronoControl() {
   if (devDrawerOpen) {
     syncRadioCardUI();
     const startInput = document.getElementById("dev-start-year-input");
-    if (startInput) startInput.value = startYear;
+    if (startInput) startInput.value = Math.floor(serverSimYear);
     tickClock();
   }
 }
 
 export function setChronoScale(scaleKey) {
+  if (!isTimelineAdmin()) {
+    syncRadioCardUI();
+    return;
+  }
   if (!CHRONO_SCALES[scaleKey]) return;
   currentScaleKey = scaleKey;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("world_domination_chrono_scale", scaleKey);
-  }
   syncRadioCardUI();
-  startClock(); // Adapts timer interval dynamically (100ms for 1s, 200ms for 5s, etc.)
+  startClock();
+
+  apiSetChronoScale(scaleKey)
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to change timeline scale"));
+      }
+      const data = await res.json();
+      syncTimelineFromServer(data);
+    })
+    .catch((err) => {
+      console.warn("Failed to synchronize chrono scale with server:", err);
+      showToast(err.message || "Failed to update speed", "error");
+      initServerTimelineSync();
+    });
 }
 
 export function setStartYear(year) {
   const parsed = parseInt(year, 10);
   if (isNaN(parsed)) return;
-  startYear = parsed;
-  accumulatedYears = 0;
-  manualYearOffset = 0;
-  lastTickWallTime = Date.now();
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("world_domination_start_year", String(startYear));
-    localStorage.removeItem("world_domination_accum_years");
-    localStorage.removeItem("world_domination_year_offset");
-  }
-  const input = document.getElementById("dev-start-year-input");
-  if (input) input.value = startYear;
-  tickClock();
+  jumpToYear(parsed);
 }
 
 export function applyStartYearInput() {
@@ -380,27 +492,71 @@ export function applyStartYearInput() {
 }
 
 export function resetToDefaultStartYear() {
-  setStartYear(BASE_YEAR);
+  jumpToYear(BASE_YEAR);
 }
 
 export function jumpToYear(targetYear) {
-  setStartYear(targetYear);
+  if (!isTimelineAdmin()) {
+    return;
+  }
+
+  const parsed = parseFloat(targetYear);
+  if (isNaN(parsed)) return;
+
+  // Optimistic local update for instantaneous responsiveness for admin
+  serverSimYear = parsed;
+  serverReceivedWallTime = Date.now();
+  hasReceivedServerTimeline = true;
+  tickClock();
+
+  // Dispatch authoritative update to server (broadcasts to all other players)
+  apiJumpTimeline(parsed)
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to jump timeline"));
+      }
+      const data = await res.json();
+      syncTimelineFromServer(data);
+    })
+    .catch((err) => {
+      console.warn("Failed to synchronize timeline jump with server:", err);
+      showToast(err.message || "Failed to update era", "error");
+      initServerTimelineSync();
+    });
+}
+
+export function setTimelinePause(paused) {
+  if (!isTimelineAdmin()) {
+    return;
+  }
+  serverIsPaused = Boolean(paused);
+  serverReceivedWallTime = Date.now();
+  tickClock();
+
+  apiSetTimelinePause(paused)
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to change pause state"));
+      }
+      const data = await res.json();
+      syncTimelineFromServer(data);
+    })
+    .catch((err) => {
+      console.warn("Failed to synchronize timeline pause with server:", err);
+      initServerTimelineSync();
+    });
 }
 
 export function stepYearOffset(delta) {
-  manualYearOffset += delta;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("world_domination_year_offset", String(manualYearOffset));
+  // Client-side year offset stepping is deprecated to ensure server is single source of truth
+  if (!isTimelineAdmin()) {
+    return;
   }
-  tickClock();
+  jumpToYear(serverSimYear + delta);
 }
 
 export function resetYearOffset() {
-  manualYearOffset = 0;
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem("world_domination_year_offset");
-  }
-  tickClock();
+  jumpToYear(BASE_YEAR);
 }
 
 export function getCurrentGameYear() {

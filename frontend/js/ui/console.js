@@ -11,6 +11,8 @@ import {
 import { showToast, logMessage, escapeHtml } from "./toast.js";
 import { kingdomPolygons } from "../map/polygons.js";
 import { applyActionResult } from "./actions.js";
+import { isCountryOwnedByCurrentUser } from "../map/renderer.js";
+import { isPureOverseer } from "./clock.js";
 
 let currentConsoleBay = "all";
 let taxRate = 50;
@@ -31,77 +33,120 @@ let debouncedPushSettingsTimer = null;
 let dialsWired = false;
 let compassDragging = false;
 
+// Round-robin territory state without queuing events
+let activeCommandCenterKingdom = null;
+let isTerritoryFetching = false;
+let isTerritoryFetchPending = false;
+let territoryPeriodicTimer = null;
+let roundRobinTerritoryIndex = 0;
+
 const DIAL_BASE_DEG = 120;
 const DIAL_DEG_PER_UNIT = 2.4; // 240 deg sweep for 0..100 range
 
 export function closeKingdomCommandCenter() {
   const cc = document.getElementById("kingdom-command-center");
   if (cc) cc.classList.add("hidden");
+  stopTerritoryRoundRobinUpdater();
+  activeCommandCenterKingdom = null;
 }
+
+export function getPlayerOwnedTerritories() {
+  if (typeof isPureOverseer === "function" && isPureOverseer()) return [];
+  const owned = (state.kingdoms || []).filter((k) => isCountryOwnedByCurrentUser(k));
+  if (owned.length > 0) return owned;
+  if (state.myKingdom && state.myKingdom.country_id) {
+    const mk = (state.kingdoms || []).find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
+    return [mk];
+  }
+  return [];
+}
+
+export function renderTerritoryPills() {
+  const container = document.getElementById("cc-territory-pills");
+  if (!container) return;
+  const owned = getPlayerOwnedTerritories();
+  if (!owned || owned.length <= 1) {
+    container.innerHTML = "";
+    container.style.display = "none";
+    return;
+  }
+  container.style.display = "flex";
+  const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
+
+  container.innerHTML = owned.map((t) => {
+    const isActive = t.id === activeId;
+    const name = t.name || t.code;
+    const color = t.color || "#ffd700";
+    return `
+      <button type="button" class="cc-territory-pill ${isActive ? "active" : ""}" data-territory-id="${t.id}" onclick="switchActiveTerritory(${t.id})">
+        <span class="cc-territory-dot" style="background-color: ${color}"></span>
+        <span>${escapeHtml(name)}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+export function switchActiveTerritory(territoryId) {
+  const territory = (state.kingdoms || []).find((k) => k.id === territoryId);
+  if (!territory) return;
+  activeCommandCenterKingdom = territory;
+  renderTerritoryPills();
+  applyLiveCommandCenterUpdate(territory);
+  stepTerritoryRoundRobin(true);
+}
+window.switchActiveTerritory = switchActiveTerritory;
 
 export async function openKingdomCommandCenter(kingdom, bay = "all") {
   const modal = document.getElementById("kingdom-command-center");
   if (!modal) return;
 
   if (!kingdom) {
-    kingdom = state.myKingdom
-      ? state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom
-      : null;
+    const owned = getPlayerOwnedTerritories();
+    kingdom = activeCommandCenterKingdom || (owned.length > 0 ? owned[0] : null);
   }
   if (!kingdom) return;
 
-  const kingdomNameEl = document.getElementById("cc-kingdom-name");
-  if (kingdomNameEl) kingdomNameEl.textContent = kingdom.name || "My Kingdom";
+  activeCommandCenterKingdom = kingdom;
+  renderTerritoryPills();
+  applyLiveCommandCenterUpdate(kingdom);
 
-  const codeEl = document.getElementById("cc-kingdom-code");
-  if (codeEl) codeEl.textContent = kingdom.code || "REALM";
+  // Wire controls and meters
+  renderMeters();
+  wireConsoleDials();
+  setCompassSide(compassDirection, true);
+  switchConsoleBay(bay);
+  modal.classList.remove("hidden");
 
-  const rulerEl = document.getElementById("cc-ruler-name");
-  if (rulerEl) {
-    rulerEl.textContent = state.currentUser ? `Lord ${state.currentUser.username}` : "Sovereign";
-  }
-
-  const crestEl = document.getElementById("cc-realm-crest");
-  if (crestEl && kingdom.color) {
-    crestEl.style.filter = `drop-shadow(0 0 10px ${kingdom.color})`;
-  }
-
-  // Fetch consolidated kingdom detail
-  let detail = null;
-  try {
-    const res = await apiGetKingdomDetail();
-    if (res.ok) {
-      detail = await res.json();
-      commandCenterDetail = detail;
-    }
-  } catch (err) {
-    console.error("Error fetching kingdom detail:", err);
-  }
+  // Start non-queuing round-robin background updater & do immediate initial fetch
+  startTerritoryRoundRobinUpdater();
+  stepTerritoryRoundRobin(true);
 
   // Fetch diplomatic relations
-  let relations = [];
   try {
     const res = await apiGetDiplomacy();
     if (res.ok) {
-      relations = await res.json();
+      const relations = await res.json();
+      renderDiplomacyLedger(relations);
     }
   } catch (err) {
     console.error("Error fetching diplomacy:", err);
   }
 
-  // Bind values from server detail or fallbacks
-  const pop = detail?.population ?? kingdom.population ?? 1000;
-  const resAmt = detail?.resources ?? kingdom.resources ?? 500;
-  const central = detail?.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
-  const borders = detail?.border_troops ?? state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  selectRecruitTier(selectedRecruitTier || "levy");
+}
 
-  taxRate = typeof detail?.economy_rate === "number" ? detail.economy_rate : 50;
-  investmentRate = typeof detail?.investment === "number" ? detail.investment : 0;
-  socialCostsRate = typeof detail?.social_costs === "number" ? detail.social_costs : 0;
-  marketsLevel = typeof detail?.markets === "number" ? detail.markets : 0;
-  infraLevel = typeof detail?.infrastructure === "number" ? detail.infrastructure : 0;
+export function applyLiveCommandCenterUpdate(kingdom) {
+  const modal = document.getElementById("kingdom-command-center");
+  if (!modal || modal.classList.contains("hidden")) return;
+  if (!kingdom) return;
 
-  // Initialize and render all meters
+  const pop = kingdom.population ?? 1000;
+  const resAmt = kingdom.resources ?? 500;
+  const central = kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
+  const borders = state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  if (typeof kingdom.markets === "number") marketsLevel = kingdom.markets;
+  if (typeof kingdom.infrastructure === "number") infraLevel = kingdom.infrastructure;
+
   renderMeters();
   setMeter("cc-meter-population", pop, 5000);
   setMeter("cc-meter-resources", resAmt, 3000);
@@ -114,27 +159,78 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) troopVal.textContent = central.toLocaleString();
 
-  // Military Tier Label
+  // Safely sync detailed cache with live broadcast
+  const detail = commandCenterDetail || kingdom;
+  if (commandCenterDetail) {
+    if (kingdom.troops_levy !== undefined) commandCenterDetail.troops_levy = kingdom.troops_levy;
+    if (kingdom.troops_regular !== undefined) commandCenterDetail.troops_regular = kingdom.troops_regular;
+    if (kingdom.troops_elite !== undefined) commandCenterDetail.troops_elite = kingdom.troops_elite;
+    if (kingdom.fort_n !== undefined) commandCenterDetail.fort_n = kingdom.fort_n;
+    if (kingdom.fort_s !== undefined) commandCenterDetail.fort_s = kingdom.fort_s;
+    if (kingdom.fort_e !== undefined) commandCenterDetail.fort_e = kingdom.fort_e;
+    if (kingdom.fort_w !== undefined) commandCenterDetail.fort_w = kingdom.fort_w;
+    if (kingdom.economy) commandCenterDetail.economy = kingdom.economy;
+  }
+
+  const levy = kingdom.troops_levy ?? detail?.troops_levy ?? 0;
+  const regular = kingdom.troops_regular ?? detail?.troops_regular ?? (kingdom.troops ?? central);
+  const elite = kingdom.troops_elite ?? detail?.troops_elite ?? 0;
+  const levyEl = document.getElementById("cc-troops-levy");
+  if (levyEl) levyEl.textContent = levy.toLocaleString();
+  const regEl = document.getElementById("cc-troops-regular");
+  if (regEl) regEl.textContent = regular.toLocaleString();
+  const eliteEl = document.getElementById("cc-troops-elite");
+  if (eliteEl) eliteEl.textContent = elite.toLocaleString();
+
   const tierBadge = document.getElementById("cc-army-tier");
   if (tierBadge) {
-    let tier = "LEVY";
-    if (central >= 5000) tier = "HORDE";
-    else if (central >= 1000) tier = "LEGION";
-    else if (central >= 500) tier = "BATTALION";
-    else if (central >= 100) tier = "COMPANY";
+    let tier = "MILITIA";
+    if (elite >= 20) tier = "ROYAL GUARD";
+    else if (regular >= 50) tier = "TERCIOS";
+    else if (regular > 0) tier = "LINE REGULARS";
+    else if (levy > 0) tier = "CONSCRIPT LEVY";
     tierBadge.textContent = tier;
   }
 
+  const fortN = kingdom.fort_n ?? detail?.fort_n ?? 0;
+  const fortS = kingdom.fort_s ?? detail?.fort_s ?? 0;
+  const fortE = kingdom.fort_e ?? detail?.fort_e ?? 0;
+  const fortW = kingdom.fort_w ?? detail?.fort_w ?? 0;
+  const fortNames = ["Outpost", "Bastion", "Citadel", "Star Fort", "Imperial Stronghold"];
+  const updateBadge = (dir, val) => {
+    const el = document.getElementById(`cc-fort-badge-${dir.toLowerCase()}`);
+    if (el) {
+      const name = fortNames[Math.min(val, fortNames.length - 1)];
+      el.textContent = `🏰 Tier ${val} (${name})`;
+      if (val > 0) el.classList.add("fort-active");
+      else el.classList.remove("fort-active");
+    }
+  };
+  updateBadge("N", fortN);
+  updateBadge("S", fortS);
+  updateBadge("E", fortE);
+  updateBadge("W", fortW);
+
+  updateFortifyButtonLabel();
+
+  if (kingdom.economy) {
+    updateDerivedEconomyUI(
+      kingdom.economy.gdp,
+      kingdom.economy.currency_value,
+      kingdom.economy.inflation_rate,
+      kingdom.economy.effective_balance ?? kingdom.economy.budget_balance
+    );
+    const balEl = document.getElementById("cc-budget-balance");
+    if (balEl) {
+      const b = kingdom.economy.effective_balance ?? Math.max(0, kingdom.economy.budget_balance || 0);
+      balEl.textContent = `+${b.toLocaleString()}/tick`;
+      balEl.classList.remove("negative");
+    }
+  }
+
   updateStepperDisplay();
-  wireConsoleDials();
-
-  setTaxRate(taxRate, false);
-  setInvestmentRate(investmentRate, false);
-  setSocialRate(socialCostsRate, false);
-  updateEconomyHintsLive();
-
   updateBorderGarrisonPods(borders);
-  setCompassSide(compassDirection, true);
+  updateEconomyHintsLive();
 
   const minimap = document.getElementById("cc-minimap");
   if (minimap) {
@@ -142,81 +238,190 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
     ctx.clearRect(0, 0, minimap.width, minimap.height);
     renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
   }
-
-  updateTargetKingdomDisplay();
-  selectDiploStance(diplomaticStance);
-  renderDiplomacyLedger(relations);
-
-  const recruitCostLabel = document.getElementById("cc-recruit-cost-label");
-  if (recruitCostLabel) {
-    const cost = Math.max(1, Math.floor(pop / 100));
-    recruitCostLabel.textContent = `Cost: ${cost} Ducats · +10 Troops`;
-  }
-
-  switchConsoleBay(bay);
-  modal.classList.remove("hidden");
 }
 
-export async function refreshKingdomCommandCenter() {
+export function applyDetailedCommandCenterData(kingdom, detail) {
+  commandCenterDetail = detail;
+
+  const kingdomNameEl = document.getElementById("cc-kingdom-name");
+  if (kingdomNameEl) kingdomNameEl.textContent = (detail?.name || kingdom.name || "My Kingdom");
+
+  const codeEl = document.getElementById("cc-kingdom-code");
+  if (codeEl) codeEl.textContent = (detail?.code || kingdom.code || "REALM");
+
+  const rulerEl = document.getElementById("cc-ruler-name");
+  if (rulerEl) {
+    rulerEl.textContent = state.currentUser ? `Lord ${state.currentUser.username}` : "Sovereign";
+  }
+
+  const crestEl = document.getElementById("cc-realm-crest");
+  if (crestEl && (detail?.color || kingdom.color)) {
+    crestEl.style.filter = `drop-shadow(0 0 10px ${detail?.color || kingdom.color})`;
+  }
+
+  const pop = detail?.population ?? kingdom.population ?? 1000;
+  const resAmt = detail?.resources ?? kingdom.resources ?? 500;
+  const central = detail?.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
+  const borders = detail?.border_troops ?? state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  marketsLevel = detail?.markets || 0;
+  infraLevel = detail?.infrastructure || 0;
+
+  renderMeters();
+  setMeter("cc-meter-population", pop, 5000);
+  setMeter("cc-meter-resources", resAmt, 3000);
+  setMeter("cc-meter-troops", central, 200);
+
+  const popVal = document.getElementById("cc-meter-pop-val");
+  if (popVal) popVal.textContent = pop.toLocaleString();
+  const resVal = document.getElementById("cc-meter-res-val");
+  if (resVal) resVal.textContent = resAmt.toLocaleString();
+  const troopVal = document.getElementById("cc-meter-troop-val");
+  if (troopVal) troopVal.textContent = central.toLocaleString();
+
+  const levy = detail?.troops_levy ?? 0;
+  const regular = detail?.troops_regular ?? (detail?.troops ?? central);
+  const elite = detail?.troops_elite ?? 0;
+  const levyEl = document.getElementById("cc-troops-levy");
+  if (levyEl) levyEl.textContent = levy.toLocaleString();
+  const regEl = document.getElementById("cc-troops-regular");
+  if (regEl) regEl.textContent = regular.toLocaleString();
+  const eliteEl = document.getElementById("cc-troops-elite");
+  if (eliteEl) eliteEl.textContent = elite.toLocaleString();
+
+  const tierBadge = document.getElementById("cc-army-tier");
+  if (tierBadge) {
+    let tier = "MILITIA";
+    if (elite >= 20) tier = "ROYAL GUARD";
+    else if (regular >= 50) tier = "TERCIOS";
+    else if (regular > 0) tier = "LINE REGULARS";
+    else if (levy > 0) tier = "CONSCRIPT LEVY";
+    tierBadge.textContent = tier;
+  }
+
+  const fortN = detail?.fort_n ?? 0;
+  const fortS = detail?.fort_s ?? 0;
+  const fortE = detail?.fort_e ?? 0;
+  const fortW = detail?.fort_w ?? 0;
+  const fortNames = ["Outpost", "Bastion", "Citadel", "Star Fort", "Imperial Stronghold"];
+  const updateBadge = (dir, val) => {
+    const el = document.getElementById(`cc-fort-badge-${dir.toLowerCase()}`);
+    if (el) {
+      const name = fortNames[Math.min(val, fortNames.length - 1)];
+      el.textContent = `🏰 Tier ${val} (${name})`;
+      if (val > 0) el.classList.add("fort-active");
+      else el.classList.remove("fort-active");
+    }
+  };
+  updateBadge("N", fortN);
+  updateBadge("S", fortS);
+  updateBadge("E", fortE);
+  updateBadge("W", fortW);
+
+  updateFortifyButtonLabel();
+
+  if (!activeDial) {
+    if (typeof detail?.economy_rate === "number") setTaxRate(detail.economy_rate, false);
+    if (typeof detail?.investment === "number") setInvestmentRate(detail.investment, false);
+    if (typeof detail?.social_costs === "number") setSocialRate(detail.social_costs, false);
+  }
+
+  updateStepperDisplay();
+  updateBorderGarrisonPods(borders);
+  updateEconomyHintsLive();
+
+  const minimap = document.getElementById("cc-minimap");
+  if (minimap) {
+    const ctx = minimap.getContext("2d");
+    ctx.clearRect(0, 0, minimap.width, minimap.height);
+    renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
+  }
+}
+
+export async function stepTerritoryRoundRobin(forceActive = false) {
   const modal = document.getElementById("kingdom-command-center");
-  if (!modal || modal.classList.contains("hidden")) return;
-  if (!state.myKingdom) return;
+  if (!modal || modal.classList.contains("hidden")) {
+    stopTerritoryRoundRobinUpdater();
+    return;
+  }
+
+  const owned = getPlayerOwnedTerritories();
+  if (!owned || owned.length === 0) return;
+
+  // Non-queuing check: if a fetch is already in flight, mark pending and skip
+  if (isTerritoryFetching) {
+    isTerritoryFetchPending = true;
+    return;
+  }
+
+  isTerritoryFetching = true;
+  isTerritoryFetchPending = false;
+
+  // Round-robin selection: cycle through all owned territories so each is updated every period
+  let targetTerritory = activeCommandCenterKingdom || owned[0];
+  if (!forceActive && owned.length > 1) {
+    targetTerritory = owned[roundRobinTerritoryIndex % owned.length];
+    roundRobinTerritoryIndex = (roundRobinTerritoryIndex + 1) % owned.length;
+  }
 
   try {
-    const res = await apiGetKingdomDetail();
-    if (!res.ok) return;
-    const detail = await res.json();
-    commandCenterDetail = detail;
+    const res = await apiGetKingdomDetail(targetTerritory.id);
+    if (res.ok) {
+      const detail = await res.json();
+      if (!state.territoryDetails) state.territoryDetails = {};
+      state.territoryDetails[targetTerritory.id] = detail;
 
-    const kingdom = state.kingdoms.find((k) => k.id === state.myKingdom.country_id) || state.myKingdom;
-    const pop = detail.population ?? kingdom.population ?? 1000;
-    const resAmt = detail.resources ?? kingdom.resources ?? 500;
-    const central = detail.central_troops ?? state.troops[kingdom.id]?.central ?? 0;
-    const borders = detail.border_troops ?? state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
-    marketsLevel = detail.markets || 0;
-    infraLevel = detail.infrastructure || 0;
+      if (detail.central_troops != null || detail.border_troops) {
+        state.troops[targetTerritory.id] = {
+          central: detail.central_troops ?? 0,
+          borders: detail.border_troops ?? { N: 0, S: 0, E: 0, W: 0 },
+        };
+      }
 
-    renderMeters();
-    setMeter("cc-meter-population", pop, 5000);
-    setMeter("cc-meter-resources", resAmt, 3000);
-    setMeter("cc-meter-troops", central, 200);
-
-    const popVal = document.getElementById("cc-meter-pop-val");
-    if (popVal) popVal.textContent = pop.toLocaleString();
-    const resVal = document.getElementById("cc-meter-res-val");
-    if (resVal) resVal.textContent = resAmt.toLocaleString();
-    const troopVal = document.getElementById("cc-meter-troop-val");
-    if (troopVal) troopVal.textContent = central.toLocaleString();
-
-    const tierBadge = document.getElementById("cc-army-tier");
-    if (tierBadge) {
-      let tier = "LEVY";
-      if (central >= 5000) tier = "HORDE";
-      else if (central >= 1000) tier = "LEGION";
-      else if (central >= 500) tier = "BATTALION";
-      else if (central >= 100) tier = "COMPANY";
-      tierBadge.textContent = tier;
-    }
-
-    if (!activeDial) {
-      if (typeof detail.economy_rate === "number") setTaxRate(detail.economy_rate, false);
-      if (typeof detail.investment === "number") setInvestmentRate(detail.investment, false);
-      if (typeof detail.social_costs === "number") setSocialRate(detail.social_costs, false);
-    }
-
-    updateStepperDisplay();
-    updateBorderGarrisonPods(borders);
-    updateEconomyHintsLive();
-
-    const minimap = document.getElementById("cc-minimap");
-    if (minimap) {
-      const ctx = minimap.getContext("2d");
-      ctx.clearRect(0, 0, minimap.width, minimap.height);
-      renderKingdomMinimap(ctx, kingdom, borders, central, compassDirection);
+      const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
+      if (targetTerritory.id === activeId) {
+        applyDetailedCommandCenterData(targetTerritory, detail);
+      }
+      renderTerritoryPills();
     }
   } catch (err) {
-    console.error("Error refreshing command center:", err);
+    console.error("Round-robin territory update error:", err);
+  } finally {
+    isTerritoryFetching = false;
+    if (isTerritoryFetchPending) {
+      isTerritoryFetchPending = false;
+      setTimeout(() => stepTerritoryRoundRobin(), 200);
+    }
   }
+}
+
+export function startTerritoryRoundRobinUpdater() {
+  if (territoryPeriodicTimer) return;
+  // Non-queuing periodic round-robin updater: runs every 1.5s
+  territoryPeriodicTimer = setInterval(() => {
+    stepTerritoryRoundRobin();
+  }, 1500);
+}
+
+export function stopTerritoryRoundRobinUpdater() {
+  if (territoryPeriodicTimer) {
+    clearInterval(territoryPeriodicTimer);
+    territoryPeriodicTimer = null;
+  }
+  isTerritoryFetchPending = false;
+}
+
+export function refreshKingdomCommandCenter(liveKingdom = null) {
+  const modal = document.getElementById("kingdom-command-center");
+  if (!modal || modal.classList.contains("hidden")) return;
+
+  const kingdom = liveKingdom || activeCommandCenterKingdom || (state.myKingdom ? ((state.kingdoms || []).find((k) => k.id === state.myKingdom.country_id) || state.myKingdom) : null);
+  if (!kingdom) return;
+
+  // Apply instant zero-lag update from authoritative WebSocket state
+  applyLiveCommandCenterUpdate(kingdom);
+
+  // Trigger round-robin fetch without queuing
+  stepTerritoryRoundRobin();
 }
 
 export function dialValueFromPoint(dialEl, clientX, clientY) {
@@ -387,12 +592,182 @@ export function pushEconomySettings() {
       return res.json();
     })
     .then((data) => {
-      logMessage(`Economy updated: Tax ${taxRate}%, Inv ${investmentRate}%, Social ${socialCostsRate}%`);
+      logMessage(`Annual Budget updated: Tax ${taxRate}%, Inv ${investmentRate}%, Social ${socialCostsRate}%`);
       if (data) {
-        updateDerivedEconomyUI(data.gdp, data.currency_value, data.inflation_rate, data.budget_balance);
+        const econObj = data.economy || data;
+        if (commandCenterDetail) {
+          commandCenterDetail.economy = econObj;
+        }
+        updateDerivedEconomyUI(
+          data.gdp ?? econObj.gdp,
+          data.currency_value ?? econObj.currency_value,
+          data.inflation_rate ?? econObj.inflation_rate,
+          econObj.effective_balance ?? Math.max(0, econObj.budget_balance || 0)
+        );
+        updateEconomyHintsLive();
       }
     })
     .catch((err) => console.error("Error setting economy settings:", err));
+}
+
+export function adjustBudgetDial(type, delta) {
+  if (type === "tax") {
+    setTaxRate(taxRate + delta, true);
+  } else if (type === "investment") {
+    setInvestmentRate(investmentRate + delta, true);
+  } else if (type === "social") {
+    setSocialRate(socialCostsRate + delta, true);
+  }
+}
+window.adjustBudgetDial = adjustBudgetDial;
+
+export function triggerAutoBalanceBudget() {
+  const kingdom =
+    activeCommandCenterKingdom ||
+    (state.myKingdom && state.kingdoms.find((k) => k.id === state.myKingdom.country_id)) ||
+    state.myKingdom ||
+    {};
+  const pop = commandCenterDetail?.population ?? kingdom.population ?? 1000;
+  const tr = commandCenterDetail?.central_troops ?? kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
+
+  // Set tax rate to optimal non-emigration sweet spot (48%)
+  const optimalTax = 48;
+  const baseProductivity = 0.08;
+  const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
+  const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
+  const civilianWorkforce = Math.max(0, pop - tr);
+  const estGdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * lafferJs(optimalTax);
+  const estTaxRev = Math.round(estGdp * (optimalTax / 100.0) + 0.5);
+  const estMktRev = (marketsLevel || 0) * 4;
+  const totalRev = estTaxRev + estMktRev;
+  const milUpkeep = Math.round(tr * 0.5 + 0.5);
+
+  const availDiscretionary = Math.max(0, totalRev - milUpkeep);
+  // Each 5% of investment or social costs ~1 ducat/tick (0.2 * rate)
+  const maxCombinedRate = Math.min(200, Math.floor(availDiscretionary / 0.2));
+  // Keep a small exchequer surplus buffer (~20% of discretionary capacity)
+  const safeCombinedRate = Math.floor(maxCombinedRate * 0.8);
+  const newInv = Math.min(100, Math.round(safeCombinedRate * 0.55));
+  const newSoc = Math.min(100, Math.max(0, safeCombinedRate - newInv));
+
+  setTaxRate(optimalTax, false);
+  setInvestmentRate(newInv, false);
+  setSocialRate(newSoc, false);
+  schedulePushEconomySettings();
+  showToast(`⚖️ Budget Balanced: Tax ${optimalTax}%, Investment ${newInv}%, Social ${newSoc}% (Zero Deficit)`, "success");
+}
+window.triggerAutoBalanceBudget = triggerAutoBalanceBudget;
+
+export function enforceClientBalancedBudget(resOrRev, totalRevenueOrMil, militaryUpkeepOrSoc, socialExpOrInv, investmentExp) {
+  let res = 0;
+  let totalRevenue, militaryUpkeep, socialExp, invExp;
+  if (investmentExp === undefined) {
+    // 4 arguments: (totalRevenue, militaryUpkeep, socialExp, investmentExp)
+    totalRevenue = resOrRev;
+    militaryUpkeep = totalRevenueOrMil;
+    socialExp = militaryUpkeepOrSoc;
+    invExp = socialExpOrInv;
+  } else {
+    // 5 arguments: (res, totalRevenue, militaryUpkeep, socialExp, investmentExp)
+    res = resOrRev;
+    totalRevenue = totalRevenueOrMil;
+    militaryUpkeep = militaryUpkeepOrSoc;
+    socialExp = socialExpOrInv;
+    invExp = investmentExp;
+  }
+
+  if (totalRevenue < 0) totalRevenue = 0;
+  const plannedTotal = militaryUpkeep + socialExp + invExp;
+
+  // If the kingdom has gold reserves in its treasury (res > 0), deficit spending is allowed
+  // and is funded by drawing down treasury reserves.
+  if (res > 0) {
+    return {
+      effMil: militaryUpkeep,
+      effSoc: socialExp,
+      effInv: invExp,
+      effTotal: plannedTotal,
+      effBalance: totalRevenue - plannedTotal,
+      capped: false,
+    };
+  }
+
+  // Once treasury is exhausted (res <= 0), no loans/debt exist in Era 1 (Hard-Specie Rule).
+  // Spending is strictly clamped to total revenue.
+  if (plannedTotal <= totalRevenue) {
+    return {
+      effMil: militaryUpkeep,
+      effSoc: socialExp,
+      effInv: invExp,
+      effTotal: plannedTotal,
+      effBalance: totalRevenue - plannedTotal,
+      capped: false,
+    };
+  }
+  if (militaryUpkeep >= totalRevenue) {
+    return {
+      effMil: totalRevenue,
+      effSoc: 0,
+      effInv: 0,
+      effTotal: totalRevenue,
+      effBalance: 0,
+      capped: true,
+    };
+  }
+  const remaining = totalRevenue - militaryUpkeep;
+  const discretionary = socialExp + invExp;
+  let effSoc = 0;
+  let effInv = 0;
+  if (discretionary > 0) {
+    effSoc = Math.round((remaining * socialExp) / discretionary);
+    if (effSoc > remaining) effSoc = remaining;
+    effInv = remaining - effSoc;
+  }
+  const effTotal = militaryUpkeep + effSoc + effInv;
+  return {
+    effMil: militaryUpkeep,
+    effSoc,
+    effInv,
+    effTotal,
+    effBalance: 0,
+    capped: true,
+  };
+}
+
+export function computeClientPopulationPressure(pop, troops, tax, social, infra) {
+  if (pop <= 0) return 0;
+  let taxStress = 0;
+  if (tax > 35) {
+    taxStress = (tax - 35) * 1.1;
+  }
+  const conscriptionRatio = troops / pop;
+  const milStress = conscriptionRatio * 120.0;
+  const relief = social * 0.35 + infra * 4.0;
+  return Math.round(Math.max(0, Math.min(100, taxStress + milStress - relief)));
+}
+
+export function computeClientMigration(pop, tax, social, infra) {
+  if (pop <= 0) return 0;
+  if (tax > 60) {
+    const excess = tax - 60;
+    const rate = excess * 0.0008 + (excess * excess) * 0.00003;
+    let outflow = Math.round(pop * rate + 0.5);
+    if (outflow < 1) outflow = 1;
+    const maxOutflow = Math.floor(pop / 10);
+    if (outflow > maxOutflow && maxOutflow > 0) outflow = maxOutflow;
+    return -outflow;
+  }
+  if (tax <= 35) {
+    const taxPull = (35 - tax) * 0.00025;
+    const welfarePull = social * 0.00008 + infra * 0.0006;
+    const totalRate = taxPull + welfarePull;
+    if (totalRate > 0) {
+      let inflow = Math.round(pop * totalRate + 0.5);
+      if (inflow < 1) inflow = 1;
+      return inflow;
+    }
+  }
+  return 0;
 }
 
 export function setEconomyRate(value, push = true) {
@@ -419,12 +794,13 @@ export function lafferJs(rate) {
 
 export function updateEconomyHintsLive() {
   const kingdom =
+    activeCommandCenterKingdom ||
     (state.myKingdom && state.kingdoms.find((k) => k.id === state.myKingdom.country_id)) ||
     state.myKingdom ||
     {};
   const pop = commandCenterDetail?.population ?? kingdom.population ?? 1000;
   const res = commandCenterDetail?.resources ?? kingdom.resources ?? 500;
-  const tr = commandCenterDetail?.central_troops ?? 0;
+  const tr = commandCenterDetail?.central_troops ?? kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
 
   const baseProductivity = 0.08;
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
@@ -432,38 +808,58 @@ export function updateEconomyHintsLive() {
   const invBonus = 1.0 + (investmentRate || 0) * 0.002;
   const laffer = lafferJs(taxRate);
 
-  const gdp = pop * baseProductivity * infraBonus * mktBonus * invBonus * laffer;
-  const revenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
-  const expenditure = Math.round(tr * 0.5 + (socialCostsRate + investmentRate) * 0.2 + 0.5);
-  const balance = revenue - expenditure;
+  // Mobilized troops reduce productive civilian workforce, directly reducing GDP and tax revenue
+  const civilianWorkforce = Math.max(0, pop - tr);
+  const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * invBonus * laffer;
+  const taxRevenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
+  const marketRevenue = (marketsLevel || 0) * 4;
+  const totalRevenue = taxRevenue + marketRevenue;
+
+  const levy = commandCenterDetail?.troops_levy ?? 0;
+  const regular = commandCenterDetail?.troops_regular ?? tr;
+  const elite = commandCenterDetail?.troops_elite ?? 0;
+  const milUpkeep = (levy + regular + elite > 0)
+    ? Math.round(levy * 2.0 + regular * 6.0 + elite * 18.0)
+    : Math.round(tr * 4.0);
+
+  const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.08);
+  const invExp = Math.round(investmentRate * 2.0 + gdp * (investmentRate / 100.0) * 0.08);
+
+  // Enforce Layer 1 Hard-Specie Fiscal Rules
+  const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
+  const popPressure = computeClientPopulationPressure(pop, tr, taxRate, socialCostsRate, infraLevel || 0);
+  const netMigration = computeClientMigration(pop, taxRate, socialCostsRate, infraLevel || 0);
 
   let value = 1.0;
   if (gdp > 0) value = res / gdp / 5.0;
 
-  let inflation = 0.0;
-  if (balance < 0) inflation = -balance * 0.05;
-  inflation += socialCostsRate * 0.02 + investmentRate * 0.005;
+  let inflation = socialCostsRate * 0.02 + investmentRate * 0.005;
   if (inflation > 100) inflation = 100;
 
   const taxHint = document.getElementById("cc-tax-impact-hint");
   if (taxHint) {
-    if (taxRate > 62) {
-      taxHint.textContent = `Rev: +${revenue}/tick (⚠️ Tax Drag)`;
+    if (taxRate > 60) {
+      taxHint.textContent = `Rev: +${taxRevenue}/yr (🚨 Emigration: ${netMigration}/yr)`;
       taxHint.style.color = "#ff6b6b";
+    } else if (taxRate <= 35 && netMigration > 0) {
+      taxHint.textContent = `Rev: +${taxRevenue}/yr (✨ Immigration: +${netMigration}/yr)`;
+      taxHint.style.color = "#4ade80";
     } else {
-      taxHint.textContent = `Tax Revenue: +${revenue}/tick`;
+      taxHint.textContent = `Tax Revenue: +${taxRevenue}/yr`;
       taxHint.style.color = "#4ecdc4";
     }
   }
 
   const invHint = document.getElementById("cc-investment-hint");
   if (invHint) {
-    invHint.textContent = `+${(investmentRate * 0.2).toFixed(1)}% GDP Multiplier`;
+    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` (-${cappedBudget.effInv} ducats/yr)`;
+    invHint.textContent = `Colonial Ventures: ${capNote}`;
   }
 
   const socHint = document.getElementById("cc-social-hint");
   if (socHint) {
-    socHint.textContent = `Spend: -${Math.round(socialCostsRate * 0.2)} ducats · Infl: +${(socialCostsRate * 0.02).toFixed(1)}%`;
+    const capNote = cappedBudget.effSoc < socExp ? ` (Capped: -${cappedBudget.effSoc})` : `-${cappedBudget.effSoc} ducats/yr`;
+    socHint.textContent = `Cathedrals & Guilds: ${capNote}`;
   }
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
@@ -471,11 +867,146 @@ export function updateEconomyHintsLive() {
     let growth = pop * 0.005 * (gdp / (pop * 0.02 || 1));
     growth += (investmentRate + socialCostsRate) * 0.0005;
     growth *= Math.max(0, 1.0 - pop / 1000000);
-    const g = Math.max(1, Math.round(growth));
-    popGrowthEl.textContent = `+${g}/tick`;
+    const naturalGrowth = Math.max(1, Math.round(growth));
+    const netPopChange = naturalGrowth + netMigration;
+    popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration})`;
+    popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
   }
 
-  updateDerivedEconomyUI(Math.round(gdp), value, inflation, balance);
+  // Update Dynamic Table Header with actual simulation years
+  const curSimYear = Math.floor(state.simYear || 1500);
+  const lastSimYear = curSimYear - 1;
+  const thLast = document.getElementById("cc-th-last-year");
+  if (thLast) {
+    thLast.textContent = `Last Year (${lastSimYear >= 1500 ? lastSimYear : 1500} Actual)`;
+  }
+  const thThis = document.getElementById("cc-th-this-year");
+  if (thThis) {
+    thThis.textContent = `This Year (${curSimYear} Projected / Capped)`;
+  }
+
+  // Populate Last Year vs. This Year Annual Budget Comparison Table
+  const srvEcon = commandCenterDetail?.economy || kingdom.economy || {};
+  const hasRecordedActuals = srvEcon.last_tax_revenue != null && (srvEcon.last_tax_revenue > 0 || srvEcon.last_total_exp > 0 || srvEcon.last_market_income > 0);
+  const lyTax = hasRecordedActuals ? srvEcon.last_tax_revenue : (srvEcon.last_tax_revenue ?? taxRevenue);
+  const lyMkt = hasRecordedActuals ? srvEcon.last_market_income : (srvEcon.last_market_income ?? marketRevenue);
+  const lyTotalRev = lyTax + lyMkt;
+  const lyMil = hasRecordedActuals ? srvEcon.last_military_exp : (srvEcon.last_military_exp ?? cappedBudget.effMil);
+  const lyInv = hasRecordedActuals ? srvEcon.last_investment_exp : (srvEcon.last_investment_exp ?? cappedBudget.effInv);
+  const lySoc = hasRecordedActuals ? srvEcon.last_social_exp : (srvEcon.last_social_exp ?? cappedBudget.effSoc);
+  const lyTotalExp = hasRecordedActuals ? srvEcon.last_total_exp : (lyMil + lyInv + lySoc);
+  const lyBal = hasRecordedActuals ? srvEcon.last_budget_balance : (srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
+  const lyMig = hasRecordedActuals ? srvEcon.last_migration : (srvEcon.last_migration ?? netMigration);
+
+  const setCell = (id, html, className = "") => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    if (className !== undefined) {
+      el.className = className;
+    }
+  };
+
+  setCell("cc-ly-tax-rev", `+${lyTax.toLocaleString()}`, "val-pos");
+  setCell("cc-ty-tax-rev", `+${taxRevenue.toLocaleString()}`, "val-pos");
+
+  setCell("cc-ly-mkt-rev", `+${lyMkt.toLocaleString()}`, "val-pos");
+  setCell("cc-ty-mkt-rev", `+${marketRevenue.toLocaleString()}`, "val-pos");
+
+  setCell("cc-ly-total-rev", `<strong>+${lyTotalRev.toLocaleString()}</strong>`, "val-pos");
+  setCell("cc-ty-total-rev", `<strong>+${totalRevenue.toLocaleString()}</strong>`, "val-pos");
+
+  const milCapBadge = cappedBudget.effMil < milUpkeep ? ` <span class="cap-tag" title="Planned ${milUpkeep}; unpaid troops demobilize">⚠️ RATIONED</span>` : "";
+  setCell("cc-ly-mil-exp", `-${lyMil.toLocaleString()}`, "val-neg");
+  setCell("cc-ty-mil-exp", `-${cappedBudget.effMil.toLocaleString()}${milCapBadge}`, "val-neg");
+
+  const invCapBadge = cappedBudget.effInv < invExp ? ` <span class="cap-tag" title="Planned ${invExp}; capped to prevent deficit">CAPPED</span>` : "";
+  setCell("cc-ly-inv-exp", `-${lyInv.toLocaleString()}`, "val-neg");
+  setCell("cc-ty-inv-exp", `-${cappedBudget.effInv.toLocaleString()}${invCapBadge}`, "val-neg");
+
+  const socCapBadge = cappedBudget.effSoc < socExp ? ` <span class="cap-tag" title="Planned ${socExp}; capped to prevent deficit">CAPPED</span>` : "";
+  setCell("cc-ly-soc-exp", `-${lySoc.toLocaleString()}`, "val-neg");
+  setCell("cc-ty-soc-exp", `-${cappedBudget.effSoc.toLocaleString()}${socCapBadge}`, "val-neg");
+
+  setCell("cc-ly-total-exp", `<strong>-${lyTotalExp.toLocaleString()}</strong>`, "val-neg");
+  setCell("cc-ty-total-exp", `<strong>-${cappedBudget.effTotal.toLocaleString()}</strong>`, "val-neg");
+
+  const tyBal = cappedBudget.effBalance;
+  const lyBalSign = lyBal < 0 ? "-" : "+";
+  const tyBalSign = tyBal < 0 ? "-" : "+";
+  const lyBalClass = lyBal < 0 ? "val-neg" : "val-surplus";
+  const tyBalClass = tyBal < 0 ? "val-neg" : "val-surplus";
+  const tyBalSuffix = (tyBal < 0 && res > 0) ? " (Draining Reserves)" : "";
+
+  setCell("cc-ly-balance", `<strong>${lyBalSign}${Math.abs(lyBal).toLocaleString()}</strong>`, lyBalClass);
+  setCell("cc-ty-balance", `<strong>${tyBalSign}${Math.abs(tyBal).toLocaleString()}${tyBalSuffix}</strong>`, tyBalClass);
+
+  const balRow = document.getElementById("cc-balance-row");
+  const balLabel = document.getElementById("cc-balance-label");
+  if (balRow) {
+    if (tyBal < 0) {
+      balRow.className = "row-deficit";
+      if (balLabel) balLabel.innerHTML = `<strong>Exchequer Deficit (Draining Reserves)</strong>`;
+    } else {
+      balRow.className = "row-surplus";
+      if (balLabel) balLabel.innerHTML = `<strong>Exchequer Surplus (No Deficit)</strong>`;
+    }
+  }
+
+  const popPressEl = document.getElementById("cc-pop-pressure-val");
+  if (popPressEl) {
+    popPressEl.textContent = `Stress ${popPressure}%`;
+    popPressEl.style.color = popPressure >= 65 ? "#ff6b6b" : popPressure >= 35 ? "#fbbf24" : "#4ade80";
+  }
+
+  setCell(
+    "cc-ly-migration",
+    `${lyMig > 0 ? "+" : ""}${lyMig.toLocaleString()}/yr`,
+    lyMig < 0 ? "val-neg" : lyMig > 0 ? "val-pos" : ""
+  );
+  setCell(
+    "cc-ty-migration",
+    `${netMigration > 0 ? "+" : ""}${netMigration.toLocaleString()}/yr`,
+    netMigration < 0 ? "val-neg" : netMigration > 0 ? "val-pos" : ""
+  );
+
+  // Alert banner for No-Deficit Rationing, Deficit Drain & Tax Migration
+  const alertBanner = document.getElementById("cc-budget-alert-banner");
+  if (alertBanner) {
+    const alerts = [];
+    if (res <= 0 && (milUpkeep + invExp + socExp) > totalRevenue) {
+      if (cappedBudget.effMil < milUpkeep) {
+        alerts.push(`🚨 <strong>TREASURY EXHAUSTED & UNPAID TROOPS:</strong> Zero gold reserves in treasury! Revenue (${totalRevenue.toLocaleString()}) cannot cover military upkeep (${milUpkeep.toLocaleString()}). Unpaid troops are deserting!`);
+      } else {
+        alerts.push(`⚖️ <strong>TREASURY EXHAUSTED (NO BORROWING):</strong> Zero gold reserves remaining! Discretionary civic spending capped to ${(cappedBudget.effInv + cappedBudget.effSoc).toLocaleString()} ducats to prevent deficits until 1860.`);
+      }
+    } else if (res > 0 && cappedBudget.effBalance < 0) {
+      alerts.push(`📉 <strong>DEFICIT FINANCING:</strong> Operating at an annual deficit of <strong>-${Math.abs(cappedBudget.effBalance).toLocaleString()} ducats/yr</strong>! Draining treasury reserves (holds ${res.toLocaleString()} gold).`);
+    }
+    if (taxRate > 60) {
+      alerts.push(`🚨 <strong>TAX FLIGHT EMIGRATION:</strong> Punitive ${taxRate}% tax rate is driving <strong>${Math.abs(netMigration)} citizens/yr</strong> to flee the realm!`);
+    } else if (taxRate <= 35 && netMigration > 0) {
+      alerts.push(`✨ <strong>PROSPERITY IMMIGRATION:</strong> Competitive ${taxRate}% tax rate &amp; civic works are attracting <strong>+${netMigration} settlers/yr</strong>.`);
+    }
+    if (alerts.length > 0) {
+      alertBanner.innerHTML = alerts.join("<br>");
+      alertBanner.classList.remove("hidden");
+      alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep || (res <= 0 && (milUpkeep + invExp + socExp) > totalRevenue));
+    } else {
+      alertBanner.classList.add("hidden");
+    }
+  }
+      alertBanner.innerHTML = alerts.join("<br>");
+      alertBanner.classList.remove("hidden");
+      alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep);
+    } else {
+      alertBanner.innerHTML = "";
+      alertBanner.classList.add("hidden");
+      alertBanner.classList.remove("alert-danger");
+    }
+  }
+
+  updateDerivedEconomyUI(Math.round(gdp), value, inflation, cappedBudget.effBalance);
 }
 
 export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance) {
@@ -596,10 +1127,7 @@ export function setCompassSide(side, updateAngle = true) {
     pod.classList.toggle("selected-frontier", pod.classList.contains(`pod-${side.toLowerCase()}`));
   });
 
-  const fortifyLabel = document.getElementById("cc-fortify-border-label");
-  if (fortifyLabel) {
-    fortifyLabel.textContent = `Reinforce ${sideNames[side]} Frontier`;
-  }
+  updateFortifyButtonLabel();
 
   if (updateAngle) {
     const angleMap = { N: 0, E: 90, S: 180, W: 270 };
@@ -874,6 +1402,7 @@ export async function performActionDirect(actionType, description, extraParams =
   }
 
   const payload = {
+    action_type: actionType,
     type: actionType,
     description: description,
     ...extraParams,
@@ -916,6 +1445,47 @@ export function triggerUpgradeInfra() {
   performActionDirect("economy", "Invest in Infrastructure");
 }
 
+export function updateFortifyButtonLabel() {
+  const fortifyLabel = document.getElementById("cc-fortify-border-label");
+  if (!fortifyLabel) return;
+  const side = compassDirection || "N";
+  const sideNames = { N: "North", S: "South", E: "East", W: "West" };
+  const currentFort = (commandCenterDetail && commandCenterDetail[`fort_${side.toLowerCase()}`]) || 0;
+  const nextTier = currentFort + 1;
+  const cost = 500 * nextTier;
+  fortifyLabel.textContent = `Cost: ${cost.toLocaleString()} Ducats · Fortify ${sideNames[side]} Frontier (Tier ${currentFort} ➔ ${nextTier})`;
+}
+
+export let selectedRecruitTier = "levy";
+
+export function selectRecruitTier(tier) {
+  selectedRecruitTier = tier;
+  const tabs = ["levy", "regular", "elite", "drill"];
+  tabs.forEach((t) => {
+    const tabEl = document.getElementById(`tab-recruit-${t}`);
+    if (tabEl) {
+      if (t === tier) tabEl.classList.add("active");
+      else tabEl.classList.remove("active");
+    }
+  });
+
+  const btnText = document.getElementById("cc-recruit-btn-text");
+  const costLabel = document.getElementById("cc-recruit-cost-label");
+  if (tier === "levy") {
+    if (btnText) btnText.textContent = "MUSTER RECRUITS";
+    if (costLabel) costLabel.textContent = "Cost: 150 Ducats · +10 Conscripts";
+  } else if (tier === "regular") {
+    if (btnText) btnText.textContent = "ENLIST LINE REGULARS";
+    if (costLabel) costLabel.textContent = "Cost: 450 Ducats · +10 Trained Regulars";
+  } else if (tier === "elite") {
+    if (btnText) btnText.textContent = "COMMISSION ROYAL GUARD";
+    if (costLabel) costLabel.textContent = "Cost: 1,200 Ducats · +10 Elite Tercios";
+  } else if (tier === "drill") {
+    if (btnText) btnText.textContent = "DRILL & PROMOTE RANKS";
+    if (costLabel) costLabel.textContent = "Cost: 300 Ducats · 10 Levies ➔ Regulars / 5 Regs ➔ Elites";
+  }
+}
+
 export function triggerRecruitTroops() {
   const btn = document.getElementById("cc-lever-recruit");
   if (btn) {
@@ -924,10 +1494,25 @@ export function triggerRecruitTroops() {
       btn.style.transform = "";
     }, 180);
   }
-  performActionDirect("military", "Recruit Troops");
+  if (selectedRecruitTier === "drill") {
+    performActionDirect("military", "Drill & Promote", {
+      troop_tier: "drill",
+    });
+  } else {
+    performActionDirect("military", "Recruit Troops", {
+      troop_tier: selectedRecruitTier,
+    });
+  }
 }
 
 export function triggerFortifyBorder() {
+  const btn = document.getElementById("cc-lever-fortify");
+  if (btn) {
+    btn.style.transform = "scale(0.96)";
+    setTimeout(() => {
+      btn.style.transform = "";
+    }, 180);
+  }
   performActionDirect("military", "Fortify Borders", {
     direction: compassDirection,
   });

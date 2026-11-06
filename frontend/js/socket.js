@@ -4,6 +4,7 @@ import { WS_URL, HEARTBEAT_INTERVAL_MS } from "./config.js";
 import { state, syncKingdomsForYear } from "./state.js";
 import { apiSendHeartbeat } from "./api.js";
 import { logMessage } from "./ui/toast.js";
+import { syncTimelineFromServer } from "./ui/clock.js";
 
 let ws = null;
 let heartbeatTimer = null;
@@ -73,6 +74,10 @@ export function connectWebSocket() {
 
     const payload = msg && msg.type === "init" ? msg.state : msg;
     if (!payload || !Array.isArray(payload.countries)) return;
+
+    if (typeof payload.sim_year === "number") {
+      syncTimelineFromServer(payload);
+    }
 
     state.lastStateAt = Date.now();
     state.currentTick = payload.tick || 0;

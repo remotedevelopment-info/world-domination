@@ -9,7 +9,10 @@ import {
   apiGetTroops,
   apiGetMyCountry,
   apiAssignCountry,
+  apiGetAdminDashboard,
+  apiAdminResetGame,
   readErrorMessage,
+  onUnauthorized,
 } from "./api.js";
 import {
   showRegister,
@@ -17,6 +20,7 @@ import {
   register as authRegister,
   login as authLogin,
   logout as authLogout,
+  setAuthMessage,
 } from "./auth.js";
 import {
   connectWebSocket,
@@ -35,6 +39,7 @@ import {
   panCamera,
   zoomCamera,
   resetCamera,
+  isCountryOwnedByCurrentUser,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
 import {
@@ -42,15 +47,20 @@ import {
   stopClock,
   tickClock,
   onEraChange,
+  isTimelineAdmin,
+  isPureOverseer,
   toggleDevChronoControl,
   setChronoScale,
   setStartYear,
   applyStartYearInput,
   resetToDefaultStartYear,
   jumpToYear,
+  setTimelinePause,
   stepYearOffset,
   resetYearOffset,
   getCurrentGameYear,
+  syncTimelineFromServer,
+  initServerTimelineSync,
 } from "./ui/clock.js";
 import {
   showAction,
@@ -68,6 +78,7 @@ import {
   triggerUpgradeMarket,
   triggerUpgradeInfra,
   triggerRecruitTroops,
+  selectRecruitTier,
   triggerFortifyBorder,
   triggerDispatchTroops,
   stepTargetKingdom,
@@ -79,6 +90,8 @@ import {
   setTaxRate,
   setInvestmentRate,
   setSocialRate,
+  adjustBudgetDial,
+  triggerAutoBalanceBudget,
 } from "./ui/console.js";
 
 // Wire module callbacks
@@ -91,14 +104,31 @@ registerActionCallbacks({
   checkMyKingdom,
 });
 
-// React to live WebSocket broadcasts
-onSocketStateChange(() => {
+// React to live WebSocket broadcasts across every open browser session
+onSocketStateChange((payload) => {
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
+  if (isAdminDashboardOpen) {
+    refreshAdminDashboard();
+  }
   if (state.myKingdom && state.myKingdom.country_id) {
-    updateEconomyPanel(state.kingdoms.find((k) => k.id === state.myKingdom.country_id));
-    refreshKingdomCommandCenter();
+    const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
+    if (!mk || !mk.owner_id || !isCountryOwnedByCurrentUser(mk)) {
+      checkMyKingdom();
+    } else {
+      updateEconomyPanel(mk);
+      refreshKingdomCommandCenter(mk);
+    }
+  }
+  if (state.shownKingdomId) {
+    const shown = state.kingdoms.find((k) => k.id === state.shownKingdomId);
+    if (shown) {
+      const popEl = document.getElementById("kingdom-population");
+      const resEl = document.getElementById("kingdom-resources");
+      if (popEl) popEl.textContent = (shown.population || 0).toLocaleString();
+      if (resEl) resEl.textContent = (shown.resources !== undefined ? shown.resources : 0).toLocaleString();
+    }
   }
 });
 
@@ -135,6 +165,40 @@ onEraChange((newEra, yearInt, prevEraId) => {
 });
 
 // Screen transitions & lifecycle
+let isSessionExpiring = false;
+
+export function handleSessionExpired(
+  reason = "Your session has expired. Please log in again to command your kingdom."
+) {
+  if (isSessionExpiring) return;
+  isSessionExpiring = true;
+  setTimeout(() => {
+    isSessionExpiring = false;
+  }, 1000);
+
+  const previousUsername = state.currentUser?.username || "";
+  clearSession();
+  showAuthScreen(reason);
+
+  const usernameInput = document.getElementById("login-username");
+  const passwordInput = document.getElementById("login-password");
+  if (usernameInput && previousUsername) {
+    usernameInput.value = previousUsername;
+  }
+  if (passwordInput) {
+    passwordInput.value = "";
+    passwordInput.focus();
+  }
+
+  logMessage("Session expired. Please log in again.");
+  showToast("Login session expired — please log in again", "warning");
+}
+
+// Automatically catch 401 Unauthorized responses across all protected endpoints
+onUnauthorized((endpoint, res) => {
+  handleSessionExpired();
+});
+
 export function showGameScreen() {
   closeModal();
   document.getElementById("auth-screen")?.classList.remove("active");
@@ -150,13 +214,19 @@ export function showGameScreen() {
   checkMyKingdom();
 }
 
-export function showAuthScreen() {
+export function showAuthScreen(message = "") {
   closeModal();
   stopClock();
   disconnectWebSocket();
+  document.getElementById("admin-console-btn")?.classList.add("hidden");
+  document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
+  document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
   document.getElementById("game-screen")?.classList.remove("active");
   document.getElementById("auth-screen")?.classList.add("active");
   showLogin();
+  if (message) {
+    setAuthMessage(message, "error");
+  }
 }
 
 export async function loadKingdoms() {
@@ -192,14 +262,60 @@ export async function loadAllTroops() {
 }
 
 export async function checkMyKingdom() {
+  if (!state.token) {
+    handleSessionExpired("Please log in to claim or command your kingdom.");
+    return false;
+  }
+
+  const isAdmin = isTimelineAdmin();
+  if (isAdmin) {
+    document.getElementById("admin-console-btn")?.classList.remove("hidden");
+    document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
+  } else {
+    document.getElementById("admin-console-btn")?.classList.add("hidden");
+    document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
+    document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
+  }
+
+  // Pure Overseer (admin@sfsw.net / admin): neutral game monitor without property
+  if (isPureOverseer()) {
+    state.myKingdom = null;
+    const playerKingdom = document.getElementById("player-kingdom");
+    if (playerKingdom) {
+      playerKingdom.textContent = "👑 Overseer";
+      playerKingdom.className = "admin-badge";
+    }
+    document.getElementById("country-selection")?.classList.add("hidden");
+    document.getElementById("my-kingdom")?.classList.add("hidden");
+    closeModal();
+    return true;
+  }
+
   try {
     const res = await apiGetMyCountry();
-    if (!res.ok) return;
+    if (res.status === 401) {
+      handleSessionExpired("Your session has expired. Please log in again to command your kingdom.");
+      return false;
+    }
+    if (!res.ok) return false;
+
     const data = await res.json();
+    if (data.email && state.currentUser) {
+      state.currentUser.email = data.email;
+    }
+
     if (data.has_country) {
       state.myKingdom = data;
       const playerKingdom = document.getElementById("player-kingdom");
-      if (playerKingdom) playerKingdom.textContent = data.country_name;
+      if (playerKingdom) {
+        if (isAdmin) {
+          playerKingdom.innerHTML = `${escapeHTML(data.country_name)} <span class="admin-crown-tag" title="Imperial Admin Authority">👑</span>`;
+          playerKingdom.className = "kingdom-badge player-admin-badge";
+        } else {
+          playerKingdom.textContent = data.country_name;
+          playerKingdom.className = "kingdom-badge";
+        }
+      }
 
       document.getElementById("country-selection")?.classList.add("hidden");
       document.getElementById("my-kingdom")?.classList.remove("hidden");
@@ -214,14 +330,24 @@ export async function checkMyKingdom() {
     } else {
       state.myKingdom = null;
       const playerKingdom = document.getElementById("player-kingdom");
-      if (playerKingdom) playerKingdom.textContent = "No Kingdom";
+      if (playerKingdom) {
+        if (isAdmin) {
+          playerKingdom.textContent = "No Kingdom 👑";
+          playerKingdom.className = "kingdom-badge player-admin-badge";
+        } else {
+          playerKingdom.textContent = "No Kingdom";
+          playerKingdom.className = "kingdom-badge";
+        }
+      }
 
       document.getElementById("country-selection")?.classList.remove("hidden");
       document.getElementById("my-kingdom")?.classList.add("hidden");
       closeModal();
     }
+    return true;
   } catch (err) {
     console.error("Error checking kingdom:", err);
+    return false;
   }
 }
 
@@ -286,10 +412,12 @@ export function refreshMyKingdomStats() {
   if (!state.myKingdom || !state.myKingdom.country_id) return;
   const country = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
   if (!country) return;
+  const nameEl = document.getElementById("my-kingdom-name");
   const popEl = document.getElementById("my-kingdom-pop");
   const resEl = document.getElementById("my-kingdom-res");
-  if (popEl) popEl.textContent = country.population ? country.population.toLocaleString() : "0";
-  if (resEl) resEl.textContent = country.resources ? country.resources.toLocaleString() : "0";
+  if (nameEl) nameEl.textContent = country.name || state.myKingdom.country_name || "";
+  if (popEl) popEl.textContent = country.population !== undefined ? country.population.toLocaleString() : "0";
+  if (resEl) resEl.textContent = country.resources !== undefined ? country.resources.toLocaleString() : "0";
 }
 
 export function updateEconomyPanel(country) {
@@ -307,13 +435,27 @@ export function updateEconomyPanel(country) {
   };
   set("econ-currency", Number(e.currency_value).toFixed(2));
   set("econ-gdp", e.gdp.toLocaleString());
-  set("econ-revenue", e.tax_revenue.toLocaleString());
-  set("econ-military", e.military_expenditure.toLocaleString());
+  const totalRev = e.total_revenue ?? e.tax_revenue ?? 0;
+  set("econ-revenue", totalRev.toLocaleString());
+  const lastExp = e.last_total_exp ?? e.effective_total_exp ?? e.military_expenditure ?? 0;
+  set("econ-last-exp", lastExp.toLocaleString());
+  const thisExp = e.effective_total_exp ?? e.military_expenditure ?? 0;
+  set("econ-military", thisExp.toLocaleString() + (e.deficit_capped ? " (Capped)" : ""));
+  const effBal = e.effective_balance ?? Math.max(0, e.budget_balance ?? 0);
   const bal = document.getElementById("econ-balance");
   if (bal) {
-    bal.textContent = (e.budget_balance >= 0 ? "+" : "") + e.budget_balance.toLocaleString();
-    bal.classList.toggle("econ-positive", e.budget_balance >= 0);
-    bal.classList.toggle("econ-negative", e.budget_balance < 0);
+    bal.textContent = "+" + effBal.toLocaleString();
+    bal.classList.add("econ-positive");
+    bal.classList.remove("econ-negative");
+  }
+  const popPress = e.population_pressure ?? 0;
+  set("econ-pop-pressure", `${popPress}% Stress`);
+  const mig = e.net_migration ?? 0;
+  const migEl = document.getElementById("econ-migration");
+  if (migEl) {
+    migEl.textContent = `${mig > 0 ? "+" : ""}${mig}/yr`;
+    migEl.classList.toggle("econ-positive", mig > 0);
+    migEl.classList.toggle("econ-negative", mig < 0);
   }
   set("econ-reserve", e.gold_reserve.toLocaleString());
   set("econ-rate", e.tax_rate);
@@ -322,7 +464,7 @@ export function updateEconomyPanel(country) {
   if (state.lastEconomy) {
     setTrend("econ-currency-trend", e.currency_value, state.lastEconomy.currency_value);
     setTrend("econ-gdp-trend", e.gdp, state.lastEconomy.gdp);
-    setTrend("econ-balance-trend", e.budget_balance, state.lastEconomy.budget_balance);
+    setTrend("econ-balance-trend", effBal, state.lastEconomy.effective_balance ?? state.lastEconomy.budget_balance);
   }
   state.lastEconomy = e;
 }
@@ -526,8 +668,8 @@ function setupCanvasInteractions(canvas) {
           "info"
         );
       }
-      // If clicking your own country, open the command center view
-      if (state.myKingdom && kingdom.id === state.myKingdom.country_id) {
+      // If clicking any country you own, open the command center view
+      if (isCountryOwnedByCurrentUser(kingdom)) {
         openKingdomCommandCenter(kingdom);
         return;
       }
@@ -541,7 +683,10 @@ function setupCanvasInteractions(canvas) {
       if (popEl) popEl.textContent = (kingdom.population || 0).toLocaleString();
       if (resEl) resEl.textContent = (kingdom.resources || 0).toLocaleString();
 
-      const ownerLabel = kingdom.owner_name
+      const isOwnedByMe = isCountryOwnedByCurrentUser(kingdom);
+      const ownerLabel = isOwnedByMe
+        ? "Owner: " + (state.currentUser?.username || "You") + " (Your Dominion)"
+        : kingdom.owner_name
         ? "Owner: " + kingdom.owner_name
         : kingdom.owner_id
         ? "Owned"
@@ -665,6 +810,7 @@ window.selectCompassSide = selectCompassSide;
 window.toggleMovementMode = toggleMovementMode;
 window.toggleMarchSpeed = toggleMarchSpeed;
 window.triggerRecruitTroops = triggerRecruitTroops;
+window.selectRecruitTier = selectRecruitTier;
 window.triggerFortifyBorder = triggerFortifyBorder;
 window.triggerDispatchTroops = triggerDispatchTroops;
 window.stepTargetKingdom = stepTargetKingdom;
@@ -673,18 +819,388 @@ window.triggerDispatchDiplomacy = triggerDispatchDiplomacy;
 window.setTaxRate = setTaxRate;
 window.setInvestmentRate = setInvestmentRate;
 window.setSocialRate = setSocialRate;
+window.adjustBudgetDial = adjustBudgetDial;
+window.triggerAutoBalanceBudget = triggerAutoBalanceBudget;
 window.toggleDevChronoControl = toggleDevChronoControl;
 window.setChronoScale = setChronoScale;
 window.setStartYear = setStartYear;
 window.applyStartYearInput = applyStartYearInput;
 window.resetToDefaultStartYear = resetToDefaultStartYear;
 window.jumpToYear = jumpToYear;
+window.setTimelinePause = setTimelinePause;
+window.syncTimelineFromServer = syncTimelineFromServer;
+window.initServerTimelineSync = initServerTimelineSync;
 window.stepYearOffset = stepYearOffset;
 window.resetYearOffset = resetYearOffset;
 window.getCurrentGameYear = getCurrentGameYear;
+window.toggleAdminDashboard = toggleAdminDashboard;
+window.handleAdminDashboardBackdrop = handleAdminDashboardBackdrop;
+window.refreshAdminDashboard = refreshAdminDashboard;
+window.adminJumpEra = adminJumpEra;
+window.adminSetSpeed = adminSetSpeed;
+window.adminTogglePause = adminTogglePause;
+
+// -------------------------------------------------------------
+// IMPERIAL OVERSEER & ADMIN DASHBOARD CONTROLLER
+// -------------------------------------------------------------
+
+let isAdminDashboardOpen = false;
+let currentAdminDashboardData = null;
+let isAdminRefreshing = false;
+let isAdminRefreshPending = false;
+let adminRefreshTimer = null;
+
+export function toggleAdminDashboard(forceOpen) {
+  if (typeof forceOpen === "boolean") {
+    isAdminDashboardOpen = forceOpen;
+  } else {
+    isAdminDashboardOpen = !isAdminDashboardOpen;
+  }
+
+  const modal = document.getElementById("admin-dashboard-modal");
+  if (modal) {
+    modal.classList.toggle("hidden", !isAdminDashboardOpen);
+  }
+
+  if (isAdminDashboardOpen) {
+    refreshAdminDashboard();
+    if (!adminRefreshTimer) {
+      // Live background update pulse every 1 second without queuing
+      adminRefreshTimer = setInterval(() => {
+        if (isAdminDashboardOpen) {
+          refreshAdminDashboard();
+        }
+      }, 1000);
+    }
+  } else {
+    if (adminRefreshTimer) {
+      clearInterval(adminRefreshTimer);
+      adminRefreshTimer = null;
+    }
+    isAdminRefreshPending = false;
+    adminResetAbort(false);
+  }
+}
+
+export function handleAdminDashboardBackdrop(event) {
+  if (event.target && event.target.id === "admin-dashboard-modal") {
+    toggleAdminDashboard(false);
+  }
+}
+
+function escapeHTML(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+export async function refreshAdminDashboard() {
+  if (!isAdminDashboardOpen) return;
+  // Non-queuing: if an update is currently in flight, record pending and skip spawning another request
+  if (isAdminRefreshing) {
+    isAdminRefreshPending = true;
+    return;
+  }
+  isAdminRefreshing = true;
+  isAdminRefreshPending = false;
+
+  const tbody = document.getElementById("admin-users-tbody");
+  try {
+    const res = await apiGetAdminDashboard();
+    if (!res.ok) {
+      throw new Error(await readErrorMessage(res, "Failed to load admin dashboard"));
+    }
+    const data = await res.json();
+    currentAdminDashboardData = data;
+    renderAdminDashboardData(data, tbody);
+  } catch (err) {
+    console.error("Error refreshing admin dashboard:", err);
+    if (tbody && !currentAdminDashboardData) {
+      tbody.innerHTML = `<tr><td colspan="9" class="loading-cell" style="color:#ff8b7b;">Error loading telemetry: ${escapeHTML(err.message)}</td></tr>`;
+    }
+  } finally {
+    isAdminRefreshing = false;
+    if (isAdminRefreshPending && isAdminDashboardOpen) {
+      isAdminRefreshPending = false;
+      setTimeout(refreshAdminDashboard, 200);
+    }
+  }
+}
+
+function renderAdminDashboardData(data, tbody) {
+  if (!data) return;
+
+  // Update Telemetry Grid
+  const simYearEl = document.getElementById("admin-sim-year");
+  if (simYearEl) simYearEl.textContent = data.timeline.sim_year ? Number(data.timeline.sim_year).toFixed(2) : "—";
+
+  const eraNameEl = document.getElementById("admin-era-name");
+  if (eraNameEl) eraNameEl.textContent = `${data.timeline.era_name || "Era"} (${data.timeline.era_id || ""})`;
+
+  const chronoScaleEl = document.getElementById("admin-chrono-scale");
+  if (chronoScaleEl) chronoScaleEl.textContent = data.timeline.chrono_scale || "—";
+
+  const ticksEl = document.getElementById("admin-ticks-count");
+  if (ticksEl) ticksEl.textContent = `Server Tick #${data.timeline.tick || 0}`;
+
+  const simStatusEl = document.getElementById("admin-sim-status");
+  if (simStatusEl) {
+    simStatusEl.textContent = data.timeline.is_paused ? "⏸️ PAUSED" : "▶️ RUNNING";
+    simStatusEl.style.color = data.timeline.is_paused ? "#ff8b7b" : "#4ade80";
+  }
+
+  const pauseToggleBtn = document.getElementById("admin-pause-toggle-btn");
+  if (pauseToggleBtn) {
+    pauseToggleBtn.textContent = data.timeline.is_paused ? "▶️ Resume Simulation" : "⏸️ Pause Simulation";
+  }
+
+  const userCountEl = document.getElementById("admin-user-count");
+  if (userCountEl) userCountEl.textContent = `${(data.users || []).length} Users`;
+
+  const claimedCount = (data.users || []).filter((u) => u.country_id).length;
+  const realmsClaimedEl = document.getElementById("admin-realms-claimed");
+  if (realmsClaimedEl) realmsClaimedEl.textContent = `${claimedCount} of ${data.total_countries || 32} Realms Claimed`;
+
+  const rosterCountEl = document.getElementById("admin-roster-count");
+  if (rosterCountEl) rosterCountEl.textContent = `${(data.users || []).length} Users / ${claimedCount} Active Realms`;
+
+  const syncTimeEl = document.getElementById("admin-timeline-sync-time");
+  if (syncTimeEl) syncTimeEl.textContent = `Live · ${new Date().toLocaleTimeString()}`;
+
+  // Highlight active era button
+  document.querySelectorAll(".admin-era-btn").forEach((btn) => {
+    const eraId = data.timeline.era_id;
+    const text = btn.textContent.toLowerCase();
+    btn.classList.toggle("active", text.includes(eraId));
+  });
+
+  // Highlight active speed button
+  document.querySelectorAll(".admin-speed-btn").forEach((btn) => {
+    const scale = data.timeline.chrono_scale;
+    btn.classList.toggle("active", btn.textContent.startsWith(scale));
+  });
+
+  // Populate Users Table (in-place cell updates when rows match, preventing scroll jumping or row flicker)
+  if (tbody) {
+    if (!data.users || data.users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="loading-cell">No registered users in database.</td></tr>`;
+      return;
+    }
+
+    const existingRows = tbody.querySelectorAll("tr[data-user-id]");
+    if (existingRows.length === data.users.length) {
+      let allFound = true;
+      data.users.forEach((u) => {
+        const row = tbody.querySelector(`tr[data-user-id="${u.id}"]`);
+        if (!row) {
+          allFound = false;
+          return;
+        }
+        const cells = row.children;
+        if (cells.length >= 9) {
+          const hasCountry = u.country_id && u.country_name;
+          const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
+          const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";
+          const troopDisplay = hasCountry ? Number(u.troops || 0).toLocaleString() : "—";
+          const taxDisplay = hasCountry ? `${Math.round(Number(u.economy_rate ?? 50))}%` : "—";
+          if (cells[4].textContent !== popDisplay) cells[4].textContent = popDisplay;
+          if (cells[5].textContent !== resDisplay) cells[5].textContent = resDisplay;
+          if (cells[6].textContent !== troopDisplay) cells[6].textContent = troopDisplay;
+          if (cells[7].textContent !== taxDisplay) cells[7].textContent = taxDisplay;
+        }
+      });
+      if (allFound) return;
+    }
+
+    tbody.innerHTML = "";
+    data.users.forEach((u) => {
+      const tr = document.createElement("tr");
+      tr.setAttribute("data-user-id", String(u.id));
+      const isUserAdmin = isTimelineAdmin(u);
+      const isOverseer = isPureOverseer(u);
+      const roleBadgeClass = isUserAdmin ? "role-admin" : "role-player";
+      const roleLabel = isOverseer
+        ? "👑 Pure Overseer"
+        : (isUserAdmin ? "👑 Player-Admin" : "Player");
+
+      const hasCountry = u.country_id && u.country_name;
+      const realmDisplay = hasCountry
+        ? `<span class="admin-realm-tag">
+             <span class="admin-realm-swatch" style="background-color: ${u.country_color || '#d4af37'}"></span>
+             <span>${escapeHTML(u.country_name)} (${escapeHTML(u.country_code || '---')})</span>
+           </span>`
+        : (isOverseer ? `<span class="admin-spectator-tag">👑 Overseer (Monitor)</span>` : `<span class="admin-spectator-tag">Spectator / Unclaimed</span>`);
+
+      const popDisplay = hasCountry ? Number(u.population || 0).toLocaleString() : "—";
+      const resDisplay = hasCountry ? Number(u.resources || 0).toLocaleString() + " G" : "—";
+      const troopDisplay = hasCountry ? Number(u.troops || 0).toLocaleString() : "—";
+      const taxDisplay = hasCountry ? `${Math.round(Number(u.economy_rate ?? 50))}%` : "—";
+      const lastLoginDisplay = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
+
+      tr.innerHTML = `
+        <td>#${u.id}</td>
+        <td>
+          <span class="admin-user-pill">
+            ${isUserAdmin ? "👑" : "👤"} ${escapeHTML(u.username)}
+          </span>
+          <span class="admin-email-sub">${escapeHTML(u.email)}</span>
+        </td>
+        <td><span class="admin-role-badge ${roleBadgeClass}">${roleLabel}</span></td>
+        <td>${realmDisplay}</td>
+        <td>${popDisplay}</td>
+        <td>${resDisplay}</td>
+        <td>${troopDisplay}</td>
+        <td>${taxDisplay}</td>
+        <td><small>${lastLoginDisplay}</small></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+export function adminJumpEra(year) {
+  jumpToYear(year);
+  setTimeout(refreshAdminDashboard, 200);
+}
+
+export function adminSetSpeed(scale) {
+  setChronoScale(scale);
+  setTimeout(refreshAdminDashboard, 200);
+}
+
+export function adminTogglePause() {
+  const isCurrentlyPaused = currentAdminDashboardData?.timeline?.is_paused;
+  setTimelinePause(!isCurrentlyPaused);
+  setTimeout(refreshAdminDashboard, 200);
+}
+
+// ----------------------------------------------------------------------------
+// PROTECTED 3-STAGE GAME RESET WORKFLOW
+// ----------------------------------------------------------------------------
+let adminResetStage = 1;
+
+export function adminResetSetStage(stage) {
+  adminResetStage = stage;
+  const s1 = document.getElementById("admin-reset-stage-1");
+  const s2 = document.getElementById("admin-reset-stage-2");
+  const s3 = document.getElementById("admin-reset-stage-3");
+  const b1 = document.getElementById("reset-step-1");
+  const b2 = document.getElementById("reset-step-2");
+  const b3 = document.getElementById("reset-step-3");
+  const l1 = document.getElementById("reset-line-1");
+  const l2 = document.getElementById("reset-line-2");
+  const badge = document.getElementById("admin-reset-stage-badge");
+
+  if (s1) s1.classList.toggle("hidden", stage !== 1);
+  if (s2) s2.classList.toggle("hidden", stage !== 2);
+  if (s3) s3.classList.toggle("hidden", stage !== 3);
+
+  if (b1) b1.className = stage >= 1 ? "reset-step active" : "reset-step";
+  if (b2) b2.className = stage >= 2 ? "reset-step active" : "reset-step";
+  if (b3) b3.className = stage >= 3 ? "reset-step active" : "reset-step";
+  if (l1) l1.classList.toggle("active", stage >= 2);
+  if (l2) l2.classList.toggle("active", stage >= 3);
+
+  if (badge) {
+    if (stage === 1) {
+      badge.textContent = "STAGE 1: LATCH SECURED 🔒";
+      badge.className = "admin-stage-indicator stage-locked";
+    } else if (stage === 2) {
+      badge.textContent = "STAGE 2: DISARMED / VERIFYING ⚠️";
+      badge.className = "admin-stage-indicator stage-verifying";
+    } else if (stage === 3) {
+      badge.textContent = "STAGE 3: MASTER TRIGGER ARMED 🚨";
+      badge.className = "admin-stage-indicator stage-critical";
+    }
+  }
+}
+
+export function adminResetStage1Unlock() {
+  adminResetSetStage(2);
+  const input = document.getElementById("admin-reset-confirm-input");
+  if (input) {
+    input.value = "";
+    setTimeout(() => input.focus(), 60);
+  }
+  const btn2 = document.getElementById("admin-reset-btn-stage2");
+  if (btn2) btn2.disabled = true;
+}
+
+export function adminResetCheckInput(val) {
+  const btn2 = document.getElementById("admin-reset-btn-stage2");
+  const matches = (val || "").trim().toUpperCase() === "RESET WORLD 1500";
+  if (btn2) {
+    btn2.disabled = !matches;
+  }
+}
+
+export function adminResetStage2Verify() {
+  const input = document.getElementById("admin-reset-confirm-input");
+  const matches = (input?.value || "").trim().toUpperCase() === "RESET WORLD 1500";
+  if (!matches) {
+    showToast("Authorization phrase must be 'RESET WORLD 1500'", "error");
+    return;
+  }
+  const clearClaims = document.getElementById("admin-reset-clear-claims")?.checked ?? true;
+  const summary = document.getElementById("admin-reset-stage3-summary");
+  if (summary) {
+    summary.textContent = `Rewind to 1500.0 · Reset All Players to Initial Values · Claims: ${clearClaims ? "Unassigned (Full Realm Wipe)" : "Retained with 1500 Starting Vitals"}`;
+  }
+  adminResetSetStage(3);
+}
+
+export function adminResetAbort(notify = true) {
+  const input = document.getElementById("admin-reset-confirm-input");
+  if (input) input.value = "";
+  adminResetSetStage(1);
+  if (notify) {
+    showToast("World Reset Aborted. Safety Latch Re-Engaged 🔒", "info");
+  }
+}
+
+export async function adminResetStage3Execute() {
+  const btn = document.getElementById("admin-reset-btn-stage3");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ DISPATCHING MASTER PURGE...";
+  }
+  const clearClaims = document.getElementById("admin-reset-clear-claims")?.checked ?? true;
+  try {
+    const res = await apiAdminResetGame("RESET WORLD 1500", clearClaims);
+    if (!res.ok) {
+      throw new Error(await readErrorMessage(res, "Failed to execute world reset"));
+    }
+    const data = await res.json();
+    showToast("🔥 " + (data.message || "World reset to Year 1500!"), "success");
+    logMessage("CRITICAL: Master World Reset to Year 1500 executed by Imperial Admin.");
+    adminResetSetStage(1);
+    const input = document.getElementById("admin-reset-confirm-input");
+    if (input) input.value = "";
+    refreshAdminDashboard();
+    checkMyKingdom();
+  } catch (err) {
+    console.error("Error executing world reset:", err);
+    showToast(err.message || "Error executing world reset", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🔥 STAGE 3: EXECUTE TOTAL WORLD RESET (1500)";
+    }
+  }
+}
+
+window.adminResetStage1Unlock = adminResetStage1Unlock;
+window.adminResetCheckInput = adminResetCheckInput;
+window.adminResetStage2Verify = adminResetStage2Verify;
+window.adminResetAbort = adminResetAbort;
+window.adminResetStage3Execute = adminResetStage3Execute;
 
 // Initialize when DOM is ready
-function initApp() {
+async function initApp() {
   const canvas = document.getElementById("world-map");
   if (canvas) {
     initRenderer(canvas);
@@ -692,10 +1208,19 @@ function initApp() {
   }
 
   window.addEventListener("resize", resizeCanvas);
-  tickClock();
+
+  // 1. Authoritative Server Timeline is the Single Source of Truth: sync before starting clock
+  await initServerTimelineSync();
+  startClock();
 
   if (state.token && state.currentUser) {
-    showGameScreen();
+    // Validate session with server before entering game screen
+    const authenticated = await checkMyKingdom();
+    if (authenticated) {
+      showGameScreen();
+    }
+  } else {
+    showAuthScreen();
   }
 }
 

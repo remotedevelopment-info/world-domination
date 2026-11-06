@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"kingdom-conquest/backend/internal/database"
 	"kingdom-conquest/backend/internal/game"
@@ -32,6 +33,8 @@ type LoginResponse struct {
 	Token    string `json:"token"`
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
 }
 
 // writeJSONError sends a consistent JSON error payload so the frontend can
@@ -142,13 +145,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	database.UpdateUserLastLogin(user.ID)
 
-	token := auth.CreateToken(user.ID, user.Username)
+	token := auth.CreateToken(user.ID, user.Username, user.Email, user.Role)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(LoginResponse{
 		Token:    token,
 		UserID:   user.ID,
 		Username: user.Username,
+		Email:    user.Email,
+		Role:     user.Role,
 	})
 }
 
@@ -232,6 +237,7 @@ func GetPlayerCountryHandler(w http.ResponseWriter, r *http.Request) {
 	if country == nil {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"has_country": false,
+			"email":       user.Email,
 		})
 		return
 	}
@@ -240,7 +246,10 @@ func GetPlayerCountryHandler(w http.ResponseWriter, r *http.Request) {
 		"has_country":  true,
 		"country_id":   country.CountryID,
 		"country_name": country.Name,
+		"country_code": country.Code,
+		"owner_id":     user.UserID,
 		"last_active":  country.LastActive,
+		"email":        user.Email,
 	}
 	json.NewEncoder(w).Encode(resp)
 }
@@ -286,19 +295,44 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pc, err := database.GetPlayerCountry(user.UserID)
-	if err != nil || pc == nil {
-		http.Error(w, "No country assigned", http.StatusBadRequest)
-		return
+	targetCountryID := int64(0)
+	if cidStr := r.URL.Query().Get("country_id"); cidStr != "" {
+		if cid, err := strconv.ParseInt(cidStr, 10, 64); err == nil && cid > 0 {
+			// Allow querying if owned by user or if admin
+			isOwner, _ := database.IsCountryOwnedByUser(cid, user.UserID)
+			isAdmin := user.Role == "admin" || database.IsAdminIdentifier(user.Email) || database.IsAdminIdentifier(user.Username)
+			if isOwner || isAdmin {
+				targetCountryID = cid
+			}
+		}
 	}
 
-	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if targetCountryID == 0 {
+		pc, err := database.GetPlayerCountry(user.UserID)
+		if err != nil || pc == nil {
+			http.Error(w, "No country assigned", http.StatusBadRequest)
+			return
+		}
+		targetCountryID = pc.CountryID
+	}
+
+	detail, err := database.GetKingdomDetail(targetCountryID)
 	if err != nil {
 		http.Error(w, "Error fetching kingdom detail", http.StatusInternalServerError)
 		return
 	}
 
-	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts)
+	econ := game.ComputeEconomyWithLayers(
+		detail.Population, detail.Resources, detail.Troops,
+		detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts,
+		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
+	)
+	game.PopulateLastYearLedger(
+		&econ,
+		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
+		detail.LastSocialExp, detail.LastInvestmentExp, detail.LastTotalExp,
+		detail.LastBudgetBalance, detail.LastMigration,
+	)
 	detail.GDP = econ.GDP
 	detail.CurrencyValue = econ.CurrencyValue
 	detail.InflationRate = econ.InflationRate
@@ -311,6 +345,13 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"population":     detail.Population,
 		"resources":      detail.Resources,
 		"troops":         detail.Troops,
+		"troops_levy":    detail.TroopsLevy,
+		"troops_regular": detail.TroopsRegular,
+		"troops_elite":   detail.TroopsElite,
+		"fort_n":         detail.FortN,
+		"fort_s":         detail.FortS,
+		"fort_e":         detail.FortE,
+		"fort_w":         detail.FortW,
 		"central_troops": detail.CentralTroops,
 		"border_troops":  detail.BorderTroops,
 		"economy_rate":   detail.EconomyRate,
@@ -322,6 +363,7 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"currency_value": detail.CurrencyValue,
 		"inflation_rate": detail.InflationRate,
 		"owner_name":     detail.OwnerName,
+		"economy":        econ,
 	})
 }
 
@@ -352,12 +394,15 @@ func GetDiplomacyHandler(w http.ResponseWriter, r *http.Request) {
 
 // ActionRequest carries one real-time action.
 type ActionRequest struct {
-	ActionType    string `json:"action_type"`    // diplomacy, economy, military
-	Description   string `json:"description"`    // human-readable action label
+	ActionType      string `json:"action_type"`    // diplomacy, economy, military
+	Type            string `json:"type,omitempty"` // alias for action_type
+	Description     string `json:"description"`    // human-readable action label
 	TargetCountryID *int64 `json:"target_country_id,omitempty"` // required for target-state actions
-	Direction     string `json:"direction,omitempty"`   // N, S, E, W, or 0-360 (interior movement)
-	Speed         string `json:"speed,omitempty"`       // Slow, Fast (interior movement)
-	MovementType  string `json:"movement_type,omitempty"` // interior, target
+	Direction       string `json:"direction,omitempty"`   // N, S, E, W, or 0-360 (interior movement)
+	Speed           string `json:"speed,omitempty"`       // Slow, Fast (interior movement)
+	MovementType    string `json:"movement_type,omitempty"` // interior, target
+	TroopTier       string `json:"troop_tier,omitempty"`    // levy, regular, elite, drill
+	TroopCount      *int64 `json:"troop_count,omitempty"`   // optional batch count (default 10)
 }
 
 // ActionHandler handles diplomacy / economy / military actions. Each action
@@ -381,16 +426,21 @@ func ActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actionType := strings.ToLower(req.ActionType)
+	actionType := strings.ToLower(strings.TrimSpace(req.ActionType))
+	if actionType == "" {
+		actionType = strings.ToLower(strings.TrimSpace(req.Type))
+	}
 	engine := game.GetEngine()
 
 	switch actionType {
-	case "economy":
+	case "economy", "economic":
+		actionType = "economy"
 		if err := handleEconomy(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-	case "diplomacy":
+	case "diplomacy", "diplomatic":
+		actionType = "diplomacy"
 		if err := handleDiplomacy(user.UserID, req.Description, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -536,8 +586,8 @@ func handleEconomy(userID int64, description string, req ActionRequest) error {
 	return nil
 }
 
-// handleDiplomacy logs a diplomacy action (e.g. envoy).
-// All diplomacy options require a target state (another country).
+// handleDiplomacy logs a diplomacy action (e.g. envoy, alliance, war).
+// All diplomacy options require a target state (another country) and require paying diplomatic tribute/costs.
 func handleDiplomacy(userID int64, description string, req ActionRequest) error {
 	pc, err := database.GetPlayerCountry(userID)
 	if err != nil || pc == nil {
@@ -554,6 +604,42 @@ func handleDiplomacy(userID int64, description string, req ActionRequest) error 
 	if desc == "" {
 		desc = "sent envoy"
 	}
+
+	countries, err := database.GetCountries("medieval")
+	if err != nil {
+		return err
+	}
+	var self *models.Country
+	for i := range countries {
+		if countries[i].ID == pc.CountryID {
+			self = &countries[i]
+			break
+		}
+	}
+	if self == nil {
+		return errors.New("player country not found")
+	}
+
+	// Diplomatic missions require tributes, emissary allowances, or war mobilization levies:
+	// - Sending an envoy requires 50 gold tribute/travel expenses
+	// - Proposing an alliance requires 75 gold treaty gifts
+	// - Declaring war requires 100 gold mobilization costs
+	tributeCost := int64(50)
+	lowerDesc := strings.ToLower(desc)
+	if strings.Contains(lowerDesc, "alliance") {
+		tributeCost = 75
+	} else if strings.Contains(lowerDesc, "war") {
+		tributeCost = 100
+	}
+
+	if self.Resources < tributeCost {
+		return fmt.Errorf("insufficient gold reserve to dispatch diplomatic mission (%d required for %s, have %d)", tributeCost, desc, self.Resources)
+	}
+
+	if err := database.UpdateCountryResources(self.ID, self.Resources-tributeCost); err != nil {
+		return err
+	}
+
 	return database.LogAction(userID, pc.CountryID, "diplomacy", desc,
 		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
@@ -573,6 +659,9 @@ func handleMilitary(userID int64, description string, req ActionRequest) error {
 	switch description {
 	case "Recruit Troops":
 		return handleMilitaryRecruit(userID, pc, req)
+	case "Train Troops", "Drill & Promote":
+		req.TroopTier = "drill"
+		return handleMilitaryRecruit(userID, pc, req)
 	case "Move Army":
 		return handleMilitaryMove(userID, pc, req)
 	case "Fortify Borders":
@@ -584,41 +673,133 @@ func handleMilitary(userID int64, description string, req ActionRequest) error {
 	}
 }
 
-// handleMilitaryRecruit recruits troops within the player's own kingdom.
-// Recruited troops accumulate at a central location in the country.
+// handleMilitaryRecruit recruits or trains/promotes troops across layered military tiers.
 func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
-	countries, err := database.GetCountries("medieval")
-	if err != nil {
-		return err
+	country, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil || country == nil {
+		return errors.New("country not found")
 	}
-	var population, resources, troops int64
-	for _, c := range countries {
-		if c.ID == pc.CountryID {
-			population, resources, troops = c.Population, c.Resources, c.Troops
-			break
+
+	tier := strings.ToLower(strings.TrimSpace(req.TroopTier))
+	if tier == "" {
+		tier = "levy" // default entry tier
+	}
+
+	batchCount := int64(10)
+	if req.TroopCount != nil && *req.TroopCount > 0 {
+		batchCount = *req.TroopCount
+	}
+
+	switch tier {
+	case "levy", "conscript", "militia":
+		// Levy: 150 gold per 10 troops (15 gold/troop)
+		cost := (batchCount / 10) * 150
+		if cost < 150 {
+			cost = 150
 		}
+		if country.Resources < cost {
+			return fmt.Errorf("insufficient resources in treasury: levying %d recruits requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
+		}
+		newResources := country.Resources - cost
+		newLevy := country.TroopsLevy + batchCount
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, newLevy, country.TroopsRegular, country.TroopsElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			fmt.Sprintf("levied %d raw conscripts (-%d gold from treasury)", batchCount, cost),
+			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+
+	case "regular", "line", "footmen":
+		// Regulars: 450 gold per 10 troops (45 gold/troop)
+		cost := (batchCount / 10) * 450
+		if cost < 450 {
+			cost = 450
+		}
+		if country.Resources < cost {
+			return fmt.Errorf("insufficient resources in treasury: recruiting %d line regulars requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
+		}
+		newResources := country.Resources - cost
+		newRegular := country.TroopsRegular + batchCount
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, newRegular, country.TroopsElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			fmt.Sprintf("enlisted %d disciplined line regulars (-%d gold from treasury)", batchCount, cost),
+			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+
+	case "elite", "guard", "knights", "veteran":
+		// Elite Guard: 1,200 gold per 10 troops (120 gold/troop)
+		cost := (batchCount / 10) * 1200
+		if cost < 1200 {
+			cost = 1200
+		}
+		if country.Resources < cost {
+			return fmt.Errorf("insufficient resources in treasury: commissioning %d royal elite guards requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
+		}
+		newResources := country.Resources - cost
+		newElite := country.TroopsElite + batchCount
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, country.TroopsRegular, newElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			fmt.Sprintf("commissioned %d elite royal guards (-%d gold from treasury)", batchCount, cost),
+			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
+
+	case "drill", "promote", "train":
+		return handleMilitaryDrillAndPromote(userID, pc, country)
+
+	default:
+		return fmt.Errorf("unknown troop layer %q (valid layers: levy, regular, elite, drill)", tier)
 	}
-	cost := population / 100
-	if cost < 1 {
-		cost = 1
+}
+
+// handleMilitaryDrillAndPromote trains troops into higher ranks over time.
+func handleMilitaryDrillAndPromote(userID int64, pc *models.PlayerCountry, country *database.KingdomDetailRow) error {
+	cost := int64(300)
+	if country.Resources < cost {
+		return fmt.Errorf("insufficient resources: drilling and promoting troops requires %d gold, treasury holds %d", cost, country.Resources)
 	}
-	if resources < cost {
-		return errors.New("insufficient resources to recruit")
+
+	if country.TroopsLevy >= 10 {
+		// Drill 10 Levies into 10 Line Regulars
+		newLevy := country.TroopsLevy - 10
+		newRegular := country.TroopsRegular + 10
+		newResources := country.Resources - cost
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, newLevy, newRegular, country.TroopsElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			"drilled and promoted 10 raw levies into disciplined line regulars (-300 gold)",
+			nil, "", "", "")
+	} else if country.TroopsRegular >= 5 {
+		// Promote 5 Battle-Tested Regulars into 5 Elite Imperial Veterans
+		newRegular := country.TroopsRegular - 5
+		newElite := country.TroopsElite + 5
+		newResources := country.Resources - cost
+		if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+			return err
+		}
+		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, newRegular, newElite); err != nil {
+			return err
+		}
+		return database.LogAction(userID, pc.CountryID, "military",
+			"promoted 5 battle-tested regulars to elite imperial veterans (-300 gold)",
+			nil, "", "", "")
+	} else {
+		return errors.New("no troops eligible for drill and promotion; recruit at least 10 levies or 5 line regulars first")
 	}
-	population += 10
-	resources -= cost
-	troops += 10 // Recruited troops accumulate at central location
-	if err := database.UpdateCountryResources(pc.CountryID, resources); err != nil {
-		return err
-	}
-	if err := database.UpdateCountryPopulation(pc.CountryID, population); err != nil {
-		return err
-	}
-	if err := database.UpdateCountryTroops(pc.CountryID, troops); err != nil {
-		return err
-	}
-	return database.LogAction(userID, pc.CountryID, "military", "recruited troops ("+strconv.FormatInt(cost, 10)+" resources, +10 population)",
-		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
 
 // handleMilitaryMove moves troops either interior (guard a border) or toward a target.
@@ -712,15 +893,57 @@ func directionToBorderSide(direction string) string {
 	}
 }
 
-// handleMilitaryFortify fortifies an owned border side.
+// handleMilitaryFortify fortifies an owned frontier, deducting high construction costs and upgrading defenses.
 func handleMilitaryFortify(userID int64, pc *models.PlayerCountry, req ActionRequest) error {
 	if req.TargetCountryID != nil && *req.TargetCountryID != 0 {
 		return errors.New("target country not allowed for fortify borders")
 	}
-	if req.Direction == "" {
-		return errors.New("border side required for fortify borders")
+	direction := strings.ToUpper(strings.TrimSpace(req.Direction))
+	if direction == "" {
+		return errors.New("border side required for fortify borders (N, S, E, or W)")
 	}
-	return database.LogAction(userID, pc.CountryID, "military", "fortified borders",
+	side := directionToBorderSide(direction)
+	if side != "N" && side != "S" && side != "E" && side != "W" {
+		return fmt.Errorf("invalid border side %q (must be N, S, E, or W)", direction)
+	}
+
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil || detail == nil {
+		return errors.New("country not found")
+	}
+
+	var currentTier int64
+	switch side {
+	case "N":
+		currentTier = detail.FortN
+	case "S":
+		currentTier = detail.FortS
+	case "E":
+		currentTier = detail.FortE
+	case "W":
+		currentTier = detail.FortW
+	}
+
+	// Cost scales heavily by tier: Tier 1 = 500 D, Tier 2 = 1,000 D, Tier 3 = 1,500 D, etc.
+	cost := int64(500) * (currentTier + 1)
+	if detail.Resources < cost {
+		return fmt.Errorf("insufficient resources in treasury: constructing Tier %d fortification on %s frontier requires %d gold, treasury holds %d", currentTier+1, side, cost, detail.Resources)
+	}
+
+	newTier, err := database.UpgradeBorderFortification(pc.CountryID, side, cost)
+	if err != nil {
+		return err
+	}
+
+	// Deploy a stationed defensive garrison on this fortified frontier
+	_, _ = database.DB.Exec(
+		`INSERT INTO troop_deployments (user_id, country_id, border_side, direction, speed, strength, deployed_at, updated_at)
+		 VALUES ($1, $2, $3, $4, 'Stationary', 10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		 ON CONFLICT DO NOTHING`,
+		userID, pc.CountryID, side, side)
+
+	return database.LogAction(userID, pc.CountryID, "military",
+		fmt.Sprintf("constructed Tier %d frontier fortification on %s border (-%d gold)", newTier, side, cost),
 		req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 }
 
@@ -825,16 +1048,23 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		EconomyRate int64 `json:"economy_rate"`
-		Investment  int64 `json:"investment"`
-		SocialCosts int64 `json:"social_costs"`
+		EconomyRate *int64 `json:"economy_rate"`
+		TaxRate     *int64 `json:"tax_rate"`
+		Investment  int64  `json:"investment"`
+		SocialCosts int64  `json:"social_costs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	econRate := int64(50)
+	if req.EconomyRate != nil {
+		econRate = *req.EconomyRate
+	} else if req.TaxRate != nil {
+		econRate = *req.TaxRate
+	}
 
-	err = database.SetEconomySettings(pc.CountryID, req.EconomyRate, req.Investment, req.SocialCosts)
+	err = database.SetEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
 	if err != nil {
 		http.Error(w, "Error setting economy settings", http.StatusInternalServerError)
 		return
@@ -858,20 +1088,334 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts)
+	game.PopulateLastYearLedger(
+		&econ,
+		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
+		detail.LastSocialExp, detail.LastInvestmentExp, detail.LastTotalExp,
+		detail.LastBudgetBalance, detail.LastMigration,
+	)
 	detail.GDP = econ.GDP
 	detail.CurrencyValue = econ.CurrencyValue
 	detail.InflationRate = econ.InflationRate
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"country_id":     detail.CountryID,
-		"name":           detail.Name,
-		"code":           detail.Code,
-		"economy_rate":   settings.EconomyRate,
-		"investment":     settings.Investment,
-		"social_costs":   settings.SocialCosts,
-		"gdp":            detail.GDP,
-		"currency_value": detail.CurrencyValue,
-		"inflation_rate": detail.InflationRate,
+		"country_id":        detail.CountryID,
+		"name":              detail.Name,
+		"code":              detail.Code,
+		"economy_rate":      settings.EconomyRate,
+		"investment":        settings.Investment,
+		"social_costs":      settings.SocialCosts,
+		"gdp":               detail.GDP,
+		"currency_value":    detail.CurrencyValue,
+		"inflation_rate":    detail.InflationRate,
+		"budget_balance":    econ.BudgetBalance,
+		"effective_balance": econ.EffectiveBalance,
+		"economy":           econ,
+	})
+}
+
+const NominatedTimelineAdminEmail = "admin@sfsw.net"
+
+// checkTimelineAdmin ensures the caller is authenticated as the designated administrator.
+func checkTimelineAdmin(r *http.Request) (*auth.Token, error) {
+	user := auth.GetUserFromContext(r)
+	if user == nil {
+		return nil, errors.New("authentication required: please log in")
+	}
+	if user.Role == "admin" || database.IsAdminIdentifier(user.Email) || database.IsAdminIdentifier(user.Username) {
+		return user, nil
+	}
+	return nil, errors.New("forbidden: administrator privileges required")
+}
+
+// GetAdminDashboardHandler returns telemetry for all users, claimed realms, resources, and live timeline.
+func GetAdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	admin, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	users, err := database.GetAdminDashboardUsers()
+	if err != nil {
+		log.Printf("Error fetching admin dashboard users: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "Failed to load dashboard telemetry")
+		return
+	}
+
+	engine := game.GetEngine()
+	simYear, yearInt, era, scale, isPaused := engine.GetTimeline()
+	state := engine.BuildState()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"admin_user":  admin.Username,
+		"admin_email": admin.Email,
+		"admin_role":  admin.Role,
+		"timeline": map[string]interface{}{
+			"sim_year":     simYear,
+			"year_int":     yearInt,
+			"era_id":       era.ID,
+			"era_name":     era.Name,
+			"chrono_scale": scale,
+			"is_paused":    isPaused,
+			"tick":         state.Tick,
+		},
+		"users":           users,
+		"total_countries": len(state.Countries),
+	})
+}
+
+type AdminResetGameRequest struct {
+	Confirmation string `json:"confirmation"`
+	ClearClaims  *bool  `json:"clear_claims"`
+}
+
+// AdminResetGameHandler handles the protected 3-stage game reset action.
+// Requires admin authorization, exact verification phrase match, and rewinds
+// the game to the Year 1500 base date while resetting all players and countries.
+func AdminResetGameHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	admin, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	var req AdminResetGameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	// Require exact confirmation code for stage 2/3 protection
+	expectedKey := "RESET WORLD 1500"
+	if strings.TrimSpace(strings.ToUpper(req.Confirmation)) != expectedKey {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid confirmation key: must type exact string '%s'", expectedKey))
+		return
+	}
+
+	clearClaims := true
+	if req.ClearClaims != nil {
+		clearClaims = *req.ClearClaims
+	}
+
+	engine := game.GetEngine()
+	state, err := engine.ResetToYear1500(clearClaims)
+	if err != nil {
+		log.Printf("Error resetting game to Year 1500: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "Failed to execute world reset: "+err.Error())
+		return
+	}
+
+	log.Printf("CRITICAL: Master game reset to Year 1500 executed by admin %s (%s). ClearClaims: %v",
+		admin.Username, admin.Email, clearClaims)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"message":      "Game successfully reset to Year 1500 base date and all players restored to initial values.",
+		"sim_year":     1500.0,
+		"era_id":       "discovery",
+		"clear_claims": clearClaims,
+		"tick":         state.Tick,
+	})
+}
+
+// GetTimelineHandler returns the current authoritative game timeline telemetry.
+func GetTimelineHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	engine := game.GetEngine()
+	simYear, yearInt, era, scale, isPaused := engine.GetTimeline()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"sim_year":       simYear,
+		"year_int":       yearInt,
+		"era_id":         era.ID,
+		"era_name":       era.Name,
+		"chrono_scale":   scale,
+		"is_paused":      isPaused,
+		"timestamp":      time.Now().UTC().Format(time.RFC3339),
+		"server_time_ms": time.Now().UnixMilli(),
+		"admin_email":    NominatedTimelineAdminEmail,
+	})
+}
+
+// JumpTimelineHandler sets the global authoritative game year and broadcasts immediately.
+// Restricted to the designated timeline administrator (nalex@sfsw.net).
+func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	var targetYear float64
+	yearStr := r.URL.Query().Get("year")
+	if yearStr != "" {
+		if y, err := strconv.ParseFloat(yearStr, 64); err == nil {
+			targetYear = y
+		}
+	}
+	if targetYear == 0 {
+		var req struct {
+			Year float64 `json:"year"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Year > 0 {
+			targetYear = req.Year
+		}
+	}
+
+	if targetYear < 1500 || targetYear > 9999 {
+		http.Error(w, "Year must be between 1500 and 9999", http.StatusBadRequest)
+		return
+	}
+
+	engine := game.GetEngine()
+	state := engine.SetSimYear(targetYear)
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving jumped game state snapshot: %v", err)
+	}
+	log.Printf("Timeline jumped to year %.2f (%s) by admin %s", state.SimYear, state.EraName, user.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":      "Timeline year updated successfully",
+		"sim_year":     state.SimYear,
+		"year_int":     state.YearInt,
+		"era_id":       state.EraID,
+		"era_name":     state.EraName,
+		"chrono_scale": state.ChronoScale,
+		"is_paused":    state.IsPaused,
+	})
+}
+
+// SetTimelineScaleHandler updates the global chrono scale and broadcasts immediately.
+// Restricted to the designated timeline administrator (nalex@sfsw.net).
+func SetTimelineScaleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	scaleStr := r.URL.Query().Get("scale")
+	if scaleStr == "" {
+		var req struct {
+			Scale string `json:"scale"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Scale != "" {
+			scaleStr = req.Scale
+		}
+	}
+
+	if scaleStr == "" {
+		http.Error(w, "Scale is required", http.StatusBadRequest)
+		return
+	}
+
+	engine := game.GetEngine()
+	state := engine.SetChronoScale(scaleStr)
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving scaled game state snapshot: %v", err)
+	}
+	log.Printf("Timeline scale set to %s by admin %s", state.ChronoScale, user.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":      "Chrono scale updated successfully",
+		"chrono_scale": state.ChronoScale,
+		"sim_year":     state.SimYear,
+		"year_int":     state.YearInt,
+		"era_id":       state.EraID,
+	})
+}
+
+// SetTimelinePauseHandler pauses or resumes the global timeline ticker.
+// Restricted to the designated timeline administrator (nalex@sfsw.net).
+func SetTimelinePauseHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	var paused bool
+	pausedStr := r.URL.Query().Get("paused")
+	if pausedStr != "" {
+		if p, err := strconv.ParseBool(pausedStr); err == nil {
+			paused = p
+		}
+	} else {
+		var req struct {
+			Paused bool `json:"paused"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			paused = req.Paused
+		}
+	}
+
+	engine := game.GetEngine()
+	state := engine.SetTimelinePaused(paused)
+	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
+		log.Printf("Error saving paused game state snapshot: %v", err)
+	}
+	log.Printf("Timeline pause state set to %v by admin %s", state.IsPaused, user.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":   "Timeline pause state updated successfully",
+		"is_paused": state.IsPaused,
+		"sim_year":  state.SimYear,
+		"year_int":  state.YearInt,
 	})
 }

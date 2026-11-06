@@ -106,7 +106,7 @@ export async function login(onSuccess) {
 
     const data = await res.json();
     setToken(data.token);
-    setCurrentUser({ id: data.user_id, username: data.username });
+    setCurrentUser({ id: data.user_id, username: data.username, email: data.email, role: data.role });
 
     clearAuthMessage();
     if (passwordInput) passwordInput.value = "";

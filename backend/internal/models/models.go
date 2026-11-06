@@ -29,11 +29,26 @@ type Country struct {
 	Population    int64     `json:"population"`
 	Resources     int64     `json:"resources"`
 	Troops        int64     `json:"troops"`     // Central troop count for this kingdom
+	TroopsLevy    int64     `json:"troops_levy"`    // Conscript levies / raw militia
+	TroopsRegular int64     `json:"troops_regular"` // Trained line regulars
+	TroopsElite   int64     `json:"troops_elite"`   // Royal guard / veteran elites
+	FortN         int64     `json:"fort_n"`         // North frontier fortification tier
+	FortS         int64     `json:"fort_s"`         // South frontier fortification tier
+	FortE         int64     `json:"fort_e"`         // East frontier fortification tier
+	FortW         int64     `json:"fort_w"`         // West frontier fortification tier
 	EconomyRate   int64     `json:"economy_rate"`  // Tax rate 0-100 set by the owning player
 	Investment    int64     `json:"investment"`    // Future GDP multiplier (0-100 slider)
 	SocialCosts   int64     `json:"social_costs"`  // Growth/wealth vs currency strength (0-100 slider)
 	Markets       int64     `json:"markets"`       // Build level: boosts trade output
 	Infrastructure int64    `json:"infrastructure"` // Build level: boosts productivity & growth
+	LastTaxRevenue    int64 `json:"last_tax_revenue"`
+	LastMarketIncome  int64 `json:"last_market_income"`
+	LastMilitaryExp   int64 `json:"last_military_exp"`
+	LastSocialExp     int64 `json:"last_social_exp"`
+	LastInvestmentExp int64 `json:"last_investment_exp"`
+	LastTotalExp      int64 `json:"last_total_exp"`
+	LastBudgetBalance int64 `json:"last_budget_balance"`
+	LastMigration     int64 `json:"last_migration"`
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
@@ -56,6 +71,7 @@ type PlayerCountry struct {
 	UserID     int64     `json:"user_id"`
 	CountryID  int64     `json:"country_id"`
 	Name       string    `json:"name"`
+	Code       string    `json:"code"`
 	AssignedAt time.Time `json:"assigned_at"`
 	IsActive   bool      `json:"is_active"`
 	LastActive time.Time `json:"last_active"`
