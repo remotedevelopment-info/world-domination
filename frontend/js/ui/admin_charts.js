@@ -9,6 +9,16 @@ let chartTooltip = null;
 let hoverElements = [];
 let hoveredElement = null;
 
+function escapeHTML(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function initAdminCharts() {
   chartCanvas = document.getElementById("admin-analytics-canvas");
   chartTooltip = document.getElementById("admin-chart-tooltip");
@@ -879,3 +889,4 @@ function renderChartSummaryKPIs() {
 // Window bindings for inline HTML handlers
 window.switchAdminChartTab = switchAdminChartTab;
 window.switchAdminChartScope = switchAdminChartScope;
+
