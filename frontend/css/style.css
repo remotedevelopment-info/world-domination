@@ -4669,6 +4669,183 @@ body {
     transition: all 0.2s ease;
 }
 
+/* ==========================================================================
+   Pure Admin Deep Analytics & Macro Visualizer Deck
+   ========================================================================== */
+.admin-analytics-btn {
+    background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+    border: 1px solid #818cf8;
+    color: #c7d2fe;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.admin-analytics-btn:hover {
+    background: linear-gradient(180deg, #312e81 0%, #1e1b4b 100%);
+    color: #ffffff;
+    border-color: #a5b4fc;
+    box-shadow: 0 0 12px rgba(129, 140, 248, 0.7);
+}
+
+.admin-analytics-section {
+    background: radial-gradient(circle at 50% 0%, rgba(20, 25, 45, 0.9) 0%, rgba(8, 12, 20, 0.98) 100%);
+    border: 1px solid rgba(129, 140, 248, 0.45);
+    box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.8), 0 0 15px rgba(99, 102, 241, 0.25);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.analytics-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.analytics-icon {
+    font-size: 1.15rem;
+}
+
+.overseer-tag {
+    font-family: monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(129, 140, 248, 0.15);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    color: #c7d2fe;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.analytics-chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.analytics-chart-controls label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+}
+
+.analytics-tabs-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 2px;
+}
+
+.analytics-tab-btn {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #cbd5e1;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.analytics-tab-btn:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(212, 175, 55, 0.5);
+    color: #ffffff;
+}
+
+.analytics-tab-btn.active {
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.3) 0%, rgba(49, 46, 129, 0.4) 100%);
+    border: 1px solid #818cf8;
+    color: #e0e7ff;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+.analytics-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: 280px;
+    background: #091019;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+#admin-analytics-canvas {
+    width: 100%;
+    height: 320px;
+    display: block;
+}
+
+.admin-chart-tooltip {
+    position: fixed;
+    background: rgba(10, 16, 26, 0.96);
+    border: 1px solid #d4af37;
+    border-radius: 5px;
+    padding: 8px 12px;
+    color: #f8fafc;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    pointer-events: none;
+    z-index: 10500;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3);
+    backdrop-filter: blur(4px);
+    max-width: 280px;
+}
+
+.analytics-summary-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    background: rgba(8, 14, 22, 0.75);
+    border: 1px solid rgba(129, 140, 248, 0.25);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.analytics-kpi-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.analytics-kpi-item .kpi-label {
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.analytics-kpi-item .kpi-val {
+    font-family: monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.analytics-kpi-item .kpi-val.kpi-good {
+    color: #4ade80;
+}
+
+.analytics-kpi-item .kpi-val.kpi-warn {
+    color: #f87171;
+}
+
+
 
 
 

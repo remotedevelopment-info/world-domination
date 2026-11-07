@@ -95,6 +95,12 @@ import {
   adjustBudgetDial,
   triggerAutoBalanceBudget,
 } from "./ui/console.js";
+import {
+  initAdminCharts,
+  updateAdminCharts,
+  switchAdminChartTab,
+  switchAdminChartScope,
+} from "./ui/admin_charts.js";
 
 // Wire module callbacks
 registerActionCallbacks({
@@ -284,13 +290,23 @@ export async function checkMyKingdom() {
     state.myKingdom = null;
     const playerKingdom = document.getElementById("player-kingdom");
     if (playerKingdom) {
-      playerKingdom.textContent = "👑 Overseer";
-      playerKingdom.className = "admin-badge";
+      playerKingdom.textContent = "👑 Pure Overseer";
+      playerKingdom.className = "admin-badge pure-overseer-badge";
+    }
+    document.getElementById("admin-analytics-quick-btn")?.classList.remove("hidden");
+    const overseerBadge = document.getElementById("admin-overseer-badge");
+    if (overseerBadge) {
+      overseerBadge.textContent = "👑 PURE OVERSEER: PLANETARY SURVEILLANCE";
+      overseerBadge.style.color = "#ffd700";
+      overseerBadge.style.borderColor = "rgba(212, 175, 55, 0.7)";
+      overseerBadge.style.background = "rgba(212, 175, 55, 0.15)";
     }
     document.getElementById("country-selection")?.classList.add("hidden");
     document.getElementById("my-kingdom")?.classList.add("hidden");
     closeModal();
     return true;
+  } else {
+    document.getElementById("admin-analytics-quick-btn")?.classList.add("hidden");
   }
 
   try {
@@ -1300,6 +1316,9 @@ function renderGameMonitor(data) {
 
   // Render cards
   renderGameMonitorCards();
+
+  // Render pure overseer deep visual analytics charts
+  updateAdminCharts(data);
 }
 
 function populateMonitorRealms(kingdoms) {
@@ -1664,6 +1683,17 @@ export async function submitCustomScenarioTune() {
   }
 }
 
+export function openPureAdminAnalytics() {
+  toggleAdminDashboard(true);
+  setTimeout(() => {
+    const section = document.getElementById("admin-analytics-section");
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth" });
+    }
+  }, 100);
+}
+
+window.openPureAdminAnalytics = openPureAdminAnalytics;
 window.setMonitorClassFilter = setMonitorClassFilter;
 window.renderGameMonitorCards = renderGameMonitorCards;
 window.applyScenarioPreset = applyScenarioPreset;
@@ -1676,6 +1706,9 @@ async function initApp() {
     initRenderer(canvas);
     setupCanvasInteractions(canvas);
   }
+
+  // Initialize pure overseer macro visualizer charts
+  initAdminCharts();
 
   window.addEventListener("resize", resizeCanvas);
 

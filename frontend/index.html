@@ -47,6 +47,7 @@
                     <span id="player-name">Player</span>
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
                     <button type="button" id="admin-console-btn" class="admin-console-btn hidden" onclick="toggleAdminDashboard()" title="Open Imperial Overseer &amp; Admin Dashboard">👑 Admin Console</button>
+                    <button type="button" id="admin-analytics-quick-btn" class="admin-analytics-btn hidden" onclick="openPureAdminAnalytics()" title="Open Pure Overseer Planetary Analytics &amp; Graphs">📊 Overseer Analytics</button>
                     <span id="connection-status" class="status-indicator" title="Server Connection Status">●</span>
                 </div>
 
@@ -490,6 +491,53 @@
                                     <button type="button" class="admin-speed-btn" onclick="adminSetSpeed('4d')">4d/yr</button>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Pure Admin Deep Analytics & Macro Visualizer Deck -->
+                        <div class="admin-section admin-analytics-section" id="admin-analytics-section">
+                            <div class="admin-section-header">
+                                <div class="analytics-header-title">
+                                    <span class="analytics-icon">📊</span>
+                                    <span class="section-title">Pure Overseer Macro Analytics &amp; Visualizer Deck</span>
+                                    <span class="overseer-tag" id="admin-overseer-badge">Planetary Analysis</span>
+                                </div>
+                                <div class="analytics-chart-controls">
+                                    <label for="admin-chart-scope">SCOPE:</label>
+                                    <select id="admin-chart-scope" class="admin-select" onchange="switchAdminChartScope(this.value)">
+                                        <option value="top10">Top 10 Powers</option>
+                                        <option value="top20">Top 20 Powers</option>
+                                        <option value="all">All 206 Realms</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Chart Navigation Tabs -->
+                            <div class="analytics-tabs-bar">
+                                <button type="button" class="analytics-tab-btn active" data-chart="wealth_gdp" onclick="switchAdminChartTab('wealth_gdp')">
+                                    💰 Wealth &amp; GDP
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="solvency_matrix" onclick="switchAdminChartTab('solvency_matrix')">
+                                    ⚔️ Solvency vs Military Risk
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="tax_pride" onclick="switchAdminChartTab('tax_pride')">
+                                    ⚖️ Tax vs Pride Curve
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="demographics" onclick="switchAdminChartTab('demographics')">
+                                    👥 Population &amp; Squalor
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="climatic_wave" onclick="switchAdminChartTab('climatic_wave')">
+                                    ☀️ Milankovitch Climatic Wave
+                                </button>
+                            </div>
+
+                            <!-- Interactive Canvas & Tooltip Container -->
+                            <div class="analytics-canvas-wrapper" id="admin-chart-wrapper">
+                                <canvas id="admin-analytics-canvas" width="900" height="340"></canvas>
+                                <div id="admin-chart-tooltip" class="admin-chart-tooltip hidden"></div>
+                            </div>
+
+                            <!-- Chart Macro Insights Summary Footer -->
+                            <div class="analytics-summary-bar" id="admin-chart-summary-bar"></div>
                         </div>
 
                         <!-- Game Monitor & Dynamic Internal Variable Matrix -->
@@ -1467,7 +1515,7 @@
         </div>
         <div id="toast-container" aria-live="polite"></div>
     </div>
-    <script type="module" src="js/main.js?v=3.3"></script>
+    <script type="module" src="js/main.js?v=3.4"></script>
 </body>
 
 </html>
