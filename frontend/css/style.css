@@ -3320,6 +3320,38 @@ body {
     max-height: 90vh;
 }
 
+.progress-modal-dialog.overseer-dialog {
+    max-width: 1140px;
+    width: 96vw;
+    max-height: 92vh;
+}
+
+.admin-view-switch-btn {
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    color: #ffd700;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-view-switch-btn:hover {
+    background: linear-gradient(180deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 1) 100%);
+    color: #ffffff;
+    border-color: #ffd700;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+}
+
+.overseer-badge-gold {
+    background: rgba(129, 140, 248, 0.2) !important;
+    border: 1px solid #818cf8 !important;
+    color: #e0e7ff !important;
+}
+
 .admin-dialog-body {
     display: flex;
     flex-direction: column;

@@ -120,6 +120,9 @@ onSocketStateChange((payload) => {
   if (isAdminDashboardOpen) {
     refreshAdminDashboard();
   }
+  if (isOverseerAnalyticsOpen) {
+    refreshOverseerAnalytics();
+  }
   if (state.myKingdom && state.myKingdom.country_id) {
     const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
     if (!mk || !mk.owner_id || !isCountryOwnedByCurrentUser(mk)) {
@@ -226,7 +229,10 @@ export function showAuthScreen(message = "") {
   closeModal();
   stopClock();
   disconnectWebSocket();
+  toggleAdminDashboard(false);
+  toggleOverseerAnalytics(false);
   document.getElementById("admin-console-btn")?.classList.add("hidden");
+  document.getElementById("admin-analytics-quick-btn")?.classList.add("hidden");
   document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
   document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
   document.getElementById("game-screen")?.classList.remove("active");
@@ -278,9 +284,11 @@ export async function checkMyKingdom() {
   const isAdmin = isTimelineAdmin();
   if (isAdmin) {
     document.getElementById("admin-console-btn")?.classList.remove("hidden");
+    document.getElementById("admin-analytics-quick-btn")?.classList.remove("hidden");
     document.getElementById("dev-chrono-toggle-btn")?.classList.remove("hidden");
   } else {
     document.getElementById("admin-console-btn")?.classList.add("hidden");
+    document.getElementById("admin-analytics-quick-btn")?.classList.add("hidden");
     document.getElementById("dev-chrono-toggle-btn")?.classList.add("hidden");
     document.getElementById("dev-chrono-drawer")?.classList.add("hidden");
   }
@@ -293,7 +301,6 @@ export async function checkMyKingdom() {
       playerKingdom.textContent = "👑 Pure Overseer";
       playerKingdom.className = "admin-badge pure-overseer-badge";
     }
-    document.getElementById("admin-analytics-quick-btn")?.classList.remove("hidden");
     const overseerBadge = document.getElementById("admin-overseer-badge");
     if (overseerBadge) {
       overseerBadge.textContent = "👑 PURE OVERSEER: PLANETARY SURVEILLANCE";
@@ -305,8 +312,6 @@ export async function checkMyKingdom() {
     document.getElementById("my-kingdom")?.classList.add("hidden");
     closeModal();
     return true;
-  } else {
-    document.getElementById("admin-analytics-quick-btn")?.classList.add("hidden");
   }
 
   try {
@@ -645,6 +650,8 @@ function setupCanvasInteractions(canvas) {
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       toggleProgressModal(false);
+      toggleAdminDashboard(false);
+      toggleOverseerAnalytics(false);
       return;
     }
 
@@ -854,12 +861,15 @@ window.getCurrentGameYear = getCurrentGameYear;
 window.toggleAdminDashboard = toggleAdminDashboard;
 window.handleAdminDashboardBackdrop = handleAdminDashboardBackdrop;
 window.refreshAdminDashboard = refreshAdminDashboard;
+window.toggleOverseerAnalytics = toggleOverseerAnalytics;
+window.handleOverseerAnalyticsBackdrop = handleOverseerAnalyticsBackdrop;
+window.refreshOverseerAnalytics = refreshOverseerAnalytics;
 window.adminJumpEra = adminJumpEra;
 window.adminSetSpeed = adminSetSpeed;
 window.adminTogglePause = adminTogglePause;
 
 // -------------------------------------------------------------
-// IMPERIAL OVERSEER & ADMIN DASHBOARD CONTROLLER
+// IMPERIAL GAME MASTER & ADMIN CONSOLE CONTROLLER
 // -------------------------------------------------------------
 
 let isAdminDashboardOpen = false;
@@ -906,6 +916,79 @@ export function handleAdminDashboardBackdrop(event) {
   }
 }
 
+// -------------------------------------------------------------
+// PLANETARY OVERSEER MACRO ANALYTICS & SURVEILLANCE CONTROLLER
+// -------------------------------------------------------------
+
+let isOverseerAnalyticsOpen = false;
+let isOverseerRefreshing = false;
+let isOverseerRefreshPending = false;
+let overseerRefreshTimer = null;
+
+export function toggleOverseerAnalytics(forceOpen) {
+  if (typeof forceOpen === "boolean") {
+    isOverseerAnalyticsOpen = forceOpen;
+  } else {
+    isOverseerAnalyticsOpen = !isOverseerAnalyticsOpen;
+  }
+
+  const modal = document.getElementById("overseer-analytics-modal");
+  if (modal) {
+    modal.classList.toggle("hidden", !isOverseerAnalyticsOpen);
+  }
+
+  if (isOverseerAnalyticsOpen) {
+    refreshOverseerAnalytics();
+    if (!overseerRefreshTimer) {
+      overseerRefreshTimer = setInterval(() => {
+        if (isOverseerAnalyticsOpen) {
+          refreshOverseerAnalytics();
+        }
+      }, 1000);
+    }
+  } else {
+    if (overseerRefreshTimer) {
+      clearInterval(overseerRefreshTimer);
+      overseerRefreshTimer = null;
+    }
+    isOverseerRefreshPending = false;
+  }
+}
+
+export function handleOverseerAnalyticsBackdrop(event) {
+  if (event.target && event.target.id === "overseer-analytics-modal") {
+    toggleOverseerAnalytics(false);
+  }
+}
+
+export async function refreshOverseerAnalytics() {
+  if (!isOverseerAnalyticsOpen) return;
+  if (isOverseerRefreshing) {
+    isOverseerRefreshPending = true;
+    return;
+  }
+  isOverseerRefreshing = true;
+  isOverseerRefreshPending = false;
+
+  try {
+    const resMon = await apiGetAdminGameMonitor();
+    if (!resMon.ok) {
+      throw new Error(await readErrorMessage(resMon, "Failed to load overseer telemetry"));
+    }
+    const monData = await resMon.json();
+    currentMonitorData = monData;
+    renderGameMonitor(monData);
+  } catch (err) {
+    console.error("Error refreshing overseer analytics:", err);
+  } finally {
+    isOverseerRefreshing = false;
+    if (isOverseerRefreshPending && isOverseerAnalyticsOpen) {
+      isOverseerRefreshPending = false;
+      setTimeout(refreshOverseerAnalytics, 200);
+    }
+  }
+}
+
 function escapeHTML(str) {
   if (!str) return "";
   return String(str)
@@ -928,25 +1011,13 @@ export async function refreshAdminDashboard() {
 
   const tbody = document.getElementById("admin-users-tbody");
   try {
-    const [res, monRes] = await Promise.all([
-      apiGetAdminDashboard(),
-      apiGetAdminGameMonitor().catch((err) => {
-        console.warn("Failed to fetch game monitor telemetry:", err);
-        return null;
-      }),
-    ]);
+    const res = await apiGetAdminDashboard();
     if (!res.ok) {
       throw new Error(await readErrorMessage(res, "Failed to load admin dashboard"));
     }
     const data = await res.json();
     currentAdminDashboardData = data;
     renderAdminDashboardData(data, tbody);
-
-    if (monRes && monRes.ok) {
-      const monData = await monRes.json();
-      currentMonitorData = monData;
-      renderGameMonitor(monData);
-    }
   } catch (err) {
     console.error("Error refreshing admin dashboard:", err);
     if (tbody && !currentAdminDashboardData) {
@@ -1621,7 +1692,10 @@ export async function applyScenarioPreset(presetName) {
       statusEl.textContent = `✓ ${result.message || "Scenario injected successfully"}`;
       statusEl.style.color = "#4ade80";
     }
-    await refreshAdminDashboard();
+    await refreshOverseerAnalytics();
+    if (isAdminDashboardOpen) {
+      refreshAdminDashboard();
+    }
   } catch (err) {
     console.error("Scenario preset injection error:", err);
     if (statusEl) {
@@ -1673,7 +1747,10 @@ export async function submitCustomScenarioTune() {
       statusEl.textContent = `✓ ${result.message || "Calibration applied"}`;
       statusEl.style.color = "#4ade80";
     }
-    await refreshAdminDashboard();
+    await refreshOverseerAnalytics();
+    if (isAdminDashboardOpen) {
+      refreshAdminDashboard();
+    }
   } catch (err) {
     console.error("Custom scenario tune error:", err);
     if (statusEl) {
@@ -1684,13 +1761,8 @@ export async function submitCustomScenarioTune() {
 }
 
 export function openPureAdminAnalytics() {
-  toggleAdminDashboard(true);
-  setTimeout(() => {
-    const section = document.getElementById("admin-analytics-section");
-    if (section) {
-      section.scrollIntoView({ behavior: "smooth" });
-    }
-  }, 100);
+  toggleAdminDashboard(false);
+  toggleOverseerAnalytics(true);
 }
 
 window.openPureAdminAnalytics = openPureAdminAnalytics;
