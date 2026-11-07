@@ -996,15 +996,6 @@ export function updateEconomyHintsLive() {
       alertBanner.classList.add("hidden");
     }
   }
-      alertBanner.innerHTML = alerts.join("<br>");
-      alertBanner.classList.remove("hidden");
-      alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep);
-    } else {
-      alertBanner.innerHTML = "";
-      alertBanner.classList.add("hidden");
-      alertBanner.classList.remove("alert-danger");
-    }
-  }
 
   updateDerivedEconomyUI(Math.round(gdp), value, inflation, cappedBudget.effBalance);
 }
