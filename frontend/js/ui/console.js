@@ -172,6 +172,18 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
     syncPopulationMileometerAnchor(kingdom.population ?? 1000);
     startPopulationMileometerTicker(popVal);
   }
+  const resVal = document.getElementById("cc-meter-res-val");
+  if (resVal) {
+    renderMileometer(resVal, kingdom.resources ?? 500, false);
+  }
+  const troopVal = document.getElementById("cc-meter-troop-val");
+  if (troopVal) {
+    renderMileometer(troopVal, kingdom.troops ?? 0, false);
+  }
+  const gdpValEl = document.getElementById("cc-meter-gdp-val");
+  if (gdpValEl) {
+    renderMileometer(gdpValEl, kingdom.economy?.gdp ?? 0, false);
+  }
 
   // Wire controls and meters
   renderMeters();
@@ -218,9 +230,9 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   const popVal = document.getElementById("cc-meter-pop-val");
   if (popVal) syncPopulationMileometerAnchor(pop);
   const resVal = document.getElementById("cc-meter-res-val");
-  if (resVal) resVal.textContent = resAmt.toLocaleString();
+  if (resVal) renderMileometer(resVal, resAmt, true);
   const troopVal = document.getElementById("cc-meter-troop-val");
-  if (troopVal) troopVal.textContent = central.toLocaleString();
+  if (troopVal) renderMileometer(troopVal, central, true);
 
   // Safely sync detailed cache with live broadcast
   const detail = commandCenterDetail || kingdom;
@@ -337,9 +349,9 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   const popVal = document.getElementById("cc-meter-pop-val");
   if (popVal) syncPopulationMileometerAnchor(pop);
   const resVal = document.getElementById("cc-meter-res-val");
-  if (resVal) resVal.textContent = resAmt.toLocaleString();
+  if (resVal) renderMileometer(resVal, resAmt, true);
   const troopVal = document.getElementById("cc-meter-troop-val");
-  if (troopVal) troopVal.textContent = central.toLocaleString();
+  if (troopVal) renderMileometer(troopVal, central, true);
 
   const levy = detail?.troops_levy ?? 0;
   const regular = detail?.troops_regular ?? (detail?.troops ?? central);
@@ -1226,7 +1238,7 @@ export function updateEconomyHintsLive() {
 export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance) {
   const gdpValEl = document.getElementById("cc-meter-gdp-val");
   if (gdpValEl && typeof gdp === "number") {
-    gdpValEl.textContent = gdp.toLocaleString();
+    renderMileometer(gdpValEl, Math.round(gdp), true);
     setMeter("cc-meter-gdp", gdp, 500);
   }
 

@@ -7,17 +7,19 @@ let anchorPopulation = 0;
 let anchorTimestamp = Date.now();
 let annualNetRate = 0;
 let currentDisplayedPop = 0;
-let activeContainerEl = null;
+let activePopContainerEl = null;
+
+// Track last rendered value per container element to prevent redundant re-renders
+const containerValues = new WeakMap();
 
 /**
- * Creates or updates the mechanical rotational drums inside target container.
+ * Creates or updates mechanical rotational drum reels inside target container.
  * Renders individual cylindrical drums with 0-9 strips that rotate via translateY.
  */
 export function renderMileometer(containerEl, value, animate = true) {
   if (!containerEl) return;
-  activeContainerEl = containerEl;
-  const num = Math.max(0, Math.round(value));
-  currentDisplayedPop = num;
+  const num = Math.max(0, Math.round(Number(value) || 0));
+  containerValues.set(containerEl, num);
 
   const formattedStr = num.toLocaleString("en-US");
   const chars = formattedStr.split("");
@@ -51,7 +53,6 @@ export function renderMileometer(containerEl, value, animate = true) {
 
         const strip = document.createElement("div");
         strip.className = "mileometer-strip";
-        // Numerals 0..9 plus wrap-around 0
         for (let d = 0; d <= 10; d++) {
           const cell = document.createElement("div");
           cell.className = "mileometer-cell";
@@ -61,7 +62,6 @@ export function renderMileometer(containerEl, value, animate = true) {
         reel.appendChild(strip);
         containerEl.appendChild(reel);
 
-        // Position initial digit without animation
         const digit = parseInt(ch, 10) || 0;
         strip.style.transform = `translateY(-${digit * DIGIT_HEIGHT}px)`;
       }
@@ -86,7 +86,6 @@ export function renderMileometer(containerEl, value, animate = true) {
         strip.style.transition = "none";
         strip.style.transform = `translateY(-${newDigit * DIGIT_HEIGHT}px)`;
       } else {
-        // Fast rotational transition for snappy mechanical feedback
         strip.style.transition = "transform 0.45s cubic-bezier(0.25, 1, 0.5, 1.05)";
         strip.style.transform = `translateY(-${newDigit * DIGIT_HEIGHT}px)`;
       }
@@ -96,14 +95,16 @@ export function renderMileometer(containerEl, value, animate = true) {
 
 /**
  * Sets the authoritative server baseline population anchor.
- * Called whenever authoritative state arrives via WebSocket or API.
  */
 export function syncPopulationMileometerAnchor(serverPop) {
-  anchorPopulation = Math.max(0, Math.round(serverPop));
+  anchorPopulation = Math.max(0, Math.round(Number(serverPop) || 0));
   anchorTimestamp = Date.now();
   currentDisplayedPop = anchorPopulation;
-  if (activeContainerEl) {
-    renderMileometer(activeContainerEl, anchorPopulation, true);
+  if (!activePopContainerEl) {
+    activePopContainerEl = document.getElementById("cc-meter-pop-val");
+  }
+  if (activePopContainerEl) {
+    renderMileometer(activePopContainerEl, anchorPopulation, true);
   }
 }
 
@@ -111,25 +112,27 @@ export function syncPopulationMileometerAnchor(serverPop) {
  * Updates the projected annual net growth rate (natural growth + net migration).
  */
 export function setPopulationMileometerRate(rate) {
-  annualNetRate = rate;
+  annualNetRate = Number(rate) || 0;
 }
 
 /**
- * Starts the continuous 1-second mileometer sub-annual interpolation ticker.
- * Slowly or quickly rolls the rotational drums between annual server updates,
- * adjusting accurately to scale and aligning cleanly on annual rollovers.
+ * Starts the continuous 1-second mileometer sub-annual interpolation ticker for population.
  */
 export function startPopulationMileometerTicker(containerEl) {
   if (containerEl) {
-    activeContainerEl = containerEl;
+    activePopContainerEl = containerEl;
   }
   if (mileometerTimer) return;
 
   mileometerTimer = setInterval(() => {
-    if (!activeContainerEl) return;
+    if (!activePopContainerEl) {
+      activePopContainerEl = document.getElementById("cc-meter-pop-val");
+    }
+    if (!activePopContainerEl) return;
+
     const modal = document.getElementById("kingdom-command-center");
     if (!modal || modal.classList.contains("hidden")) {
-      return; // Pause animation when command center is closed
+      return;
     }
 
     if (annualNetRate === 0) return;
@@ -138,14 +141,13 @@ export function startPopulationMileometerTicker(containerEl) {
     const scaleSec = getCurrentScaleSeconds();
     if (scaleSec <= 0) return;
 
-    // Fractional years elapsed since anchor was committed
     const deltaYears = elapsedSec / scaleSec;
     const projectedPop = Math.max(0, Math.round(anchorPopulation + annualNetRate * deltaYears));
 
     if (projectedPop !== currentDisplayedPop) {
-      renderMileometer(activeContainerEl, projectedPop, true);
+      renderMileometer(activePopContainerEl, projectedPop, true);
     }
-  }, 1000); // Ticks every 1 second
+  }, 1000);
 }
 
 /**

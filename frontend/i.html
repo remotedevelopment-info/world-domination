@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kingdom Conquest - Medieval Strategy Game</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Login/Register Screen -->
+        <div id="auth-screen" class="screen active">
+            <div class="auth-container">
+                <h1>🏰 Kingdom Conquest</h1>
+                <p class="subtitle">Medieval Era - Claim Your Kingdom</p>
+
+                <div id="login-form" class="auth-form">
+                    <h2>Login</h2>
+                    <input type="text" id="login-username" placeholder="Username" required autocomplete="username"
+                        onkeydown="if(event.key==='Enter')document.getElementById('login-password')?.focus()">
+                    <input type="password" id="login-password" placeholder="Password" required
+                        autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
+                    <button onclick="login()">Login</button>
+                    <p class="switch-form">Don't have an account? <a href="#" onclick="showRegister(event)">Register</a>
+                    </p>
+                </div>
+
+                <div id="register-form" class="hidden auth-form">
+                    <h2>Register</h2>
+                    <input type="text" id="register-username" placeholder="Username" required>
+                    <input type="email" id="register-email" placeholder="Email" required>
+                    <input type="password" id="register-password" placeholder="Password" required>
+                    <button onclick="register()">Register</button>
+                    <p class="switch-form">Already have an account? <a href="#" onclick="showLogin(event)">Login</a></p>
+                </div>
+
+                <div id="auth-message" class="auth-message" role="alert" aria-live="polite"></div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <header class="game-header">
+                <div class="player-info">
+                    <span id="player-name">Player</span>
+                    <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
+                    <button type="button" id="admin-console-btn" class="admin-console-btn hidden"
+                        onclick="toggleAdminDashboard()" title="Open Imperial Overseer &amp; Admin Dashboard">👑 Admin
+                        Console</button>
+                    <button type="button" id="admin-analytics-quick-btn" class="admin-analytics-btn hidden"
+                        onclick="openPureAdminAnalytics()"
+                        title="Open Pure Overseer Planetary Analytics &amp; Graphs">📊 Overseer Analytics</button>
+                    <span id="connection-status" class="status-indicator" title="Server Connection Status">●</span>
+                </div>
+
+                <!-- Steampunk Map Legend with In-Game Year & Chronometer -->
+                <div class="map-legend-chronometer" id="header-map-legend">
+                    <div class="legend-frame-plate">
+                        <div class="legend-crest" title="Imperial Navigational Astrolabe">🧭</div>
+                        <div class="legend-body">
+                            <div class="legend-year-banner">
+                                <span class="legend-ad">ANNO DOMINI</span>
+                                <span class="legend-year-num" id="legend-year-display">1500</span>
+                                <span class="legend-season-badge" id="legend-season-display">🌱 Spring</span>
+                            </div>
+                            <div class="legend-era-tag" id="legend-era-tag">THE AGE OF DISCOVERY</div>
+                        </div>
+                        <div class="legend-year-progress-track" title="Progression through Current Year">
+                            <div class="legend-year-progress-fill" id="legend-year-progress" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Development Activated Time Scale Control Button -->
+                    <button type="button" class="dev-chrono-btn hidden" id="dev-chrono-toggle-btn"
+                        onclick="toggleDevChronoControl()"
+                        title="Toggle Development Time Regulator (Map Ticks to Years)">
+                        <span class="dev-gear-icon">⚙️</span>
+                        <span class="dev-ratio-tag" id="header-dev-ratio-badge">1d = 1yr</span>
+                    </button>
+                </div>
+
+                <!-- Historical Era Chronometer of Ages (5 Historic Eras) -->
+                <nav class="era-chronometer-bar" aria-label="Historical Eras Timeline">
+                    <div class="era-track-label">
+                        <span class="gear-icon">⚙️</span>
+                        <span class="chronometer-title">AGES</span>
+                    </div>
+                    <div class="era-plaques-container">
+                        <div class="era-plaque active" data-era="discovery" onclick="jumpToYear(1500)"
+                            title="Age of Discovery (c. 1500) - Founding Sovereign Empires (including Scotland and Ireland)">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA I</div>
+                            <div class="plaque-name">DISCOVERY</div>
+                            <div class="plaque-dates">circa 1500</div>
+                            <div class="plaque-badge active-lamp">ACTIVE</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="revolt" onclick="jumpToYear(1750)"
+                            title="Age of Revolt (1750–1860) - Adds Dutch Republic, Prussia, Sweden, Greece">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA II</div>
+                            <div class="plaque-name">REVOLT</div>
+                            <div class="plaque-dates">1750–1860</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="independence" onclick="jumpToYear(1860)"
+                            title="Age of Independence (1860–1920) - Adds Italy, Austria-Hungary, Romania, Serbia, Norway">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA III</div>
+                            <div class="plaque-name">INDEPENDENCE</div>
+                            <div class="plaque-dates">1860–1920</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="decolonisation" onclick="jumpToYear(1920)"
+                            title="Age of Decolonisation (1920–1989) - Adds Finland, Hungary, Egypt, Morocco, Algeria">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA IV</div>
+                            <div class="plaque-name">DECOLONISATION</div>
+                            <div class="plaque-dates">1920–1989</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+
+                        <div class="era-plaque locked" data-era="modern" onclick="jumpToYear(1989)"
+                            title="The Modern Age (1989–Present) - Adds Ukraine, Baltic Republics, Czechia, Croatia, Tunisia">
+                            <div class="plaque-rivet top-left"></div>
+                            <div class="plaque-rivet top-right"></div>
+                            <div class="plaque-num">ERA V</div>
+                            <div class="plaque-name">MODERN</div>
+                            <div class="plaque-dates">1989–Pres</div>
+                            <div class="plaque-badge locked-lamp">LOCKED</div>
+                            <div class="plaque-rivet btm-left"></div>
+                            <div class="plaque-rivet btm-right"></div>
+                        </div>
+                    </div>
+                </nav>
+
+                <!-- Header Control: Imperial Progress Modal Toggle -->
+                <button type="button" class="progress-modal-btn" id="progress-modal-toggle-btn"
+                    onclick="toggleProgressModal()" title="View Imperial Progress, Realm Selection, and Chronicle">
+                    <span class="progress-btn-icon">📜</span>
+                    <span class="progress-btn-text">Progress</span>
+                </button>
+            </header>
+
+            <!-- Development Activated Chrono Regulator Drawer / Modal -->
+            <div id="dev-chrono-drawer" class="hidden dev-chrono-panel">
+                <div class="dev-chrono-header">
+                    <div class="dev-title-block">
+                        <span class="dev-panel-gear">⚙️</span>
+                        <div>
+                            <h4>CHRONOMETER RATIO REGULATOR</h4>
+                            <div class="dev-subtitle">Development Control · Map Real-World Time &amp; Ticks to
+                                Historical Years</div>
+                        </div>
+                    </div>
+                    <button type="button" class="dev-close-x" onclick="toggleDevChronoControl()"
+                        title="Close Control">×</button>
+                </div>
+
+                <div class="dev-chrono-body">
+                    <div class="dev-section-title">SELECT TICK-TO-YEAR MAPPING RATIO:</div>
+                    <div class="chrono-scales-grid">
+                        <label class="scale-card" data-scale="1s">
+                            <input type="radio" name="chrono-scale-radio" value="1s" onchange="setChronoScale('1s')">
+                            <div class="card-content">
+                                <span class="card-label">⚡ 1 SECOND = 1 YEAR</span>
+                                <span class="card-meta">🚀 Warp Speed Dev Mode (1 yr / sec)</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="5s">
+                            <input type="radio" name="chrono-scale-radio" value="5s" onchange="setChronoScale('5s')">
+                            <div class="card-content">
+                                <span class="card-label">🚀 5 SECONDS = 1 YEAR</span>
+                                <span class="card-meta">⚡ Ultra-Speed Dev Turbo Mode</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="1m">
+                            <input type="radio" name="chrono-scale-radio" value="1m" onchange="setChronoScale('1m')">
+                            <div class="card-content">
+                                <span class="card-label">1 MINUTE = 1 YEAR</span>
+                                <span class="card-meta">⚡ ~4 ticks/yr · Ultra-Fast Dev Test</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="1h">
+                            <input type="radio" name="chrono-scale-radio" value="1h" onchange="setChronoScale('1h')">
+                            <div class="card-content">
+                                <span class="card-label">1 HOUR = 1 YEAR</span>
+                                <span class="card-meta">🏃 240 ticks/yr · Fast Dev Sprint</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="4h">
+                            <input type="radio" name="chrono-scale-radio" value="4h" onchange="setChronoScale('4h')">
+                            <div class="card-content">
+                                <span class="card-label">4 HOURS = 1 YEAR</span>
+                                <span class="card-meta">🐎 960 ticks/yr · Accelerated Simulation</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card active" data-scale="1d">
+                            <input type="radio" name="chrono-scale-radio" value="1d" checked
+                                onchange="setChronoScale('1d')">
+                            <div class="card-content">
+                                <span class="card-label">1 DAY = 1 YEAR (STANDARD)</span>
+                                <span class="card-meta">🌍 5,760 ticks/yr · Player Reality Normal</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="2d">
+                            <input type="radio" name="chrono-scale-radio" value="2d" onchange="setChronoScale('2d')">
+                            <div class="card-content">
+                                <span class="card-label">2 DAYS = 1 YEAR</span>
+                                <span class="card-meta">🐢 11,520 ticks/yr · Slow Campaign</span>
+                            </div>
+                        </label>
+
+                        <label class="scale-card" data-scale="4d">
+                            <input type="radio" name="chrono-scale-radio" value="4d" onchange="setChronoScale('4d')">
+                            <div class="card-content">
+                                <span class="card-label">4 DAYS = 1 YEAR</span>
+                                <span class="card-meta">⚓ 23,040 ticks/yr · Epic Multi-Month Saga</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Start Year Calibration Input -->
+                    <div class="dev-start-year-row">
+                        <label for="dev-start-year-input" class="start-year-label">START YEAR CALIBRATION:</label>
+                        <div class="start-year-input-wrap">
+                            <input type="number" id="dev-start-year-input" class="start-year-input" value="1500" min="0"
+                                max="9999" step="1" onkeydown="if(event.key==='Enter')applyStartYearInput()">
+                            <button type="button" class="start-year-apply-btn"
+                                onclick="applyStartYearInput()">Apply</button>
+                            <button type="button" class="start-year-reset-btn" onclick="resetToDefaultStartYear()"
+                                title="Reset to 1500">1500</button>
+                        </div>
+                    </div>
+
+                    <!-- Developer Only Progress & Engine Telemetry -->
+                    <div class="dev-chrono-substatus">
+                        <div class="substatus-box">
+                            <span class="substatus-label">CALENDAR PROGRESSION:</span>
+                            <span class="substatus-val" id="dev-live-month-day">Month 1 (Jan) · Day 1 · 🌱 Spring</span>
+                        </div>
+                        <div class="substatus-box">
+                            <span class="substatus-label">AUTHORITATIVE ENGINE TICK:</span>
+                            <span class="substatus-val legend-tick-pulse" id="dev-live-next-tick">Next Tick in
+                                15s</span>
+                        </div>
+                    </div>
+
+                    <div class="dev-section-title">HISTORICAL ERA TIME WARP (DEV FAST-FORWARD):</div>
+                    <div class="dev-warp-buttons">
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1500)">1500 Discovery</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1750)">1750 Revolt</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1860)">1860 Independence</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(1945)">1945 Decolonisation</button>
+                        <button type="button" class="warp-btn" onclick="jumpToYear(2000)">2000 Modern</button>
+                    </div>
+
+                    <div class="dev-fine-tune-row">
+                        <button type="button" class="step-btn" onclick="stepYearOffset(-10)">-10 Yrs</button>
+                        <button type="button" class="step-btn" onclick="stepYearOffset(-1)">-1 Yr</button>
+                        <span class="offset-display" id="dev-offset-display">Offset: +0 years</span>
+                        <button type="button" class="step-btn" onclick="stepYearOffset(1)">+1 Yr</button>
+                        <button type="button" class="step-btn" onclick="stepYearOffset(10)">+10 Yrs</button>
+                        <button type="button" class="step-btn reset" onclick="resetYearOffset()">Reset</button>
+                    </div>
+
+                    <div class="dev-live-readout">
+                        <div class="readout-col">
+                            <span class="r-label">CURRENT SIM YEAR:</span>
+                            <span class="r-val" id="dev-live-year">1500.00</span>
+                        </div>
+                        <div class="readout-col">
+                            <span class="r-label">HISTORICAL ERA:</span>
+                            <span class="r-val" id="dev-live-era">Age of Discovery</span>
+                        </div>
+                        <div class="readout-col">
+                            <span class="r-label">SERVER TICKS:</span>
+                            <span class="r-val" id="dev-live-ticks">0</span>
+                        </div>
+                        <div class="readout-col">
+                            <span class="r-label">NEXT YEAR ROLLOVER:</span>
+                            <span class="r-val" id="dev-live-next-yr">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <main class="game-main">
+                <div class="map-container steampunk-map-frame">
+                    <!-- Corner Astrolabe Brackets -->
+                    <div class="map-corner-bracket top-left"></div>
+                    <div class="map-corner-bracket top-right"></div>
+                    <div class="map-corner-bracket bottom-left"></div>
+                    <div class="map-corner-bracket bottom-right"></div>
+
+                    <!-- Steampunk Navigation Tools Bar -->
+                    <div class="map-tool-ribbon">
+                        <button type="button" id="reset-view-btn" class="map-ribbon-btn" onclick="resetCamera(true)"
+                            title="Reset Camera to Era Framing (or Middle-Click anywhere on map)">
+                            <span class="btn-icon">🧭</span>
+                            <span class="btn-txt">Reset View</span>
+                        </button>
+                        <button type="button" id="toggle-loupe-btn" class="map-ribbon-btn"
+                            title="Toggle 2.4× Steampunk Brass Loupe (or hold Right-Click anywhere on map)">
+                            <span class="btn-icon">🔍</span>
+                            <span class="btn-txt">2.4× Loupe</span>
+                        </button>
+                        <button type="button" id="toggle-labels-btn" class="map-ribbon-btn active"
+                            onclick="toggleMapLabels()"
+                            title="Toggle Kingdom Name Plate Badges (Map looks pristine without labels)">
+                            <span class="btn-icon">🏷️</span>
+                            <span class="btn-txt" id="labels-btn-label">Labels: On</span>
+                        </button>
+                        <button type="button" id="toggle-polynesia-btn" class="map-ribbon-btn"
+                            onclick="togglePolynesiaMetaTheme()"
+                            title="Toggle Polynesian &amp; Pacific Island Kingdoms (Advanced Play Meta Theme)">
+                            <span class="btn-icon">🏝️</span>
+                            <span class="btn-txt" id="polynesia-btn-label">Polynesia: Off</span>
+                        </button>
+                        <span class="map-nav-tip">Wheel: Zoom · Arrows/Drag: Pan · Middle-click: Reset · Right-click:
+                            Loupe</span>
+                    </div>
+
+                    <canvas id="world-map"></canvas>
+                    <div id="map-overlay" class="map-overlay">
+                        <div id="kingdom-info" class="hidden kingdom-info">
+                            <h3 id="kingdom-name"></h3>
+                            <p>Population: <span id="kingdom-population"></span></p>
+                            <p>Resources: <span id="kingdom-resources"></span></p>
+                            <p id="kingdom-owner"></p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Imperial Progress Modal Dialog (Frees 100% full-screen map) -->
+            <div id="progress-modal-overlay" class="progress-modal-overlay hidden"
+                onclick="handleProgressModalBackdrop(event)">
+                <div class="progress-modal-dialog steampunk-panel" role="dialog" aria-modal="true"
+                    aria-labelledby="progress-modal-title">
+                    <div class="progress-modal-header">
+                        <div class="progress-modal-title-group">
+                            <span class="progress-crest">📜</span>
+                            <h2 id="progress-modal-title">IMPERIAL PROGRESS &amp; CODEX</h2>
+                        </div>
+                        <button type="button" class="progress-modal-close-btn" onclick="toggleProgressModal(false)"
+                            title="Close (Esc)">✕</button>
+                    </div>
+                    <div class="progress-modal-body">
+                        <div id="country-selection" class="panel">
+                            <h3>👑 Claim an Imperial Realm</h3>
+                            <p class="panel-desc">Select a sovereign power operating in the current cartographic chart
+                            </p>
+                            <div id="available-kingdoms" class="kingdom-list"></div>
+                            <button id="claim-btn" onclick="claimKingdom()" disabled>Claim Realm</button>
+                        </div>
+
+                        <div id="my-kingdom" class="hidden panel">
+                            <h3>My Imperial Realm</h3>
+                            <div id="kingdom-stats">
+                                <p>Name: <span id="my-kingdom-name"></span></p>
+                                <p>Population: <span id="my-kingdom-pop"></span></p>
+                                <p>Resources: <span id="my-kingdom-res"></span></p>
+                                <p>Last Active: <span id="my-kingdom-active"></span></p>
+                            </div>
+                            <div class="action-buttons">
+                                <button onclick="showAction('diplomacy')">🤝 Diplomacy</button>
+                                <button onclick="showAction('economy')">💰 Economy</button>
+                                <button onclick="showAction('military')">⚔️ Military</button>
+                            </div>
+                        </div>
+
+                        <div id="economy-panel" class="hidden panel">
+                            <h3>Royal Exchequer &amp; Economy</h3>
+                            <div id="economy-stats">
+                                <p>Currency Value: <span id="econ-currency">—</span><span
+                                        class="econ-unit">ducats</span><span id="econ-currency-trend"
+                                        class="econ-trend"></span></p>
+                                <p>Productivity (GDP): <span id="econ-gdp">—</span><span id="econ-gdp-trend"
+                                        class="econ-trend"></span></p>
+                                <p>Tax Revenue: <span id="econ-revenue">—</span><span class="econ-unit">/yr</span>
+                                </p>
+                                <p>Last Year Expenditure: <span id="econ-last-exp">—</span><span
+                                        class="econ-unit">/yr</span></p>
+                                <p>This Year Expenditure: <span id="econ-military">—</span><span
+                                        class="econ-unit">/yr</span></p>
+                                <p>Exchequer Balance (No Deficit): <span id="econ-balance">—</span><span
+                                        id="econ-balance-trend" class="econ-trend"></span></p>
+                                <p>Pop Pressure &amp; Migration: <span id="econ-pop-pressure">—</span> · <span
+                                        id="econ-migration">—</span></p>
+                                <p>Gold Reserve: <span id="econ-reserve">—</span></p>
+                                <p>Tax Rate: <span id="econ-rate">—</span><span class="econ-unit">%</span></p>
+                                <p>Development: <span id="econ-levels">—</span></p>
+                            </div>
+                        </div>
+
+                        <div id="activity-log" class="panel">
+                            <h3>Chronicle of Imperial Deeds</h3>
+                            <div id="log-entries" class="log-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Dashboard & Overseer Console Modal -->
+            <div id="admin-dashboard-modal" class="progress-modal-overlay hidden"
+                onclick="handleAdminDashboardBackdrop(event)">
+                <div class="progress-modal-dialog steampunk-panel admin-dialog" role="dialog" aria-modal="true"
+                    aria-labelledby="admin-dialog-title">
+                    <div class="progress-modal-header">
+                        <div class="progress-modal-title-group">
+                            <span class="progress-crest">👑</span>
+                            <h2 id="admin-dialog-title">IMPERIAL GAME MASTER &amp; ADMIN CONSOLE</h2>
+                            <span class="admin-live-badge">MASTER CONTROLS</span>
+                        </div>
+                        <div class="admin-header-actions">
+                            <button type="button" class="admin-view-switch-btn"
+                                onclick="toggleAdminDashboard(false); toggleOverseerAnalytics(true);"
+                                title="Open Pure Overseer Planetary Analytics Deck">📊 Overseer Analytics ↗</button>
+                            <button type="button" class="admin-refresh-btn" onclick="refreshAdminDashboard()"
+                                title="Refresh telemetry">🔄 Refresh</button>
+                            <button type="button" class="progress-modal-close-btn" onclick="toggleAdminDashboard(false)"
+                                title="Close (Esc)">✕</button>
+                        </div>
+                    </div>
+                    <div class="progress-modal-body admin-dialog-body">
+                        <!-- Server Timeline Telemetry & Master Controls -->
+                        <div class="admin-section">
+                            <div class="admin-section-header">
+                                <span class="section-title">⏱️ Authoritative Server Timeline &amp; Simulation
+                                    Engine</span>
+                                <span id="admin-timeline-sync-time" class="admin-sync-tag">Authoritative Single
+                                    Source</span>
+                            </div>
+                            <div class="admin-telemetry-grid">
+                                <div class="admin-stat-card">
+                                    <span class="stat-label">CURRENT SIMULATION YEAR</span>
+                                    <span class="stat-value" id="admin-sim-year">—</span>
+                                    <span class="stat-sub" id="admin-era-name">—</span>
+                                </div>
+                                <div class="admin-stat-card">
+                                    <span class="stat-label">TIMELINE PACE / CHRONO SCALE</span>
+                                    <span class="stat-value" id="admin-chrono-scale">—</span>
+                                    <span class="stat-sub" id="admin-ticks-count">Tick: —</span>
+                                </div>
+                                <div class="admin-stat-card">
+                                    <span class="stat-label">SERVER TICKER STATUS</span>
+                                    <span class="stat-value" id="admin-sim-status">—</span>
+                                    <span class="stat-sub">
+                                        <button type="button" id="admin-pause-toggle-btn" class="admin-btn-action"
+                                            onclick="adminTogglePause()">Toggle Pause</button>
+                                    </span>
+                                </div>
+                                <div class="admin-stat-card">
+                                    <span class="stat-label">REGISTERED USERS / REALMS</span>
+                                    <span class="stat-value" id="admin-user-count">—</span>
+                                    <span class="stat-sub" id="admin-realms-claimed">— Claimed</span>
+                                </div>
+                            </div>
+
+                            <!-- Fast Era Jump Station -->
+                            <div class="admin-control-bar">
+                                <span class="control-bar-label">WARP TO HISTORICAL ERA:</span>
+                                <div class="admin-era-jump-buttons">
+                                    <button type="button" class="admin-era-btn" onclick="adminJumpEra(1500)">Era I:
+                                        Discovery (1500)</button>
+                                    <button type="button" class="admin-era-btn" onclick="adminJumpEra(1750)">Era II:
+                                        Revolt (1750)</button>
+                                    <button type="button" class="admin-era-btn" onclick="adminJumpEra(1860)">Era III:
+                                        Independence (1860)</button>
+                                    <button type="button" class="admin-era-btn" onclick="adminJumpEra(1920)">Era IV:
+                                        Decolonisation (1920)</button>
+                                    <button type="button" class="admin-era-btn" onclick="adminJumpEra(1989)">Era V:
+                                        Modern (1989)</button>
+                                </div>
+                            </div>
+
+                            <!-- Speed Adjustment Bar -->
+                            <div class="admin-control-bar">
+                                <span class="control-bar-label">GLOBAL SPEED:</span>
+                                <div class="admin-speed-buttons">
+                                    <button type="button" class="admin-speed-btn" onclick="adminSetSpeed('1s')">1s/yr
+                                        (Warp)</button>
+                                    <button type="button" class="admin-speed-btn" onclick="adminSetSpeed('5s')">5s/yr
+                                        (Turbo)</button>
+                                    <button type="button" class="admin-speed-btn"
+                                        onclick="adminSetSpeed('1m')">1m/yr</button>
+                                    <button type="button" class="admin-speed-btn"
+                                        onclick="adminSetSpeed('1h')">1h/yr</button>
+                                    <button type="button" class="admin-speed-btn"
+                                        onclick="adminSetSpeed('4h')">4h/yr</button>
+                                    <button type="button" class="admin-speed-btn" onclick="adminSetSpeed('1d')">1d/yr
+                                        (Standard)</button>
+                                    <button type="button" class="admin-speed-btn"
+                                        onclick="adminSetSpeed('2d')">2d/yr</button>
+                                    <button type="button" class="admin-speed-btn"
+                                        onclick="adminSetSpeed('4d')">4d/yr</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- All Users & Assigned Territories / Resources Roster -->
+                        <div class="admin-section">
+                            <div class="admin-section-header">
+                                <span class="section-title">👥 Empire Roster &amp; Player Territories</span>
+                                <span class="admin-sync-tag" id="admin-roster-count">0 Players Loaded</span>
+                            </div>
+                            <div class="admin-table-container">
+                                <table class="admin-users-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>User / Identity</th>
+                                            <th>Role</th>
+                                            <th>Assigned Realm</th>
+                                            <th>Population</th>
+                                            <th>Treasury / Res</th>
+                                            <th>Troops</th>
+                                            <th>Tax Rate</th>
+                                            <th>Last Login / Active</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-users-tbody">
+                                        <tr>
+                                            <td colspan="9" class="loading-cell">Loading overseer telemetry...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Sovereign Armageddon & Game Reset (Protected 3-Stage Mechanism) -->
+                        <div class="admin-section admin-reset-section">
+                            <div class="admin-section-header">
+                                <div class="reset-section-header-title">
+                                    <span class="hazard-icon">⚠️</span>
+                                    <span class="section-title">Imperial Reset &amp; World Rewind Protocol (3-Stage
+                                        Safety Lock)</span>
+                                </div>
+                                <span class="admin-stage-indicator stage-locked" id="admin-reset-stage-badge">STAGE 1:
+                                    LATCH SECURED 🔒</span>
+                            </div>
+
+                            <div class="admin-reset-body">
+                                <!-- Stage Progress Visualizer -->
+                                <div class="admin-reset-stepper">
+                                    <div class="reset-step active" id="reset-step-1">
+                                        <span class="step-num">1</span>
+                                        <span class="step-text">Disarm Safety</span>
+                                    </div>
+                                    <div class="reset-step-line" id="reset-line-1"></div>
+                                    <div class="reset-step" id="reset-step-2">
+                                        <span class="step-num">2</span>
+                                        <span class="step-text">Authorize &amp; Scope</span>
+                                    </div>
+                                    <div class="reset-step-line" id="reset-line-2"></div>
+                                    <div class="reset-step" id="reset-step-3">
+                                        <span class="step-num">3</span>
+                                        <span class="step-text">Execute Purge</span>
+                                    </div>
+                                </div>
+
+                                <!-- STAGE 1: Disarm Latch -->
+                                <div id="admin-reset-stage-1" class="reset-stage-pane">
+                                    <div class="reset-info-box">
+                                        <h4>🛡️ Stage 1: Safety Interlock Engaged</h4>
+                                        <p>Complete world rewind mechanism: Restores the simulation timeline to
+                                            <strong>Year 1500.0 (The Age of Discovery)</strong> and resets all player
+                                            domains, armies, borders, and treasuries to initial baseline values.
+                                        </p>
+                                        <div class="reset-scope-summary">
+                                            <span>• Rewind global simulation clock to Year 1500.0 (Base Date)</span>
+                                            <span>• Demobilize all mobilized armies &amp; border garrisons to 0</span>
+                                            <span>• Restore all starting treasuries &amp; seed populations</span>
+                                            <span>• Reset fiscal levers (50% Tax, 0% Investment, 0% Social)</span>
+                                            <span>• Clear in-flight movements, deployed garrisons &amp;
+                                                chronicles</span>
+                                        </div>
+                                    </div>
+                                    <div class="reset-action-row">
+                                        <button type="button" class="admin-reset-btn btn-stage1-disarm"
+                                            onclick="adminResetStage1Unlock()">
+                                            🔓 STAGE 1: DISARM SAFETY LATCH
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STAGE 2: Verification, Scope & Authorization Key -->
+                                <div id="admin-reset-stage-2" class="reset-stage-pane hidden">
+                                    <div class="reset-warning-box">
+                                        <h4>⚠️ Stage 2: Scope Verification &amp; Authorization Key</h4>
+                                        <p>This action is <strong>irreversible</strong>. Review the reset scope and type
+                                            the master confirmation phrase below to verify intent and unlock the master
+                                            trigger.</p>
+
+                                        <div class="reset-options-group">
+                                            <label class="reset-option-checkbox">
+                                                <input type="checkbox" id="admin-reset-clear-claims" checked>
+                                                <span><strong>Clear All Realm Claims:</strong> Unassign all player
+                                                    territories so all players re-select fresh in Era I (1500). (Uncheck
+                                                    to retain users' primary realm assignment with 1500 starting
+                                                    vitals).</span>
+                                            </label>
+                                        </div>
+
+                                        <div class="reset-key-prompt">
+                                            <label for="admin-reset-confirm-input">Type exact phrase
+                                                <code>RESET WORLD 1500</code> to authorize:</label>
+                                            <input type="text" id="admin-reset-confirm-input" class="admin-reset-input"
+                                                placeholder="RESET WORLD 1500" autocomplete="off"
+                                                oninput="adminResetCheckInput(this.value)">
+                                        </div>
+                                    </div>
+                                    <div class="reset-action-row">
+                                        <button type="button" class="admin-reset-cancel-btn"
+                                            onclick="adminResetAbort()">
+                                            🔒 Abort &amp; Re-Engage Latch
+                                        </button>
+                                        <button type="button" id="admin-reset-btn-stage2"
+                                            class="admin-reset-btn btn-stage2-arm" disabled
+                                            onclick="adminResetStage2Verify()">
+                                            ⚠️ STAGE 2: VERIFY &amp; ARM TRIGGER
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STAGE 3: Final Master Trigger Armed -->
+                                <div id="admin-reset-stage-3" class="reset-stage-pane hidden">
+                                    <div class="reset-critical-box">
+                                        <div class="critical-alarm-header">
+                                            <span class="flashing-alarm">🚨</span>
+                                            <h4>CRITICAL: STAGE 3 MASTER TRIGGER ARMED</h4>
+                                            <span class="flashing-alarm">🚨</span>
+                                        </div>
+                                        <p>All safety locks have been disarmed and verified. Engaging the master
+                                            actuator below will immediately rewind the world simulation to <strong>Year
+                                                1500.0</strong>, restore all players to initial values, and broadcast
+                                            the authoritative base state to every live session.</p>
+                                        <div class="critical-badge" id="admin-reset-stage3-summary">
+                                            Rewind to 1500.0 · Reset All Players to Initial Values
+                                        </div>
+                                    </div>
+                                    <div class="reset-action-row">
+                                        <button type="button" class="admin-reset-cancel-btn"
+                                            onclick="adminResetAbort()">
+                                            🔒 ABORT &amp; RE-LOCK
+                                        </button>
+                                        <button type="button" id="admin-reset-btn-stage3"
+                                            class="admin-reset-btn btn-stage3-fire" onclick="adminResetStage3Execute()">
+                                            🔥 STAGE 3: EXECUTE TOTAL WORLD RESET (1500)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pure Overseer Deep Macro Analytics & Imperial Surveillance Modal -->
+            <div id="overseer-analytics-modal" class="progress-modal-overlay hidden"
+                onclick="handleOverseerAnalyticsBackdrop(event)">
+                <div class="progress-modal-dialog steampunk-panel overseer-dialog" role="dialog" aria-modal="true"
+                    aria-labelledby="overseer-dialog-title">
+                    <div class="progress-modal-header">
+                        <div class="progress-modal-title-group">
+                            <span class="progress-crest">📊</span>
+                            <h2 id="overseer-dialog-title">PLANETARY OVERSEER MACRO ANALYTICS &amp; SURVEILLANCE</h2>
+                            <span class="admin-live-badge overseer-badge-gold">PURE OVERSEER DECK</span>
+                        </div>
+                        <div class="admin-header-actions">
+                            <button type="button" class="admin-view-switch-btn"
+                                onclick="toggleOverseerAnalytics(false); toggleAdminDashboard(true);"
+                                title="Switch to Imperial Game Master &amp; Admin Console">👑 Admin Console ↗</button>
+                            <button type="button" class="admin-refresh-btn" onclick="refreshOverseerAnalytics()"
+                                title="Refresh overseer telemetry">🔄 Refresh</button>
+                            <button type="button" class="progress-modal-close-btn"
+                                onclick="toggleOverseerAnalytics(false)" title="Close (Esc)">✕</button>
+                        </div>
+                    </div>
+                    <div class="progress-modal-body admin-dialog-body overseer-dialog-body">
+                        <!-- Pure Admin Deep Analytics & Macro Visualizer Deck -->
+                        <div class="admin-section admin-analytics-section" id="admin-analytics-section">
+                            <div class="admin-section-header">
+                                <div class="analytics-header-title">
+                                    <span class="analytics-icon">📊</span>
+                                    <span class="section-title">Pure Overseer Macro Analytics &amp; Visualizer
+                                        Deck</span>
+                                    <span class="overseer-tag" id="admin-overseer-badge">Planetary Analysis</span>
+                                </div>
+                                <div class="analytics-chart-controls">
+                                    <label for="admin-chart-scope">SCOPE:</label>
+                                    <select id="admin-chart-scope" class="admin-select"
+                                        onchange="switchAdminChartScope(this.value)">
+                                        <option value="top10">Top 10 Powers</option>
+                                        <option value="top20">Top 20 Powers</option>
+                                        <option value="all">All 206 Realms</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Chart Navigation Tabs -->
+                            <div class="analytics-tabs-bar">
+                                <button type="button" class="analytics-tab-btn active" data-chart="wealth_gdp"
+                                    onclick="switchAdminChartTab('wealth_gdp')">
+                                    💰 Wealth &amp; GDP
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="solvency_matrix"
+                                    onclick="switchAdminChartTab('solvency_matrix')">
+                                    ⚔️ Solvency vs Military Risk
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="tax_pride"
+                                    onclick="switchAdminChartTab('tax_pride')">
+                                    ⚖️ Tax vs Pride Curve
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="demographics"
+                                    onclick="switchAdminChartTab('demographics')">
+                                    👥 Population &amp; Squalor
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="climatic_wave"
+                                    onclick="switchAdminChartTab('climatic_wave')">
+                                    ☀️ Milankovitch Climatic Wave
+                                </button>
+                            </div>
+
+                            <!-- Interactive Canvas & Tooltip Container -->
+                            <div class="analytics-canvas-wrapper" id="admin-chart-wrapper">
+                                <canvas id="admin-analytics-canvas" width="900" height="340"></canvas>
+                                <div id="admin-chart-tooltip" class="admin-chart-tooltip hidden"></div>
+                            </div>
+
+                            <!-- Chart Macro Insights Summary Footer -->
+                            <div class="analytics-summary-bar" id="admin-chart-summary-bar"></div>
+                        </div>
+
+                        <!-- Game Monitor & Dynamic Internal Variable Matrix -->
+                        <div class="admin-section admin-monitor-section">
+                            <div class="admin-section-header">
+                                <div class="monitor-header-left">
+                                    <span class="section-title">🔭 Imperial Game Monitor &amp; Variable Matrix</span>
+                                    <span class="monitor-class-count-tag">5 Classified Tiers</span>
+                                </div>
+                                <div class="monitor-header-right">
+                                    <span id="admin-monitor-last-sync" class="admin-sync-tag">Telemetry: Live</span>
+                                </div>
+                            </div>
+
+                            <!-- Seasonal & Climatic Atmospheric Indicator Strip -->
+                            <div class="admin-seasonal-bar" id="admin-seasonal-bar">
+                                <div class="seasonal-pill season-badge" id="admin-climate-season">
+                                    <span class="pill-icon">☀️</span>
+                                    <span class="pill-val" id="admin-climate-season-name">Summer</span>
+                                </div>
+                                <div class="seasonal-pill climate-badge" id="admin-climate-phase-box">
+                                    <span class="pill-label">CLIMATE CYCLE:</span>
+                                    <span class="pill-val" id="admin-climate-phase">Baseline Holocene</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">HARVEST YIELD:</span>
+                                    <span class="metric-val" id="admin-climate-harvest">100%</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">WINTER ATTRITION:</span>
+                                    <span class="metric-val" id="admin-climate-winter-logistics">1.00x</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">TRADE VELOCITY:</span>
+                                    <span class="metric-val" id="admin-climate-velocity">1.00x</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">ORBITAL FORCING:</span>
+                                    <span class="metric-val" id="admin-climate-orbital">Neutral</span>
+                                </div>
+                            </div>
+
+                            <!-- Taxonomy Classification Filter Bar & Realm Selection -->
+                            <div class="monitor-controls-row">
+                                <div class="monitor-taxonomy-filters">
+                                    <span class="filter-label">VARIABLE CLASS:</span>
+                                    <button type="button" class="monitor-pill-btn active" data-class="all"
+                                        onclick="setMonitorClassFilter('all')">🌐 All Classes</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="user_setting"
+                                        onclick="setMonitorClassFilter('user_setting')">⚙️ 1. User Settings</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="user_state"
+                                        onclick="setMonitorClassFilter('user_state')">👁️ 2. User State
+                                        (Hidden)</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="game_state"
+                                        onclick="setMonitorClassFilter('game_state')">🌍 3. Game State</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="seasonal"
+                                        onclick="setMonitorClassFilter('seasonal')">❄️ 4. Seasonal</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="population_pressure"
+                                        onclick="setMonitorClassFilter('population_pressure')">👥 5. Population
+                                        Pressure</button>
+                                </div>
+                                <div class="monitor-realm-selector-box">
+                                    <label for="admin-monitor-realm-select">REALM FOCUS:</label>
+                                    <select id="admin-monitor-realm-select" class="admin-select"
+                                        onchange="renderGameMonitorCards()">
+                                        <option value="ALL">🌐 All Realms Matrix</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Live Telemetry Matrix Grid -->
+                            <div class="admin-monitor-cards-grid" id="admin-monitor-cards-container">
+                                <div class="loading-cell"
+                                    style="grid-column: 1 / -1; padding: 20px; text-align: center; color: #8da4b8;">
+                                    Reading internal variable matrix from authoritative server...
+                                </div>
+                            </div>
+
+                            <!-- Scenario Injection & Dynamic Variable Fine-Tuner -->
+                            <div class="admin-scenario-tuner-panel">
+                                <div class="scenario-tuner-header">
+                                    <span class="scenario-tuner-title">⚡ Scenario Injection &amp; Live Variable
+                                        Calibration</span>
+                                    <span class="scenario-tuner-hint">Inject stress tests and macroeconomic shocks to
+                                        fine-tune balancing</span>
+                                </div>
+
+                                <div class="scenario-presets-bar">
+                                    <span class="presets-label">QUICK PRESETS:</span>
+                                    <button type="button" class="scenario-preset-btn debt-shock-btn"
+                                        onclick="applyScenarioPreset('debt_shock')">📉 Fiscal Debt Shock</button>
+                                    <button type="button" class="scenario-preset-btn winter-btn"
+                                        onclick="applyScenarioPreset('severe_winter')">❄️ Severe Frost &amp;
+                                        Attrition</button>
+                                    <button type="button" class="scenario-preset-btn golden-age-btn"
+                                        onclick="applyScenarioPreset('golden_age')">🌟 Entrepreneurial Golden
+                                        Age</button>
+                                </div>
+
+                                <div class="scenario-custom-tune-form">
+                                    <div class="tune-field">
+                                        <label for="tune-realm-id">TARGET REALM:</label>
+                                        <select id="tune-realm-id" class="admin-select"></select>
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-pride">ENTREPRENEURIAL PRIDE (0-100%):</label>
+                                        <input type="number" id="tune-pride" class="admin-input-num" min="0" max="100"
+                                            step="1" placeholder="e.g. 75">
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-delayed-costs">DELAYED MILITARY LIABILITIES ($):</label>
+                                        <input type="number" id="tune-delayed-costs" class="admin-input-num" min="0"
+                                            step="100" placeholder="e.g. 2500">
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-resources">TREASURY RESERVES ($):</label>
+                                        <input type="number" id="tune-resources" class="admin-input-num" min="0"
+                                            step="1000" placeholder="Leave blank for unchanged">
+                                    </div>
+                                    <div class="tune-action">
+                                        <button type="button" class="admin-btn-action-primary"
+                                            onclick="submitCustomScenarioTune()">Apply Variable Calibration</button>
+                                    </div>
+                                </div>
+                                <div id="scenario-tune-status" class="scenario-tune-feedback"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Modal -->
+            <div id="action-modal" class="hidden modal">
+                <div class="modal-content">
+                    <h3 id="action-title"></h3>
+                    <div id="action-options"></div>
+
+                    <!-- Target country selector (shown for target-state actions) -->
+                    <div id="action-field-target" class="hidden action-field" data-for="target">
+                        <label for="action-target-country">Target Country:</label>
+                        <select id="action-target-country" name="target_country_id">
+                            <option value="">-- Select a country --</option>
+                        </select>
+                    </div>
+
+                    <!-- Movement type radio group (shown for Move Army) -->
+                    <div id="action-field-movement" class="hidden action-field" data-for="movement">
+                        <label>Movement Type:</label>
+                        <div style="display:flex; gap:12px; margin-top:6px;">
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                <input type="radio" name="action-movement-type" value="interior" checked>
+                                Interior (guard border)
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                <input type="radio" name="action-movement-type" value="target">
+                                Target (attack another country)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Direction selector (shown for interior movement) -->
+                    <div id="action-field-direction" class="hidden action-field" data-for="direction">
+                        <label for="action-direction">Direction:</label>
+                        <select id="action-direction" name="direction">
+                            <option value="N">North</option>
+                            <option value="S">South</option>
+                            <option value="E">East</option>
+                            <option value="W">West</option>
+                        </select>
+                    </div>
+
+                    <!-- Speed selector (shown for interior movement) -->
+                    <div id="action-field-speed" class="hidden action-field" data-for="speed">
+                        <label for="action-speed">Speed:</label>
+                        <select id="action-speed" name="speed">
+                            <option value="Slow">Slow</option>
+                            <option value="Fast">Fast</option>
+                        </select>
+                    </div>
+
+                    <div id="action-feedback" class="hidden action-feedback" role="alert" aria-live="assertive"></div>
+                    <button onclick="closeModal()" class="close-btn">Close</button>
+                </div>
+            </div>
+
+            <!-- Kingdom Command Center Modal (War Room Console with Dials, Meters, and Controls) -->
+            <div id="kingdom-command-center" class="hidden modal">
+                <div class="modal-content command-center-panel war-room-console">
+                    <!-- Console Header: Crest, Titles, Status, Bay Nav, Close -->
+                    <div class="console-header">
+                        <div class="console-title-group">
+                            <span class="realm-crest" id="cc-realm-crest">🏰</span>
+                            <div>
+                                <h2 id="cc-kingdom-name" class="console-title">IMPERIAL COMMAND CONSOLE · AGE OF
+                                    DISCOVERY c. 1500</h2>
+                                <div class="console-subtext">
+                                    <span id="cc-ruler-name">Lord Sovereign</span> ·
+                                    <span id="cc-kingdom-code" class="code-badge">KINGDOM</span> ·
+                                    <span class="console-status-lamp active">STEAMPUNK TELEMETRY &amp; REAL-TIME
+                                        CONTROL</span>
+                                </div>
+                                <div id="cc-territory-pills" class="cc-territory-pills"></div>
+                            </div>
+                        </div>
+                        <div class="console-nav-tabs">
+                            <button class="nav-tab active" data-bay="all" onclick="switchConsoleBay('all')">🎛️ Master
+                                Console</button>
+                            <button class="nav-tab" data-bay="fiscal" onclick="switchConsoleBay('fiscal')">💰 Exchequer
+                                &amp; Trade</button>
+                            <button class="nav-tab" data-bay="military" onclick="switchConsoleBay('military')">⚔️
+                                Tercios &amp; Armadas</button>
+                            <button class="nav-tab" data-bay="diplomacy" onclick="switchConsoleBay('diplomacy')">🤝
+                                Chancery &amp; Envoys</button>
+                        </div>
+                        <button onclick="closeKingdomCommandCenter()" class="console-close-btn"
+                            title="Close Control Panel">×</button>
+                    </div>
+
+                    <!-- Telemetry Bar: 4 Primary Analog Gauges -->
+                    <div class="telemetry-bar">
+                        <!-- Population Gauge -->
+                        <div class="analog-gauge-card" id="gauge-card-pop">
+                            <div class="gauge-header">
+                                <span class="gauge-title">POPULATION</span>
+                                <span class="gauge-delta" id="cc-pop-growth">+0/tick</span>
+                            </div>
+                            <div class="analog-gauge" id="cc-meter-population">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-pop-val">0</span>
+                                <span class="gauge-sub">SUBJECTS &amp; GUILDS</span>
+                            </div>
+                        </div>
+
+                        <!-- Treasury Reserve Gauge -->
+                        <div class="analog-gauge-card" id="gauge-card-res">
+                            <div class="gauge-header">
+                                <span class="gauge-title">GOLD RESERVES</span>
+                                <span class="gauge-delta" id="cc-budget-balance">+0/tick</span>
+                            </div>
+                            <div class="analog-gauge gold-gauge" id="cc-meter-resources">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-res-val">0</span>
+                                <span class="gauge-sub">GOLD DUCATS</span>
+                            </div>
+                        </div>
+
+                        <!-- Central Army Armory Gauge -->
+                        <div class="analog-gauge-card" id="gauge-card-troops">
+                            <div class="gauge-header">
+                                <span class="gauge-title">CENTRAL ARMADA</span>
+                                <span class="military-tier-badge" id="cc-army-tier">TERCIO</span>
+                            </div>
+                            <div class="analog-gauge iron-gauge" id="cc-meter-troops">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-troop-val">0</span>
+                                <span class="gauge-sub">TERCIOS &amp; CARAVELS</span>
+                                <div class="military-tiers-breakdown">
+                                    <span class="troop-layer-pill layer-levy"
+                                        title="Raw Conscript Levies (Upkeep: 0.5 D/cycle)">🌾 <strong
+                                            id="cc-troops-levy">0</strong></span>
+                                    <span class="troop-layer-pill layer-regular"
+                                        title="Disciplined Line Regulars (Upkeep: 1.5 D/cycle)">⚔️ <strong
+                                            id="cc-troops-regular">0</strong></span>
+                                    <span class="troop-layer-pill layer-elite"
+                                        title="Royal Elite Veterans (Upkeep: 3.5 D/cycle)">👑 <strong
+                                            id="cc-troops-elite">0</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Economic Vitality Gauge (GDP & Currency Parity) -->
+                        <div class="analog-gauge-card" id="gauge-card-vitality">
+                            <div class="gauge-header">
+                                <span class="gauge-title">TRADE PRODUCTIVITY</span>
+                                <span class="gauge-delta" id="cc-currency-val">1.00 ducat</span>
+                            </div>
+                            <div class="analog-gauge vitality-gauge" id="cc-meter-gdp">
+                                <div class="meter-face">
+                                    <div class="meter-ticks"></div>
+                                    <div class="meter-needle"></div>
+                                </div>
+                            </div>
+                            <div class="gauge-readout">
+                                <span class="gauge-value" id="cc-meter-gdp-val">0</span>
+                                <span class="gauge-sub">DUCATS / CYCLE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Console Bays -->
+                    <div class="console-bays">
+                        <!-- BAY 1: FISCAL & ECONOMIC REGULATOR -->
+                        <section class="console-bay bay-fiscal" id="bay-fiscal">
+                            <div class="bay-plate-title">
+                                <span class="plate-rivet"></span>
+                                <span>💰 ROYAL EXCHEQUER &amp; TARIFF REGULATOR</span>
+                                <span class="plate-rivet"></span>
+                            </div>
+
+                            <div class="bay-content">
+                                <!-- Rotary Dials: Tax Rate, Investment, Social Spending -->
+                                <div class="dials-row">
+                                    <!-- Tax Rate Dial -->
+                                    <div class="dial-container">
+                                        <div class="control-label">ROYAL TITHE &amp; TARIFF</div>
+                                        <div id="cc-economy-dial" class="rotary-dial brass-dial" data-dial-type="tax"
+                                            tabindex="0" role="slider" aria-label="Tax Rate" aria-valuemin="0"
+                                            aria-valuemax="100">
+                                            <div class="dial-bezel"></div>
+                                            <div class="dial-arc"></div>
+                                            <div class="dial-ticks"></div>
+                                            <div class="dial-labels">
+                                                <span class="label-0">0</span>
+                                                <span class="label-25">25</span>
+                                                <span class="label-50">50</span>
+                                                <span class="label-75">75</span>
+                                                <span class="label-100">100</span>
+                                            </div>
+                                            <div class="dial-sweet-spot" title="Optimal Laffer Band (~58%)"></div>
+                                            <div class="dial-pointer"></div>
+                                        </div>
+                                        <div class="dial-digital-readout">
+                                            <span class="readout-num" id="cc-economy-dial-value">50</span><span
+                                                class="readout-unit">%</span>
+                                            <div class="readout-hint" id="cc-tax-impact-hint">Tithe Revenue: +25
+                                                ducats/cycle</div>
+                                            <div class="dial-step-btns">
+                                                <button type="button" class="dial-step-btn"
+                                                    onclick="adjustBudgetDial('tax', -5)"
+                                                    title="Decrease Tax Rate by 5%">-5%</button>
+                                                <button type="button" class="dial-step-btn"
+                                                    onclick="adjustBudgetDial('tax', 5)"
+                                                    title="Increase Tax Rate by 5%">+5%</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Investment Allocation Dial -->
+                                    <div class="dial-container">
+                                        <div class="control-label">COLONIAL EXPEDITIONS</div>
+                                        <div id="cc-investment-dial" class="rotary-dial cyan-dial"
+                                            data-dial-type="investment" tabindex="0" role="slider"
+                                            aria-label="Capital Investment" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="dial-bezel"></div>
+                                            <div class="dial-arc"></div>
+                                            <div class="dial-ticks"></div>
+                                            <div class="dial-labels">
+                                                <span class="label-0">0</span>
+                                                <span class="label-25">25</span>
+                                                <span class="label-50">50</span>
+                                                <span class="label-75">75</span>
+                                                <span class="label-100">100</span>
+                                            </div>
+                                            <div class="dial-pointer"></div>
+                                        </div>
+                                        <div class="dial-digital-readout">
+                                            <span class="readout-num" id="cc-investment-dial-value">0</span><span
+                                                class="readout-unit">%</span>
+                                            <div class="readout-hint" id="cc-investment-hint">+0.0% Trade Multiplier
+                                            </div>
+                                            <div class="dial-step-btns">
+                                                <button type="button" class="dial-step-btn"
+                                                    onclick="adjustBudgetDial('investment', -5)"
+                                                    title="Decrease Capital Investment by 5%">-5%</button>
+                                                <button type="button" class="dial-step-btn"
+                                                    onclick="adjustBudgetDial('investment', 5)"
+                                                    title="Increase Capital Investment by 5%">+5%</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Social Welfare Spending Dial -->
+                                    <div class="dial-container">
+                                        <div class="control-label">GUILD &amp; CATHEDRAL FUNDS</div>
+                                        <div id="cc-social-dial" class="rotary-dial purple-dial" data-dial-type="social"
+                                            tabindex="0" role="slider" aria-label="Social Spending" aria-valuemin="0"
+                                            aria-valuemax="100">
+                                            <div class="dial-bezel"></div>
+                                            <div class="dial-arc"></div>
+                                            <div class="dial-ticks"></div>
+                                            <div class="dial-labels">
+                                                <span class="label-0">0</span>
+                                                <span class="label-25">25</span>
+                                                <span class="label-50">50</span>
+                                                <span class="label-75">75</span>
+                                                <span class="label-100">100</span>
+                                            </div>
+                                            <div class="dial-pointer"></div>
+                                        </div>
+                                        <div class="dial-digital-readout">
+                                            <span class="readout-num" id="cc-social-dial-value">0</span><span
+                                                class="readout-unit">%</span>
+                                            <div class="readout-hint" id="cc-social-hint">Growth vs Inflation</div>
+                                            <div class="dial-step-btns">
+                                                <button type="button" class="dial-step-btn"
+                                                    onclick="adjustBudgetDial('social', -5)"
+                                                    title="Decrease Social Welfare by 5%">-5%</button>
+                                                <button type="button" class="dial-step-btn"
+                                                    onclick="adjustBudgetDial('social', 5)"
+                                                    title="Increase Social Welfare by 5%">+5%</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Annual Exchequer Budget Ledger (Last Year vs. This Year) -->
+                                <div class="annual-budget-ledger" id="cc-annual-budget-ledger">
+                                    <div class="budget-ledger-header">
+                                        <div class="budget-ledger-title-group">
+                                            <span class="budget-ledger-title">📜 ANNUAL EXCHEQUER BUDGET LEDGER</span>
+                                            <span class="regime-badge" id="cc-fiscal-regime-badge">⚖️ BALANCED BUDGET
+                                                (NO DEFICIT)</span>
+                                        </div>
+                                        <button type="button" class="budget-autobalance-btn"
+                                            onclick="triggerAutoBalanceBudget()"
+                                            title="Set optimal Laffer tax rate and balance discretionary allocations within revenue">
+                                            ⚖️ Auto-Balance This Year
+                                        </button>
+                                    </div>
+                                    <div class="budget-era-roadmap">
+                                        <span>Layer 1: Hard-Specie Balanced Budget</span>
+                                        <span class="roadmap-sep">·</span>
+                                        <span title="Unlocked in Age of Independence (1860)">🔒 World Bank Loans
+                                            (1860)</span>
+                                        <span class="roadmap-sep">·</span>
+                                        <span title="Unlocked in Age of Decolonisation (1920)">🔒 Sovereign Bonds
+                                            (1920)</span>
+                                        <span class="roadmap-sep">·</span>
+                                        <span title="Unlocked in Modern Age (1989)">🔒 Derivatives / CDO / CDS
+                                            (1989)</span>
+                                    </div>
+                                    <div id="cc-budget-alert-banner" class="budget-alert-banner hidden"></div>
+                                    <table class="budget-comparison-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Exchequer Line Item</th>
+                                                <th id="cc-th-last-year">Last Year (Actual)</th>
+                                                <th id="cc-th-this-year">This Year (Projected / Capped)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr class="row-revenue">
+                                                <td>Crown Tithe &amp; Tax Revenue</td>
+                                                <td id="cc-ly-tax-rev">+0</td>
+                                                <td id="cc-ty-tax-rev">+0</td>
+                                            </tr>
+                                            <tr class="row-revenue">
+                                                <td>Port &amp; Market Trade Income</td>
+                                                <td id="cc-ly-mkt-rev">+0</td>
+                                                <td id="cc-ty-mkt-rev">+0</td>
+                                            </tr>
+                                            <tr class="row-total-rev">
+                                                <td><strong>Total Annual Revenue</strong></td>
+                                                <td id="cc-ly-total-rev"><strong>+0</strong></td>
+                                                <td id="cc-ty-total-rev"><strong>+0</strong></td>
+                                            </tr>
+                                            <tr class="row-expense">
+                                                <td>Standing Military Upkeep</td>
+                                                <td id="cc-ly-mil-exp">-0</td>
+                                                <td id="cc-ty-mil-exp">-0</td>
+                                            </tr>
+                                            <tr class="row-expense">
+                                                <td>Colonial &amp; Capital Investment</td>
+                                                <td id="cc-ly-inv-exp">-0</td>
+                                                <td id="cc-ty-inv-exp">-0</td>
+                                            </tr>
+                                            <tr class="row-expense">
+                                                <td>Guild &amp; Social Welfare</td>
+                                                <td id="cc-ly-soc-exp">-0</td>
+                                                <td id="cc-ty-soc-exp">-0</td>
+                                            </tr>
+                                            <tr class="row-total-exp">
+                                                <td><strong>Total Annual Expenditure</strong></td>
+                                                <td id="cc-ly-total-exp"><strong>-0</strong></td>
+                                                <td id="cc-ty-total-exp"><strong>-0</strong></td>
+                                            </tr>
+                                            <tr id="cc-balance-row" class="row-surplus">
+                                                <td id="cc-balance-label"><strong>Exchequer Surplus (No
+                                                        Deficit)</strong></td>
+                                                <td id="cc-ly-balance"><strong>+0</strong></td>
+                                                <td id="cc-ty-balance"><strong>+0</strong></td>
+                                            </tr>
+                                            <tr class="row-demographics">
+                                                <td>Tax Migration &amp; Pop Pressure (<span
+                                                        id="cc-pop-pressure-val">0%</span>)</td>
+                                                <td id="cc-ly-migration">0</td>
+                                                <td id="cc-ty-migration">0</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Economic Telemetry & Action Levers -->
+                                <div class="fiscal-levers-panel">
+                                    <!-- Treasury Harvest Lever -->
+                                    <div class="tactical-lever-card">
+                                        <div class="lever-info">
+                                            <div class="lever-title">HARVEST CROWN TITHE</div>
+                                            <div class="lever-sub">Collect immediate tax cycle into gold reserve</div>
+                                        </div>
+                                        <button id="cc-lever-collect-taxes" class="mechanical-lever-btn lever-gold"
+                                            onclick="triggerCollectTaxes()">
+                                            <div class="lever-arm">
+                                                <div class="lever-knob"></div>
+                                            </div>
+                                            <span class="lever-caption">PULL TO COLLECT</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Stepper: Market Trading Posts -->
+                                    <div class="tactical-stepper-card">
+                                        <div class="stepper-header">
+                                            <span class="stepper-title">PORT CARAVEL &amp; TRADING POSTS</span>
+                                            <span class="stepper-level-text" id="cc-market-level-label">Tier 0</span>
+                                        </div>
+                                        <div class="stepper-pips" id="cc-market-pips">
+                                            <span class="pip"></span><span class="pip"></span><span
+                                                class="pip"></span><span class="pip"></span><span class="pip"></span>
+                                        </div>
+                                        <div class="stepper-meta">
+                                            <span class="meta-cost">Cost: 200 Ducats</span>
+                                            <span class="meta-benefit">+5% Trade GDP</span>
+                                        </div>
+                                        <button id="cc-btn-upgrade-market" class="stepper-actuator-btn"
+                                            onclick="triggerUpgradeMarket()">
+                                            <span>🏗️ CHARTER TRADING POST</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Stepper: Civil Infrastructure -->
+                                    <div class="tactical-stepper-card">
+                                        <div class="stepper-header">
+                                            <span class="stepper-title">GUILD &amp; HARBOR INFRASTRUCTURE</span>
+                                            <span class="stepper-level-text" id="cc-infra-level-label">Tier 0</span>
+                                        </div>
+                                        <div class="stepper-pips" id="cc-infra-pips">
+                                            <span class="pip"></span><span class="pip"></span><span
+                                                class="pip"></span><span class="pip"></span><span class="pip"></span>
+                                        </div>
+                                        <div class="stepper-meta">
+                                            <span class="meta-cost">Cost: 150 Ducats</span>
+                                            <span class="meta-benefit">+3% Productivity &amp; Pop</span>
+                                        </div>
+                                        <button id="cc-btn-upgrade-infra" class="stepper-actuator-btn"
+                                            onclick="triggerUpgradeInfra()">
+                                            <span>🛠️ EXPAND HARBOR WORKS</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- BAY 2: TACTICAL WAR ROOM & BORDER DEFENSE -->
+                        <section class="console-bay bay-military" id="bay-military">
+                            <div class="bay-plate-title">
+                                <span class="plate-rivet"></span>
+                                <span>⚔️ TACTICAL WAR ROOM &amp; BORDER DEFENSE</span>
+                                <span class="plate-rivet"></span>
+                            </div>
+
+                            <div class="bay-content military-grid">
+                                <!-- Minimap with 4 Border Garrison Gauges -->
+                                <div class="minimap-command-station">
+                                    <div class="station-heading">TERRITORY GARRISONS &amp; FRONTIERS</div>
+
+                                    <div class="minimap-gauge-matrix">
+                                        <!-- North Border Meter -->
+                                        <div class="border-gauge-pod pod-n" id="pod-border-n"
+                                            onclick="selectCompassSide('N')">
+                                            <div class="pod-dir">NORTH BORDER</div>
+                                            <div class="pod-fort-badge" id="cc-fort-badge-n">🏰 Fort Tier 0</div>
+                                            <div class="pod-meter-bar">
+                                                <div class="pod-bar-fill" id="bar-fill-n"></div>
+                                            </div>
+                                            <div class="pod-val" id="cc-border-n">0</div>
+                                            <div class="pod-hint">TROOPS</div>
+                                        </div>
+
+                                        <div class="matrix-mid-row">
+                                            <!-- West Border Meter -->
+                                            <div class="border-gauge-pod pod-w" id="pod-border-w"
+                                                onclick="selectCompassSide('W')">
+                                                <div class="pod-dir">WEST</div>
+                                                <div class="pod-fort-badge" id="cc-fort-badge-w">🏰 Tier 0</div>
+                                                <div class="pod-meter-bar vertical">
+                                                    <div class="pod-bar-fill" id="bar-fill-w"></div>
+                                                </div>
+                                                <div class="pod-val" id="cc-border-w">0</div>
+                                            </div>
+
+                                            <!-- Minimap Screen -->
+                                            <div class="radar-scope-frame">
+                                                <canvas id="cc-minimap" width="240" height="180"></canvas>
+                                                <div class="scope-grid-overlay"></div>
+                                            </div>
+
+                                            <!-- East Border Meter -->
+                                            <div class="border-gauge-pod pod-e" id="pod-border-e"
+                                                onclick="selectCompassSide('E')">
+                                                <div class="pod-dir">EAST</div>
+                                                <div class="pod-fort-badge" id="cc-fort-badge-e">🏰 Tier 0</div>
+                                                <div class="pod-meter-bar vertical">
+                                                    <div class="pod-bar-fill" id="bar-fill-e"></div>
+                                                </div>
+                                                <div class="pod-val" id="cc-border-e">0</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- South Border Meter -->
+                                        <div class="border-gauge-pod pod-s" id="pod-border-s"
+                                            onclick="selectCompassSide('S')">
+                                            <div class="pod-dir">SOUTH BORDER</div>
+                                            <div class="pod-fort-badge" id="cc-fort-badge-s">🏰 Fort Tier 0</div>
+                                            <div class="pod-meter-bar">
+                                                <div class="pod-bar-fill" id="bar-fill-s"></div>
+                                            </div>
+                                            <div class="pod-val" id="cc-border-s">0</div>
+                                            <div class="pod-hint">TROOPS</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tactical Controls: Compass Knob, Mode Rocker, Speed Throttle & Deploy Lever -->
+                                <div class="tactical-controls-station">
+                                    <div class="controls-subgrid">
+                                        <!-- Direction Compass Dial -->
+                                        <div class="compass-station">
+                                            <div class="control-label">MARCH DIRECTION COMPASS</div>
+                                            <div class="compass-dial-wrap">
+                                                <div id="cc-compass-dial" class="compass-dial-face" tabindex="0"
+                                                    role="slider" aria-label="March Direction" aria-valuemin="0"
+                                                    aria-valuemax="360">
+                                                    <div class="compass-ring"></div>
+                                                    <div class="compass-ticks"></div>
+                                                    <div class="compass-cardinals">
+                                                        <button type="button" class="cardinal-btn card-n active"
+                                                            onclick="selectCompassSide('N', event)">N</button>
+                                                        <button type="button" class="cardinal-btn card-e"
+                                                            onclick="selectCompassSide('E', event)">E</button>
+                                                        <button type="button" class="cardinal-btn card-s"
+                                                            onclick="selectCompassSide('S', event)">S</button>
+                                                        <button type="button" class="cardinal-btn card-w"
+                                                            onclick="selectCompassSide('W', event)">W</button>
+                                                    </div>
+                                                    <div class="compass-needle" id="cc-compass-needle"></div>
+                                                    <div class="compass-hub"></div>
+                                                </div>
+                                            </div>
+                                            <div class="compass-readout">
+                                                <span class="active-side-badge"
+                                                    id="cc-compass-direction-label">NORTH</span>
+                                                <span class="side-deg" id="cc-compass-deg">0°</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Movement Mode & Speed Switches -->
+                                        <div class="tactical-switches-group">
+                                            <!-- Movement Mode Rocker Switch -->
+                                            <div class="switch-block">
+                                                <div class="control-label">TACTICAL DEPLOYMENT MODE</div>
+                                                <div class="industrial-rocker" id="cc-mode-rocker"
+                                                    onclick="toggleMovementMode()">
+                                                    <div class="rocker-position active" id="rocker-pos-interior">
+                                                        <span class="rocker-indicator"></span>
+                                                        <span>🛡️ INTERIOR DEFENSE</span>
+                                                    </div>
+                                                    <div class="rocker-position" id="rocker-pos-target">
+                                                        <span class="rocker-indicator"></span>
+                                                        <span>⚔️ EXPEDITIONARY</span>
+                                                    </div>
+                                                </div>
+                                                <div class="switch-subtext" id="cc-mode-description">Station 10 troops
+                                                    on selected border side</div>
+                                            </div>
+
+                                            <!-- Speed Throttle Lever -->
+                                            <div class="switch-block">
+                                                <div class="control-label">MARCH TEMPO (SPEED)</div>
+                                                <div class="throttle-lever-track" id="cc-speed-throttle"
+                                                    onclick="toggleMarchSpeed()">
+                                                    <div class="throttle-slot">
+                                                        <div class="throttle-lever" id="cc-throttle-handle">
+                                                            <div class="throttle-knob"></div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="throttle-labels">
+                                                        <span class="th-label active" id="th-label-slow">🐢 SLOW
+                                                            (Defensive)</span>
+                                                        <span class="th-label" id="th-label-fast">⚡ FAST (Forced)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Levers: Conscribe, Fortify, Deploy -->
+                                    <div class="military-actuators-row">
+                                        <!-- Conscribe Troops Lever / Plunger -->
+                                        <div class="actuator-box actuator-recruit-tiered">
+                                            <div class="recruit-tier-selector" role="radiogroup"
+                                                aria-label="Troop Recruitment Layer">
+                                                <button type="button" class="tier-tab-btn active" id="tab-recruit-levy"
+                                                    onclick="selectRecruitTier('levy')"
+                                                    title="Enlist raw peasant levies (150 D / 10 troops)">🌾 Conscripts
+                                                    (150 D)</button>
+                                                <button type="button" class="tier-tab-btn" id="tab-recruit-regular"
+                                                    onclick="selectRecruitTier('regular')"
+                                                    title="Train disciplined line regulars (450 D / 10 troops)">⚔️
+                                                    Regulars (450 D)</button>
+                                                <button type="button" class="tier-tab-btn" id="tab-recruit-elite"
+                                                    onclick="selectRecruitTier('elite')"
+                                                    title="Commission elite knights / guard (1,200 D / 10 troops)">👑
+                                                    Elite Guard (1,200 D)</button>
+                                                <button type="button" class="tier-tab-btn" id="tab-recruit-drill"
+                                                    onclick="selectRecruitTier('drill')"
+                                                    title="Drill levies into regulars or regulars into elites (300 D)">🎯
+                                                    Drill &amp; Promote (300 D)</button>
+                                            </div>
+                                            <button id="cc-lever-recruit" class="chunky-actuator-btn btn-recruit"
+                                                onclick="triggerRecruitTroops()">
+                                                <span class="btn-icon">🎖️</span>
+                                                <span class="btn-main" id="cc-recruit-btn-text">MUSTER RECRUITS</span>
+                                                <span class="btn-meta" id="cc-recruit-cost-label">Cost: 150 Ducats · +10
+                                                    Conscripts</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Fortify Border Actuator -->
+                                        <div class="actuator-box">
+                                            <button id="cc-lever-fortify" class="chunky-actuator-btn btn-fortify"
+                                                onclick="triggerFortifyBorder()">
+                                                <span class="btn-icon">🏰</span>
+                                                <span class="btn-main">FORTIFY CITADEL &amp; BORDER</span>
+                                                <span class="btn-meta" id="cc-fortify-border-label">Cost: 500 Ducats ·
+                                                    Reinforce North Frontier</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Master Dispatch Forces Lever -->
+                                        <div class="actuator-box action-master">
+                                            <button id="cc-lever-deploy" class="master-dispatch-lever-btn"
+                                                onclick="triggerDispatchTroops()">
+                                                <div class="master-lever-handle">
+                                                    <div class="lever-head"></div>
+                                                </div>
+                                                <div class="master-label-block">
+                                                    <span class="master-title">⚔️ DISPATCH FORCES &amp; ARMADA</span>
+                                                    <span class="master-order" id="cc-deploy-order-preview">March to
+                                                        North Border (Slow)</span>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- BAY 3: FOREIGN AFFAIRS & DIPLOMATIC TARGETING -->
+                        <section class="console-bay bay-diplomacy" id="bay-diplomacy">
+                            <div class="bay-plate-title">
+                                <span class="plate-rivet"></span>
+                                <span>🤝 FOREIGN AFFAIRS &amp; DIPLOMATIC RADAR</span>
+                                <span class="plate-rivet"></span>
+                            </div>
+
+                            <div class="bay-content diplomacy-grid">
+                                <!-- Left: Rotary Target Kingdom Selector Wheel -->
+                                <div class="target-radar-station">
+                                    <div class="control-label">TARGET KINGDOM RADAR SELECTOR</div>
+                                    <div class="radar-station-body">
+                                        <!-- Target Selector Dial Wheel -->
+                                        <div class="target-dial-wheel-wrap">
+                                            <button type="button" class="wheel-step-btn prev"
+                                                onclick="stepTargetKingdom(-1)" title="Previous Kingdom">◀</button>
+                                            <div id="cc-target-dial" class="target-wheel-face" tabindex="0"
+                                                role="slider" aria-label="Target Kingdom">
+                                                <div class="target-wheel-rim"></div>
+                                                <div class="target-wheel-ticks"></div>
+                                                <div class="target-heraldry-pod" id="cc-target-heraldry-pod">
+                                                    <div class="target-shield-icon" id="cc-target-color-shield">🛡️
+                                                    </div>
+                                                    <div class="target-code-display" id="cc-target-code">FRA</div>
+                                                </div>
+                                                <div class="target-wheel-pointer"></div>
+                                            </div>
+                                            <button type="button" class="wheel-step-btn next"
+                                                onclick="stepTargetKingdom(1)" title="Next Kingdom">▶</button>
+                                        </div>
+
+                                        <!-- Target Country Telemetry Card -->
+                                        <div class="target-telemetry-card">
+                                            <div class="target-name-banner" id="cc-target-name">Kingdom of France</div>
+                                            <div class="target-detail-rows">
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">RULER:</span>
+                                                    <span class="td-val" id="cc-target-owner">Lord Philip</span>
+                                                </div>
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">POPULATION:</span>
+                                                    <span class="td-val" id="cc-target-pop">1,200</span>
+                                                </div>
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">TREASURY:</span>
+                                                    <span class="td-val" id="cc-target-res">150 gold</span>
+                                                </div>
+                                                <div class="target-detail-row">
+                                                    <span class="td-key">DIPLOMATIC STATUS:</span>
+                                                    <span class="td-val status-badge" id="cc-target-status">At
+                                                        Peace</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right: Diplomatic Stance Selector Knob, Action Lever & Ledger -->
+                                <div class="diplomacy-actions-station">
+                                    <!-- Stance Selector Knob -->
+                                    <div class="stance-selector-box">
+                                        <div class="control-label">DIPLOMATIC STANCE SELECTOR</div>
+                                        <div class="stance-knob-panel">
+                                            <div id="cc-diplo-stance-dial" class="stance-rotary-knob" tabindex="0"
+                                                role="radiogroup" aria-label="Diplomatic Stance">
+                                                <div class="stance-positions">
+                                                    <button type="button" class="stance-pos-btn pos-envoy active"
+                                                        data-stance="envoy" onclick="selectDiploStance('envoy')">
+                                                        <span class="stance-led"></span>
+                                                        <span>🤝 ENVOY</span>
+                                                    </button>
+                                                    <button type="button" class="stance-pos-btn pos-alliance"
+                                                        data-stance="alliance" onclick="selectDiploStance('alliance')">
+                                                        <span class="stance-led"></span>
+                                                        <span>📜 ALLIANCE</span>
+                                                    </button>
+                                                    <button type="button" class="stance-pos-btn pos-trade"
+                                                        data-stance="trade" onclick="selectDiploStance('trade')">
+                                                        <span class="stance-led"></span>
+                                                        <span>⚖️ TRADE (50G)</span>
+                                                    </button>
+                                                    <button type="button" class="stance-pos-btn pos-war"
+                                                        data-stance="war" onclick="selectDiploStance('war')">
+                                                        <span class="stance-led"></span>
+                                                        <span>⚔️ DECLARE WAR</span>
+                                                    </button>
+                                                </div>
+                                                <div class="stance-pointer-needle" id="cc-stance-pointer"></div>
+                                            </div>
+                                            <div class="stance-description-card" id="cc-stance-description">
+                                                Dispatch royal envoy to initiate formal diplomatic relations and
+                                                establish emissary presence.
+                                            </div>
+                                        </div>
+
+                                        <!-- Dispatch Diplomatic Mission Master Lever -->
+                                        <button id="cc-lever-dispatch-diplo" class="diplomatic-dispatch-lever-btn"
+                                            onclick="triggerDispatchDiplomacy()">
+                                            <span class="seal-icon">📜</span>
+                                            <span class="seal-title">SEAL &amp; DISPATCH DIPLOMATIC MISSION</span>
+                                            <span class="seal-sub" id="cc-diplo-mission-preview">Send Envoy to Kingdom
+                                                of France</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Diplomatic Ledger & Treaties Log -->
+                                    <div class="diplomatic-ledger-box">
+                                        <div class="control-label">DIPLOMATIC TREATIES &amp; RELATIONS LEDGER</div>
+                                        <div id="cc-diplomacy-list" class="ledger-scroll-container">
+                                            <!-- Dynamic rows injected by JS -->
+                                        </div>
+                                        <div id="cc-diplomacy-empty" class="ledger-empty-note">
+                                            No foreign treaties or diplomatic envoys recorded yet.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Console Footer Status -->
+                    <div class="console-footer-bar">
+                        <div class="footer-status-pill">
+                            <span class="live-dot">●</span> <span>MUD SIMULATION AUTHORITY: 90s CYCLE PERSISTENCE</span>
+                        </div>
+                        <div class="footer-version-tag">WORLD DOMINATION v0.2.0 · TACTICAL CONSOLE</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:20px;padding:10px;background:#1a1a2e;color:#888;font-size:0.75em;text-align:center;">
+                <div style="color:#ffd700;font-weight:bold;">v0.1.0</div>
+                <div>Kingdom Command Center - Enhanced Edition</div>
+            </div>
+        </div>
+        <div id="toast-container" aria-live="polite"></div>
+    </div>
+    <script type="module" src="js/main.js?v=3.7"></script>
+</body>
+
+</html>
