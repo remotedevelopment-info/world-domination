@@ -32,6 +32,8 @@ let activeDial = null;
 let debouncedPushSettingsTimer = null;
 let dialsWired = false;
 let compassDragging = false;
+let lastEconomyUserActionTime = 0;
+let isPushingEconomySettings = false;
 
 // Round-robin territory state without queuing events
 let activeCommandCenterKingdom = null;
@@ -43,11 +45,44 @@ let roundRobinTerritoryIndex = 0;
 const DIAL_BASE_DEG = 120;
 const DIAL_DEG_PER_UNIT = 2.4; // 240 deg sweep for 0..100 range
 
+export function isUserAdjustingEconomy() {
+  if (activeDial !== null) return true;
+  if (debouncedPushSettingsTimer !== null) return true;
+  if (isPushingEconomySettings) return true;
+  if (Date.now() - lastEconomyUserActionTime < 2500) return true;
+  return false;
+}
+
+export function syncLocalEconomyCache() {
+  if (commandCenterDetail) {
+    commandCenterDetail.economy_rate = taxRate;
+    commandCenterDetail.investment = investmentRate;
+    commandCenterDetail.social_costs = socialCostsRate;
+  }
+  if (state.myKingdom) {
+    state.myKingdom.economy_rate = taxRate;
+    state.myKingdom.investment = investmentRate;
+    state.myKingdom.social_costs = socialCostsRate;
+  }
+  const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
+  if (activeId && state.territoryDetails && state.territoryDetails[activeId]) {
+    state.territoryDetails[activeId].economy_rate = taxRate;
+    state.territoryDetails[activeId].investment = investmentRate;
+    state.territoryDetails[activeId].social_costs = socialCostsRate;
+  }
+}
+
 export function closeKingdomCommandCenter() {
   const cc = document.getElementById("kingdom-command-center");
   if (cc) cc.classList.add("hidden");
   stopTerritoryRoundRobinUpdater();
   activeCommandCenterKingdom = null;
+  lastEconomyUserActionTime = 0;
+  if (debouncedPushSettingsTimer) {
+    clearTimeout(debouncedPushSettingsTimer);
+    debouncedPushSettingsTimer = null;
+  }
+  isPushingEconomySettings = false;
 }
 
 export function getPlayerOwnedTerritories() {
@@ -89,6 +124,12 @@ export function renderTerritoryPills() {
 export function switchActiveTerritory(territoryId) {
   const territory = (state.kingdoms || []).find((k) => k.id === territoryId);
   if (!territory) return;
+  lastEconomyUserActionTime = 0;
+  if (debouncedPushSettingsTimer) {
+    clearTimeout(debouncedPushSettingsTimer);
+    debouncedPushSettingsTimer = null;
+  }
+  isPushingEconomySettings = false;
   activeCommandCenterKingdom = territory;
   renderTerritoryPills();
   applyLiveCommandCenterUpdate(territory);
@@ -105,6 +146,13 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
     kingdom = activeCommandCenterKingdom || (owned.length > 0 ? owned[0] : null);
   }
   if (!kingdom) return;
+
+  lastEconomyUserActionTime = 0;
+  if (debouncedPushSettingsTimer) {
+    clearTimeout(debouncedPushSettingsTimer);
+    debouncedPushSettingsTimer = null;
+  }
+  isPushingEconomySettings = false;
 
   activeCommandCenterKingdom = kingdom;
   renderTerritoryPills();
@@ -319,10 +367,17 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
 
   updateFortifyButtonLabel();
 
-  if (!activeDial) {
+  if (!isUserAdjustingEconomy()) {
     if (typeof detail?.economy_rate === "number") setTaxRate(detail.economy_rate, false);
     if (typeof detail?.investment === "number") setInvestmentRate(detail.investment, false);
     if (typeof detail?.social_costs === "number") setSocialRate(detail.social_costs, false);
+  } else {
+    // Keep local cache synced with user's active choice
+    if (detail) {
+      detail.economy_rate = taxRate;
+      detail.investment = investmentRate;
+      detail.social_costs = socialCostsRate;
+    }
   }
 
   updateStepperDisplay();
@@ -419,9 +474,6 @@ export function refreshKingdomCommandCenter(liveKingdom = null) {
 
   // Apply instant zero-lag update from authoritative WebSocket state
   applyLiveCommandCenterUpdate(kingdom);
-
-  // Trigger round-robin fetch without queuing
-  stepTerritoryRoundRobin();
 }
 
 export function dialValueFromPoint(dialEl, clientX, clientY) {
@@ -467,8 +519,10 @@ export function wireConsoleDials() {
 
     const onStart = (e) => {
       activeDial = cfg;
+      lastEconomyUserActionTime = Date.now();
       const pt = e.touches && e.touches.length ? e.touches[0] : e;
       cfg.set(dialValueFromPoint(dial, pt.clientX, pt.clientY), false);
+      syncLocalEconomyCache();
       e.preventDefault();
     };
 
@@ -479,8 +533,10 @@ export function wireConsoleDials() {
       "wheel",
       (e) => {
         e.preventDefault();
+        lastEconomyUserActionTime = Date.now();
         const delta = e.deltaY < 0 ? 2 : -2;
         cfg.set(cfg.get() + delta, true);
+        syncLocalEconomyCache();
       },
       { passive: false }
     );
@@ -489,19 +545,25 @@ export function wireConsoleDials() {
       const step = e.shiftKey ? 5 : 1;
       if (e.key === "ArrowUp" || e.key === "ArrowRight") {
         e.preventDefault();
+        lastEconomyUserActionTime = Date.now();
         cfg.set(cfg.get() + step, true);
+        syncLocalEconomyCache();
       } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
         e.preventDefault();
+        lastEconomyUserActionTime = Date.now();
         cfg.set(cfg.get() - step, true);
+        syncLocalEconomyCache();
       }
     });
   });
 
   window.addEventListener("mousemove", (e) => {
     if (!activeDial) return;
+    lastEconomyUserActionTime = Date.now();
     const dial = document.getElementById(activeDial.id);
     if (dial) {
       activeDial.set(dialValueFromPoint(dial, e.clientX, e.clientY), false);
+      syncLocalEconomyCache();
     }
   });
 
@@ -509,9 +571,11 @@ export function wireConsoleDials() {
     "touchmove",
     (e) => {
       if (!activeDial || !e.touches.length) return;
+      lastEconomyUserActionTime = Date.now();
       const dial = document.getElementById(activeDial.id);
       if (dial) {
         activeDial.set(dialValueFromPoint(dial, e.touches[0].clientX, e.touches[0].clientY), false);
+        syncLocalEconomyCache();
       }
     },
     { passive: false }
@@ -520,7 +584,9 @@ export function wireConsoleDials() {
   const onEnd = () => {
     if (!activeDial) return;
     activeDial = null;
-    schedulePushEconomySettings();
+    lastEconomyUserActionTime = Date.now();
+    syncLocalEconomyCache();
+    schedulePushEconomySettings(50);
   };
   window.addEventListener("mouseup", onEnd);
   window.addEventListener("touchend", onEnd);
@@ -542,7 +608,11 @@ export function setTaxRate(value, push = true) {
   if (readout) readout.textContent = taxRate;
 
   updateEconomyHintsLive();
-  if (push) schedulePushEconomySettings();
+  if (push) {
+    lastEconomyUserActionTime = Date.now();
+    syncLocalEconomyCache();
+    schedulePushEconomySettings(200);
+  }
 }
 
 export function setInvestmentRate(value, push = true) {
@@ -558,7 +628,11 @@ export function setInvestmentRate(value, push = true) {
   if (readout) readout.textContent = investmentRate;
 
   updateEconomyHintsLive();
-  if (push) schedulePushEconomySettings();
+  if (push) {
+    lastEconomyUserActionTime = Date.now();
+    syncLocalEconomyCache();
+    schedulePushEconomySettings(200);
+  }
 }
 
 export function setSocialRate(value, push = true) {
@@ -574,30 +648,60 @@ export function setSocialRate(value, push = true) {
   if (readout) readout.textContent = socialCostsRate;
 
   updateEconomyHintsLive();
-  if (push) schedulePushEconomySettings();
+  if (push) {
+    lastEconomyUserActionTime = Date.now();
+    syncLocalEconomyCache();
+    schedulePushEconomySettings(200);
+  }
 }
 
-export function schedulePushEconomySettings() {
+export function schedulePushEconomySettings(delayMs = 200) {
   if (debouncedPushSettingsTimer) clearTimeout(debouncedPushSettingsTimer);
   debouncedPushSettingsTimer = setTimeout(() => {
+    debouncedPushSettingsTimer = null;
     pushEconomySettings();
-  }, 350);
+  }, delayMs);
 }
 
 export function pushEconomySettings() {
   if (!state.token || !state.myKingdom) return;
-  apiSetEconomySettings(taxRate, investmentRate, socialCostsRate)
+  const pushedTax = taxRate;
+  const pushedInv = investmentRate;
+  const pushedSoc = socialCostsRate;
+  isPushingEconomySettings = true;
+  lastEconomyUserActionTime = Date.now();
+
+  apiSetEconomySettings(pushedTax, pushedInv, pushedSoc)
     .then((res) => {
       if (!res.ok) throw new Error("Failed to persist economy settings");
       return res.json();
     })
     .then((data) => {
-      logMessage(`Annual Budget updated: Tax ${taxRate}%, Inv ${investmentRate}%, Social ${socialCostsRate}%`);
+      logMessage(`Annual Budget updated: Tax ${pushedTax}%, Inv ${pushedInv}%, Social ${pushedSoc}%`);
       if (data) {
         const econObj = data.economy || data;
+        const finalTax = data.economy_rate ?? pushedTax;
+        const finalInv = data.investment ?? pushedInv;
+        const finalSoc = data.social_costs ?? pushedSoc;
+
         if (commandCenterDetail) {
           commandCenterDetail.economy = econObj;
+          commandCenterDetail.economy_rate = finalTax;
+          commandCenterDetail.investment = finalInv;
+          commandCenterDetail.social_costs = finalSoc;
         }
+        if (state.myKingdom) {
+          state.myKingdom.economy_rate = finalTax;
+          state.myKingdom.investment = finalInv;
+          state.myKingdom.social_costs = finalSoc;
+        }
+        const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
+        if (activeId && state.territoryDetails && state.territoryDetails[activeId]) {
+          state.territoryDetails[activeId].economy_rate = finalTax;
+          state.territoryDetails[activeId].investment = finalInv;
+          state.territoryDetails[activeId].social_costs = finalSoc;
+        }
+
         updateDerivedEconomyUI(
           data.gdp ?? econObj.gdp,
           data.currency_value ?? econObj.currency_value,
@@ -607,17 +711,23 @@ export function pushEconomySettings() {
         updateEconomyHintsLive();
       }
     })
-    .catch((err) => console.error("Error setting economy settings:", err));
+    .catch((err) => console.error("Error setting economy settings:", err))
+    .finally(() => {
+      isPushingEconomySettings = false;
+    });
 }
 
 export function adjustBudgetDial(type, delta) {
+  lastEconomyUserActionTime = Date.now();
   if (type === "tax") {
-    setTaxRate(taxRate + delta, true);
+    setTaxRate(taxRate + delta, false);
   } else if (type === "investment") {
-    setInvestmentRate(investmentRate + delta, true);
+    setInvestmentRate(investmentRate + delta, false);
   } else if (type === "social") {
-    setSocialRate(socialCostsRate + delta, true);
+    setSocialRate(socialCostsRate + delta, false);
   }
+  syncLocalEconomyCache();
+  schedulePushEconomySettings(200);
 }
 window.adjustBudgetDial = adjustBudgetDial;
 
@@ -650,10 +760,12 @@ export function triggerAutoBalanceBudget() {
   const newInv = Math.min(100, Math.round(safeCombinedRate * 0.55));
   const newSoc = Math.min(100, Math.max(0, safeCombinedRate - newInv));
 
+  lastEconomyUserActionTime = Date.now();
   setTaxRate(optimalTax, false);
   setInvestmentRate(newInv, false);
   setSocialRate(newSoc, false);
-  schedulePushEconomySettings();
+  syncLocalEconomyCache();
+  schedulePushEconomySettings(50);
   showToast(`⚖️ Budget Balanced: Tax ${optimalTax}%, Investment ${newInv}%, Social ${newSoc}% (Zero Deficit)`, "success");
 }
 window.triggerAutoBalanceBudget = triggerAutoBalanceBudget;
