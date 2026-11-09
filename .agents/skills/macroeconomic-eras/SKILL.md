@@ -39,12 +39,17 @@ flowchart TD
    - Active warfare inflicts frontline attrition (~8% annually) and triggers **continuous conscription**, draining both gold reserves and civilian population.
    - **Diplomacy as a Strategic Shield**: Sending envoys and forging alliances requires upfront tribute/gifts but prevents ruinous multi-front wars.
 
-3. **Population Pressure & Tax-Driven Migration**:
+3. **Population Pressure, Wealth Factor & Segmented Migration**:
    - **Population Pressure (`0–100%`)**: Rises as population density approaches infrastructure capacity or when military mobilization strips the civilian economy. High pressure requires infrastructure expansion and social spending.
-   - **Taxation Consequences (Laffer Curve & Migration)**:
-     - Moderate taxes (`25%–58%`) fund the state sustainably.
-     - Confiscatory taxes (`> 60%`) depress GDP output and trigger **Tax Flight (Emigration)**—citizens flee high-tax or war-torn realms and resettle in lower-tax, prosperous countries.
-     - Low taxes (`<= 30%`) paired with social welfare and infrastructure attract **Immigration**, accelerating demographic and economic growth.
+   - **Variable Wealth Factor ($W \in [0.0, 1.0]$) & Wealthy Percentage ($P_{\text{wealthy}} \in [2\%, 18\%]$)**:
+     - The population is segmented into the **Wealthy Merchant Class** and the **General Settler Populace**.
+     - $P_{\text{wealthy}} = 0.02 + W \times 0.16$, where $W$ is driven by GDP per capita, commercial markets tier, infrastructure level, treasury gold solvency, and merchant entrepreneurial pride.
+   - **Empirical Taxation Thresholds**:
+     1. **Capital Haven (`taxRate <= 20%`)**: Attracts foreign capital and wealthy merchant relocations (`wealthy_migration > 0`), injecting fresh gold specie into the national treasury (`+5 gold/wealthy immigrant`).
+     2. **Fair Prosperity (`21% <= taxRate <= 35%`)**: Civic sweet spot. Encourages steady family, artisan, and settler immigration (`general_migration > 0`). Wealthy remain content with zero flight.
+     3. **Moderate / Normal (`36% <= taxRate <= 58%`)**: Standard tax burden. Migration is neutral, stimulated primarily by cathedral/guild social spending (`social_costs`) and infrastructure.
+     4. **Heavy Drag (`59% <= taxRate <= 68%`)**: Burdensome taxes blunt natural demographic growth and cause marginal merchants and settlers to seek opportunities abroad.
+     5. **Extreme Wealth Flight (`taxRate > 68%`)**: Confiscatory taxation! The wealthy migrate away first and fastest (`wealthy_migration < 0`), triggering **Capital Flight** that drains treasury specie reserves (`-10 gold/fleeing wealthy citizen`) and degrades entrepreneurial pride. General citizens also emigrate at an accelerated rate.
 
 ---
 
