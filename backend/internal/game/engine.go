@@ -423,6 +423,15 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		migrationDelta := int64(math.Round(float64(econ.NetMigration) * yearsPassed))
 		newPopulation += popGrowth + migrationDelta
 
+		// Wealthy Capital Transfer: incoming wealthy inject specie, fleeing wealthy drain specie
+		if econ.CapitalFlightDrain != 0 && yearsPassed > 0 {
+			capDelta := int64(math.Round(float64(econ.CapitalFlightDrain) * yearsPassed))
+			newResources += capDelta
+			if newResources < 0 {
+				newResources = 0
+			}
+		}
+
 		// 4. Warfare, Multi-Layered Troops, Continuous Conscription & Demobilization
 		newTroops := c.Troops
 		newLevy := c.TroopsLevy

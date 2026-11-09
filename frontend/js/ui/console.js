@@ -746,28 +746,104 @@ export function computeClientPopulationPressure(pop, troops, tax, social, infra)
   return Math.round(Math.max(0, Math.min(100, taxStress + milStress - relief)));
 }
 
-export function computeClientMigration(pop, tax, social, infra) {
-  if (pop <= 0) return 0;
-  if (tax > 60) {
-    const excess = tax - 60;
-    const rate = excess * 0.0008 + (excess * excess) * 0.00003;
-    let outflow = Math.round(pop * rate + 0.5);
-    if (outflow < 1) outflow = 1;
-    const maxOutflow = Math.floor(pop / 10);
-    if (outflow > maxOutflow && maxOutflow > 0) outflow = maxOutflow;
-    return -outflow;
+export function computeClientMigration(pop, tax, social, infra, gdp = 0, res = 0, markets = 0, pride = 100) {
+  if (pop <= 0) {
+    return {
+      netMigration: 0,
+      wealthyMigration: 0,
+      generalMigration: 0,
+      wealthFactor: 0.1,
+      wealthyRatio: 0.02,
+      capitalDrain: 0,
+      status: "STABLE",
+    };
   }
-  if (tax <= 35) {
-    const taxPull = (35 - tax) * 0.00025;
-    const welfarePull = social * 0.00008 + infra * 0.0006;
-    const totalRate = taxPull + welfarePull;
-    if (totalRate > 0) {
-      let inflow = Math.round(pop * totalRate + 0.5);
-      if (inflow < 1) inflow = 1;
-      return inflow;
+
+  const gdpPerCap = gdp > 0 ? (gdp / pop) : 0.08;
+  const gdpScore = Math.min(2.5, gdpPerCap / 0.08);
+  const commScore = 1.0 + (markets || 0) * 0.20 + (infra || 0) * 0.10;
+  const resPerCap = pop > 0 ? (res / pop) : 0;
+  const solvencyScore = Math.min(2.0, 0.5 + resPerCap * 1000.0);
+  const prideScore = 0.60 + 0.40 * (pride / 100.0);
+
+  const composite = (gdpScore * 0.35 + commScore * 0.35 + solvencyScore * 0.15) * (prideScore * 0.15 + 0.85);
+  const wealthFactor = Math.max(0.0, Math.min(1.0, (composite - 0.50) / 2.0));
+  const wealthyRatio = 0.02 + wealthFactor * 0.16;
+
+  const wealthyPop = Math.round(pop * wealthyRatio);
+  const generalPop = Math.max(0, pop - wealthyPop);
+
+  let wealthyMig = 0;
+  let generalMig = 0;
+  let capitalDrain = 0;
+  let status = "STABLE";
+
+  if (tax <= 20) {
+    status = "CAPITAL_HAVEN";
+    const shelterPull = (21 - tax) / 20.0;
+    const commPull = 1.0 + (markets || 0) * 0.25 + (infra || 0) * 0.15;
+    const prideBonus = 0.70 + 0.30 * (pride / 100.0);
+    const wRate = 0.015 * shelterPull * commPull * prideBonus;
+    wealthyMig = Math.round(wealthyPop * wRate);
+    if (wealthyMig < 1 && tax <= 15 && wealthyPop > 10) wealthyMig = 1;
+
+    const gRate = 0.003 * shelterPull * (1.0 + (infra || 0) * 0.20 + (social || 0) * 0.005);
+    generalMig = Math.round(generalPop * gRate);
+    capitalDrain = wealthyMig * 5;
+  } else if (tax <= 35) {
+    status = "FAIR_PROSPERITY";
+    const taxAdvantage = (36 - tax) / 15.0;
+    const civicFactor = 1.0 + (infra || 0) * 0.20 + (social || 0) * 0.015;
+    const prideBonus = 0.70 + 0.30 * (pride / 100.0);
+    const gRate = 0.005 * taxAdvantage * civicFactor * prideBonus;
+    generalMig = Math.round(generalPop * gRate);
+    if (generalMig < 1) generalMig = 1;
+
+    const wRate = 0.002 * taxAdvantage * (1.0 + (markets || 0) * 0.15) * prideBonus;
+    wealthyMig = Math.round(wealthyPop * wRate);
+    capitalDrain = wealthyMig * 3;
+  } else if (tax <= 58) {
+    status = "MODERATE_TAX";
+    if (social >= 50) {
+      const welfarePull = (social - 50) * 0.00004;
+      generalMig = Math.round(generalPop * welfarePull);
     }
+  } else if (tax <= 68) {
+    status = "HEAVY_DRAG";
+    const excess = tax - 58;
+    const relief = (social || 0) * 0.10;
+    const effExcess = Math.max(0, excess - relief);
+    const wRate = (effExcess / 10.0) * 0.008;
+    wealthyMig = -Math.ceil(wealthyPop * wRate);
+    const gRate = (effExcess / 10.0) * 0.004;
+    generalMig = -Math.ceil(generalPop * gRate);
+    capitalDrain = wealthyMig * 5;
+  } else {
+    status = "WEALTH_FLIGHT";
+    const excess = tax - 60;
+    const relief = (social || 0) * 0.12;
+    const effExcess = Math.max(1.0, excess - relief);
+    const prideDrag = 1.0 + (1.0 - pride / 100.0) * 0.5;
+    const wRate = (effExcess / 32.0) * 0.030 * prideDrag;
+    wealthyMig = -Math.ceil(wealthyPop * wRate);
+    if (wealthyMig > -1) wealthyMig = -1;
+
+    const gRate = (effExcess / 32.0) * 0.012 * prideDrag;
+    generalMig = -Math.ceil(generalPop * gRate);
+    if (generalMig > -1) generalMig = -1;
+    capitalDrain = wealthyMig * 10;
   }
-  return 0;
+
+  const netMigration = wealthyMig + generalMig;
+  return {
+    netMigration,
+    wealthyMigration: wealthyMig,
+    generalMigration: generalMig,
+    wealthFactor,
+    wealthyRatio,
+    capitalDrain,
+    status,
+  };
 }
 
 export function setEconomyRate(value, push = true) {
@@ -828,7 +904,9 @@ export function updateEconomyHintsLive() {
   // Enforce Layer 1 Hard-Specie Fiscal Rules
   const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
   const popPressure = computeClientPopulationPressure(pop, tr, taxRate, socialCostsRate, infraLevel || 0);
-  const netMigration = computeClientMigration(pop, taxRate, socialCostsRate, infraLevel || 0);
+  const pride = commandCenterDetail?.entrepreneurial_pride ?? kingdom.entrepreneurial_pride ?? 100;
+  const migInfo = computeClientMigration(pop, taxRate, socialCostsRate, infraLevel || 0, gdp, res, marketsLevel || 0, pride);
+  const netMigration = migInfo.netMigration;
 
   let value = 1.0;
   if (gdp > 0) value = res / gdp / 5.0;
@@ -838,14 +916,17 @@ export function updateEconomyHintsLive() {
 
   const taxHint = document.getElementById("cc-tax-impact-hint");
   if (taxHint) {
-    if (taxRate > 60) {
-      taxHint.textContent = `Rev: +${taxRevenue}/yr (🚨 Emigration: ${netMigration}/yr)`;
+    if (migInfo.status === "WEALTH_FLIGHT") {
+      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (🚨 Wealth Flight: ${migInfo.wealthyMigration.toLocaleString()}/yr)`;
       taxHint.style.color = "#ff6b6b";
-    } else if (taxRate <= 35 && netMigration > 0) {
-      taxHint.textContent = `Rev: +${taxRevenue}/yr (✨ Immigration: +${netMigration}/yr)`;
+    } else if (migInfo.status === "CAPITAL_HAVEN") {
+      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (🏛️ Capital Haven: +${migInfo.wealthyMigration.toLocaleString()} magnates/yr)`;
+      taxHint.style.color = "#38bdf8";
+    } else if (migInfo.status === "FAIR_PROSPERITY") {
+      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (✨ Settlers: +${netMigration.toLocaleString()}/yr)`;
       taxHint.style.color = "#4ade80";
     } else {
-      taxHint.textContent = `Tax Revenue: +${taxRevenue}/yr`;
+      taxHint.textContent = `Tax Revenue: +${taxRevenue.toLocaleString()}/yr`;
       taxHint.style.color = "#4ecdc4";
     }
   }
@@ -864,12 +945,16 @@ export function updateEconomyHintsLive() {
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
   if (popGrowthEl) {
-    let growth = pop * 0.005 * (gdp / (pop * 0.02 || 1));
+    const effectiveCap = Math.max(pop * 1.5, 2000000) * (1.0 + (infraLevel || 0) * 0.20 + (marketsLevel || 0) * 0.10);
+    let growth = pop * 0.005 * (gdp / (pop * 0.08 || 1));
     growth += (investmentRate + socialCostsRate) * 0.0005;
-    growth *= Math.max(0, 1.0 - pop / 1000000);
+    if (taxRate > 50) {
+      growth *= Math.max(0.15, 1.0 - (taxRate - 50) / 50.0);
+    }
+    growth *= Math.max(0, 1.0 - pop / effectiveCap);
     const naturalGrowth = Math.max(1, Math.round(growth));
     const netPopChange = naturalGrowth + netMigration;
-    popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration})`;
+    popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange.toLocaleString()}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration.toLocaleString()})`;
     popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
   }
 
@@ -964,9 +1049,12 @@ export function updateEconomyHintsLive() {
     `${lyMig > 0 ? "+" : ""}${lyMig.toLocaleString()}/yr`,
     lyMig < 0 ? "val-neg" : lyMig > 0 ? "val-pos" : ""
   );
+  const migBreakdownBadge = (migInfo.wealthyMigration !== 0)
+    ? ` <span class="cap-tag" title="👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy class (${migInfo.wealthyMigration >= 0 ? "+" : ""}${migInfo.wealthyMigration.toLocaleString()}/yr), 👥 Settlers: ${migInfo.generalMigration >= 0 ? "+" : ""}${migInfo.generalMigration.toLocaleString()}/yr">👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy</span>`
+    : ` <span class="cap-tag" title="👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy class">👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy</span>`;
   setCell(
     "cc-ty-migration",
-    `${netMigration > 0 ? "+" : ""}${netMigration.toLocaleString()}/yr`,
+    `${netMigration > 0 ? "+" : ""}${netMigration.toLocaleString()}/yr${migBreakdownBadge}`,
     netMigration < 0 ? "val-neg" : netMigration > 0 ? "val-pos" : ""
   );
 
@@ -983,15 +1071,21 @@ export function updateEconomyHintsLive() {
     } else if (res > 0 && cappedBudget.effBalance < 0) {
       alerts.push(`📉 <strong>DEFICIT FINANCING:</strong> Operating at an annual deficit of <strong>-${Math.abs(cappedBudget.effBalance).toLocaleString()} ducats/yr</strong>! Draining treasury reserves (holds ${res.toLocaleString()} gold).`);
     }
-    if (taxRate > 60) {
-      alerts.push(`🚨 <strong>TAX FLIGHT EMIGRATION:</strong> Punitive ${taxRate}% tax rate is driving <strong>${Math.abs(netMigration)} citizens/yr</strong> to flee the realm!`);
-    } else if (taxRate <= 35 && netMigration > 0) {
-      alerts.push(`✨ <strong>PROSPERITY IMMIGRATION:</strong> Competitive ${taxRate}% tax rate &amp; civic works are attracting <strong>+${netMigration} settlers/yr</strong>.`);
+
+    if (migInfo.status === "WEALTH_FLIGHT") {
+      alerts.push(`🚨 <strong>CAPITAL & WEALTH FLIGHT:</strong> Punitive ${taxRate}% tax rate is driving <strong>${Math.abs(migInfo.wealthyMigration).toLocaleString()} wealthy burghers/yr</strong> into foreign exile (${migInfo.capitalDrain.toLocaleString()} ducats capital drain)!`);
+    } else if (migInfo.status === "CAPITAL_HAVEN") {
+      alerts.push(`🏛️ <strong>CAPITAL HAVEN:</strong> Competitive ${taxRate}% tax rate is attracting foreign merchant capital and <strong>+${migInfo.wealthyMigration.toLocaleString()} wealthy magnates/yr</strong> (+${migInfo.capitalDrain.toLocaleString()} ducats capital injection)!`);
+    } else if (migInfo.status === "FAIR_PROSPERITY") {
+      alerts.push(`✨ <strong>FAIR TAXATION PROSPERITY:</strong> Balanced ${taxRate}% tax rate encourages civic immigration of <strong>+${netMigration.toLocaleString()} settlers/yr</strong>.`);
+    } else if (migInfo.status === "HEAVY_DRAG") {
+      alerts.push(`⚠️ <strong>HEAVY TAX BURDEN:</strong> High ${taxRate}% tax rate is discouraging commerce and causing <strong>${Math.abs(netMigration).toLocaleString()} emigrants/yr</strong> to seek opportunity abroad.`);
     }
+
     if (alerts.length > 0) {
       alertBanner.innerHTML = alerts.join("<br>");
       alertBanner.classList.remove("hidden");
-      alertBanner.classList.toggle("alert-danger", taxRate > 60 || cappedBudget.effMil < milUpkeep || (res <= 0 && (milUpkeep + invExp + socExp) > totalRevenue));
+      alertBanner.classList.toggle("alert-danger", taxRate > 68 || cappedBudget.effMil < milUpkeep || (res <= 0 && (milUpkeep + invExp + socExp) > totalRevenue));
     } else {
       alertBanner.classList.add("hidden");
     }

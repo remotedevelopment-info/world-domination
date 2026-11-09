@@ -1545,6 +1545,12 @@ func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
 			"currency_value":         econ.CurrencyValue,
 			"inflation_rate":         econ.InflationRate,
 			"fiscal_stress_index":    math.Round(fiscalStress*10) / 10,
+			"wealth_factor":          econ.WealthFactor,
+			"wealthy_ratio":          econ.WealthyRatio,
+			"wealthy_migration":      econ.WealthyMigration,
+			"general_migration":      econ.GeneralMigration,
+			"capital_flight_drain":  econ.CapitalFlightDrain,
+			"migration_status":       econ.MigrationStatus,
 		}
 
 		seasonalImpact := map[string]interface{}{

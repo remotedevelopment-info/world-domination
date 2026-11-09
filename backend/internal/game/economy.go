@@ -51,6 +51,14 @@ type EconomyState struct {
 	PopulationPressure  float64 `json:"population_pressure"`
 	NetMigration        int64   `json:"net_migration"`
 
+	// Demographic & Wealth Factor Telemetry
+	WealthFactor        float64 `json:"wealth_factor"`
+	WealthyRatio        float64 `json:"wealthy_ratio"`
+	WealthyMigration    int64   `json:"wealthy_migration"`
+	GeneralMigration    int64   `json:"general_migration"`
+	CapitalFlightDrain  int64   `json:"capital_flight_drain"`
+	MigrationStatus     string  `json:"migration_status"`
+
 	// Feature/Internals: User State & Environmental Telemetry
 	EntrepreneurialPride    float64 `json:"entrepreneurial_pride"`
 	MilitaryDelayedCosts    int64   `json:"military_delayed_costs"`
@@ -270,43 +278,158 @@ func GetClimaticAndSeasonalState(simYear float64) SeasonalClimaticState {
 	}
 }
 
-// ComputeMigrationWithPride calculates net population migration considering tax rates and merchant confidence.
-// High taxes blunts birth growth and produces steady, gradual emigration.
-// Low taxes and high entrepreneurial pride attract ambitious merchants and immigrants.
-func ComputeMigrationWithPride(population, taxRate, socialCosts, infrastructure int64, pride float64) int64 {
+// ComputeWealthFactor returns:
+// 1. wealthFactor (0.05 to 1.00): composite wealth score based on productivity, markets, infrastructure, and solvency
+// 2. wealthyRatio (0.02 to 0.18): proportion of population in the wealthy/merchant class
+func ComputeWealthFactor(population, resources, gdp, markets, infrastructure int64, pride float64) (wealthFactor float64, wealthyRatio float64) {
 	if population <= 0 {
-		return 0
+		return 0.10, 0.02
 	}
-	if taxRate > 60 {
+	gdpPerCap := float64(gdp) / float64(population)
+	gdpScore := math.Min(2.5, gdpPerCap/baseProductivity)
+	commScore := 1.0 + float64(markets)*0.20 + float64(infrastructure)*0.10
+	resPerCap := float64(resources) / float64(population)
+	solvencyScore := math.Min(2.0, 0.5+resPerCap*1000.0)
+	prideScore := 0.60 + 0.40*(pride/100.0)
+
+	composite := (gdpScore*0.35 + commScore*0.35 + solvencyScore*0.15) * (prideScore*0.15 + 0.85)
+	wealthFactor = math.Max(0.0, math.Min(1.0, (composite-0.50)/2.0))
+	wealthFactor = math.Round(wealthFactor*1000) / 1000
+
+	// Percentage of wealthy varies from 2.0% in agrarian economies up to 18.0% in advanced merchant hubs
+	wealthyRatio = 0.02 + wealthFactor*0.16
+	wealthyRatio = math.Round(wealthyRatio*1000) / 1000
+	return wealthFactor, wealthyRatio
+}
+
+// MigrationBreakdown encapsulates threshold-based segmented demographic migration.
+type MigrationBreakdown struct {
+	NetMigration       int64   `json:"net_migration"`
+	WealthyMigration   int64   `json:"wealthy_migration"`
+	GeneralMigration   int64   `json:"general_migration"`
+	WealthFactor       float64 `json:"wealth_factor"`
+	WealthyRatio       float64 `json:"wealthy_ratio"`
+	CapitalFlightDrain int64   `json:"capital_flight_drain"`
+	MigrationStatus    string  `json:"migration_status"`
+}
+
+// ComputeMigrationDetailed computes segmented migration across thresholds for wealthy and general populations:
+// - Low Tax Haven (<= 20%): Wealthy merchants from other realms view this territory as an attractive tax haven to relocate to.
+// - Fair / Balanced Taxation (21% - 35%): Encourages steady artisan/family immigration and demographic expansion.
+// - Moderate / Normal Taxation (36% - 58%): Balanced baseline.
+// - High Taxation (59% - 68%): Moderate drag on general populace and marginal merchants.
+// - Extreme Taxation (> 68%): Confiscatory! The wealthy look at other countries and actively migrate away first (capital flight).
+func ComputeMigrationDetailed(population, resources, gdp, taxRate, markets, infrastructure, socialCosts int64, pride float64) MigrationBreakdown {
+	if population <= 0 {
+		return MigrationBreakdown{}
+	}
+
+	wealthFactor, wealthyRatio := ComputeWealthFactor(population, resources, gdp, markets, infrastructure, pride)
+	wealthyPop := int64(math.Round(float64(population) * wealthyRatio))
+	generalPop := population - wealthyPop
+	if generalPop < 0 {
+		generalPop = 0
+	}
+
+	var wealthyMig int64
+	var generalMig int64
+	var capitalDrain int64
+	var status string
+
+	switch {
+	// Threshold 1: Low Tax Haven (taxRate <= 20%)
+	case taxRate <= 20:
+		status = "CAPITAL_HAVEN"
+		shelterPull := float64(21-taxRate) / 20.0
+		commPull := 1.0 + float64(markets)*0.25 + float64(infrastructure)*0.15
+		prideBonus := 0.70 + 0.30*(pride/100.0)
+		wRate := 0.015 * shelterPull * commPull * prideBonus
+		wealthyMig = int64(math.Round(float64(wealthyPop) * wRate))
+		if wealthyMig < 1 && taxRate <= 15 && wealthyPop > 10 {
+			wealthyMig = 1
+		}
+
+		gRate := 0.003 * shelterPull * (1.0 + float64(infrastructure)*0.20 + float64(socialCosts)*0.005)
+		generalMig = int64(math.Round(float64(generalPop) * gRate))
+		capitalDrain = wealthyMig * 5 // Capital injection (+gold into treasury)
+
+	// Threshold 2: Fair / Balanced Level of Taxation (21% <= taxRate <= 35%)
+	case taxRate <= 35:
+		status = "FAIR_PROSPERITY"
+		taxAdvantage := float64(36-taxRate) / 15.0
+		civicFactor := 1.0 + float64(infrastructure)*0.20 + float64(socialCosts)*0.015
+		prideBonus := 0.70 + 0.30*(pride/100.0)
+		gRate := 0.005 * taxAdvantage * civicFactor * prideBonus
+		generalMig = int64(math.Round(float64(generalPop) * gRate))
+		if generalMig < 1 {
+			generalMig = 1
+		}
+
+		wRate := 0.002 * taxAdvantage * (1.0 + float64(markets)*0.15) * prideBonus
+		wealthyMig = int64(math.Round(float64(wealthyPop) * wRate))
+		capitalDrain = wealthyMig * 3
+
+	// Threshold 3: Moderate / Normal Taxation (36% <= taxRate <= 58%)
+	case taxRate <= 58:
+		status = "MODERATE_TAX"
+		if socialCosts >= 50 {
+			welfarePull := float64(socialCosts-50) * 0.00004
+			generalMig = int64(math.Round(float64(generalPop) * welfarePull))
+		}
+
+	// Threshold 4: High / Heavy Taxation (59% <= taxRate <= 68%)
+	case taxRate <= 68:
+		status = "HEAVY_DRAG"
+		excess := float64(taxRate - 58)
+		relief := float64(socialCosts) * 0.10
+		effExcess := math.Max(0, excess-relief)
+
+		wRate := (effExcess / 10.0) * 0.008
+		wealthyMig = -int64(math.Ceil(float64(wealthyPop) * wRate))
+
+		gRate := (effExcess / 10.0) * 0.004
+		generalMig = -int64(math.Ceil(float64(generalPop) * gRate))
+		capitalDrain = wealthyMig * 5
+
+	// Threshold 5: Extreme / Punitive Taxation (taxRate > 68%)
+	default:
+		status = "WEALTH_FLIGHT"
 		excess := float64(taxRate - 60)
 		relief := float64(socialCosts) * 0.12
-		effExcess := excess - relief
-		if effExcess <= 0 {
-			return 0
-		}
-		// Gradual tax flight: capped around 1.0% to 1.5% per year,
-		// worsened if entrepreneurial pride is broken
+		effExcess := math.Max(1.0, excess-relief)
+
 		prideDrag := 1.0 + (1.0-pride/100.0)*0.5
-		rate := (effExcess / 40.0) * 0.015 * prideDrag
-		loss := int64(math.Ceil(float64(population) * rate))
-		if loss < 1 {
-			loss = 1
+		wRate := (effExcess / 32.0) * 0.030 * prideDrag
+		wealthyMig = -int64(math.Ceil(float64(wealthyPop) * wRate))
+		if wealthyMig > -1 {
+			wealthyMig = -1
 		}
-		return -loss
-	}
-	if taxRate <= 35 && population < carryingCapacity {
-		taxAdvantage := float64(36-taxRate) / 36.0
-		civicFactor := 1.0 + float64(infrastructure)*0.20 + float64(socialCosts)*0.015
-		damping := 1.0 - float64(population)/float64(carryingCapacity)
-		prideBonus := 0.70 + 0.30*(pride/100.0)
-		rate := 0.002 * taxAdvantage * civicFactor * damping * prideBonus
-		gain := int64(math.Round(float64(population) * rate))
-		if gain < 1 && (infrastructure > 0 || socialCosts >= 20 || taxRate <= 25) {
-			gain = 1
+
+		gRate := (effExcess / 32.0) * 0.012 * prideDrag
+		generalMig = -int64(math.Ceil(float64(generalPop) * gRate))
+		if generalMig > -1 {
+			generalMig = -1
 		}
-		return gain
+		capitalDrain = wealthyMig * 10 // Capital flight (gold drains from treasury)
 	}
-	return 0
+
+	netMig := wealthyMig + generalMig
+	return MigrationBreakdown{
+		NetMigration:       netMig,
+		WealthyMigration:   wealthyMig,
+		GeneralMigration:   generalMig,
+		WealthFactor:       wealthFactor,
+		WealthyRatio:       wealthyRatio,
+		CapitalFlightDrain: capitalDrain,
+		MigrationStatus:    status,
+	}
+}
+
+// ComputeMigrationWithPride preserves backward compatibility for existing callers and tests.
+func ComputeMigrationWithPride(population, taxRate, socialCosts, infrastructure int64, pride float64) int64 {
+	baseGDP := int64(math.Round(float64(population) * baseProductivity))
+	res := ComputeMigrationDetailed(population, 500, baseGDP, taxRate, 0, infrastructure, socialCosts, pride)
+	return res.NetMigration
 }
 
 // ComputeMigration returns the net annual population migration for a kingdom.
@@ -440,7 +563,7 @@ func ComputeEconomyWithInternals(
 		inflation = 100
 	}
 
-	netMig := ComputeMigrationWithPride(population, taxRate, socialCosts, infrastructure, pride)
+	mig := ComputeMigrationDetailed(population, resources, int64(gdp+0.5), taxRate, markets, infrastructure, socialCosts, pride)
 
 	return EconomyState{
 		TaxRate:                 taxRate,
@@ -471,7 +594,13 @@ func ComputeEconomyWithInternals(
 		Markets:                 markets,
 		Infrastructure:          infrastructure,
 		PopulationPressure:      popPressure,
-		NetMigration:            netMig,
+		NetMigration:            mig.NetMigration,
+		WealthFactor:            mig.WealthFactor,
+		WealthyRatio:            mig.WealthyRatio,
+		WealthyMigration:        mig.WealthyMigration,
+		GeneralMigration:        mig.GeneralMigration,
+		CapitalFlightDrain:      mig.CapitalFlightDrain,
+		MigrationStatus:         mig.MigrationStatus,
 		EntrepreneurialPride:    pride,
 		MilitaryDelayedCosts:    delayedCosts,
 		SeasonalHarvestFactor:   season.HarvestYieldFactor,
@@ -523,7 +652,8 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	if population <= 0 {
 		return 0
 	}
-	if population >= carryingCapacity {
+	effectiveCapacity := int64(math.Max(float64(population)*1.5, 2000000.0) * (1.0 + float64(infrastructure)*0.20 + float64(markets)*0.10))
+	if population >= effectiveCapacity {
 		return 0
 	}
 	perCapita := gdpValue(population, 0, taxRate, markets, infrastructure) / float64(population)
@@ -539,7 +669,7 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	// Logistic damping: the closer the kingdom is to its carrying capacity, the
 	// slower it grows. Without this the growth term is proportional to the
 	// population itself, and budget balances grow unbounded.
-	damped := growth * (1.0 - float64(population)/float64(carryingCapacity))
+	damped := growth * (1.0 - float64(population)/float64(effectiveCapacity))
 	if damped < 0 {
 		damped = 0
 	}

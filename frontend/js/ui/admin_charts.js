@@ -388,31 +388,36 @@ function renderTaxPrideCurveChart(width, height, kingdoms) {
   chartCtx.font = "11px 'Cinzel', Georgia, serif";
   chartCtx.fillText("HISTORICAL LAFFER / RISK CURVE: TAX RATE (%) VS ENTREPRENEURIAL PRIDE (%)", padLeft, 22);
 
-  // Zone Background Shading
+  // Zone Background Shading across 5 Empirical Tax Thresholds
+  const x20 = padLeft + (20 / 100) * plotWidth;
   const x35 = padLeft + (35 / 100) * plotWidth;
-  const x50 = padLeft + (50 / 100) * plotWidth;
-  const x60 = padLeft + (60 / 100) * plotWidth;
+  const x58 = padLeft + (58 / 100) * plotWidth;
+  const x68 = padLeft + (68 / 100) * plotWidth;
 
-  // 0-35%: Optimal Growth (Green)
+  // 0-20%: Capital Haven (Cyan)
+  chartCtx.fillStyle = "rgba(56, 189, 248, 0.09)";
+  chartCtx.fillRect(padLeft, padTop, x20 - padLeft, plotHeight);
+
+  // 20-35%: Fair Prosperity (Green)
   chartCtx.fillStyle = "rgba(16, 185, 129, 0.08)";
-  chartCtx.fillRect(padLeft, padTop, x35 - padLeft, plotHeight);
+  chartCtx.fillRect(x20, padTop, x35 - x20, plotHeight);
 
-  // 35-50%: Balanced Zone (Yellow)
-  chartCtx.fillStyle = "rgba(245, 158, 11, 0.07)";
-  chartCtx.fillRect(x35, padTop, x50 - x35, plotHeight);
+  // 35-58%: Balanced Zone (Yellow)
+  chartCtx.fillStyle = "rgba(245, 158, 11, 0.06)";
+  chartCtx.fillRect(x35, padTop, x58 - x35, plotHeight);
 
-  // 50-60%: Pride Erosion (Orange)
+  // 58-68%: Pride Erosion & Drag (Orange)
   chartCtx.fillStyle = "rgba(249, 115, 22, 0.08)";
-  chartCtx.fillRect(x50, padTop, x60 - x50, plotHeight);
+  chartCtx.fillRect(x58, padTop, x68 - x58, plotHeight);
 
-  // >60%: Emigration Cliff (Red)
-  chartCtx.fillStyle = "rgba(239, 68, 68, 0.12)";
-  chartCtx.fillRect(x60, padTop, padLeft + plotWidth - x60, plotHeight);
+  // >68%: Wealth Flight Cliff (Red)
+  chartCtx.fillStyle = "rgba(239, 68, 68, 0.14)";
+  chartCtx.fillRect(x68, padTop, padLeft + plotWidth - x68, plotHeight);
 
   // Zone threshold dashed lines
   chartCtx.strokeStyle = "rgba(255, 255, 255, 0.15)";
   chartCtx.setLineDash([3, 3]);
-  [x35, x50, x60].forEach((xVal) => {
+  [x20, x35, x58, x68].forEach((xVal) => {
     chartCtx.beginPath();
     chartCtx.moveTo(xVal, padTop);
     chartCtx.lineTo(xVal, padTop + plotHeight);
@@ -422,17 +427,20 @@ function renderTaxPrideCurveChart(width, height, kingdoms) {
 
   // Zone labels
   chartCtx.font = "8px monospace";
+  chartCtx.fillStyle = "#38bdf8";
+  chartCtx.fillText("HAVEN (<20%)", padLeft + 4, padTop + 14);
+
   chartCtx.fillStyle = "#34d399";
-  chartCtx.fillText("PROSPERITY (<35%)", padLeft + 6, padTop + 14);
+  chartCtx.fillText("FAIR (<35%)", x20 + 4, padTop + 14);
 
   chartCtx.fillStyle = "#fbbf24";
-  chartCtx.fillText("BALANCED", x35 + 6, padTop + 14);
+  chartCtx.fillText("BALANCED", x35 + 4, padTop + 14);
 
   chartCtx.fillStyle = "#fb923c";
-  chartCtx.fillText("EROSION", x50 + 6, padTop + 14);
+  chartCtx.fillText("EROSION", x58 + 4, padTop + 14);
 
   chartCtx.fillStyle = "#f87171";
-  chartCtx.fillText("EMIGRATION CLIFF (>60%)", x60 + 6, padTop + 14);
+  chartCtx.fillText("WEALTH FLIGHT (>68%)", x68 + 4, padTop + 14);
 
   // Draw Theoretical Pride Decay Curve
   chartCtx.strokeStyle = "rgba(56, 189, 248, 0.6)";
@@ -490,13 +498,17 @@ function renderTaxPrideCurveChart(width, height, kingdoms) {
     chartCtx.lineWidth = 1;
     chartCtx.stroke();
 
+    const wRatio = k.user_state?.wealthy_ratio != null ? (k.user_state.wealthy_ratio * 100).toFixed(1) : null;
+    const migStatus = k.user_state?.migration_status || (tax <= 20 ? "Capital Haven" : tax <= 35 ? "Fair Prosperity" : tax <= 58 ? "Moderate Tax" : tax <= 68 ? "Heavy Drag" : "Wealth Flight");
+    const wealthyTip = wRatio ? `<br>👑 Wealthy Class: ${wRatio}%` : "";
+
     hoverElements.push({
       x: x - 6,
       y: y - 6,
       w: 12,
       h: 12,
       kingdom: k,
-      text: `<strong>${escapeHTML(k.name || k.country_name)} (${k.code || k.country_id})</strong><br>Tax Rate: ${tax}%<br>Entrepreneurial Pride: ${Number(pride).toFixed(1)}%<br>Vitality status: ${pride < 40 ? "Depressed (Risk Averse)" : pride < 70 ? "Moderate" : "Flourishing"}`,
+      text: `<strong>${escapeHTML(k.name || k.country_name)} (${k.code || k.country_id})</strong><br>Tax Rate: ${tax}%<br>Entrepreneurial Pride: ${Number(pride).toFixed(1)}%${wealthyTip}<br>Threshold Status: ${migStatus}`,
     });
   });
 }
