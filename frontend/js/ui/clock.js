@@ -61,6 +61,11 @@ export function isPureOverseer(user = state.currentUser) {
 }
 
 let currentScaleKey = "1d";
+
+export function getCurrentScaleSeconds() {
+  const scale = CHRONO_SCALES[currentScaleKey] || CHRONO_SCALES["1d"];
+  return scale.seconds || 86400;
+}
 let devDrawerOpen = false;
 let clockTimer = null;
 let lastSyncedEraId = null;

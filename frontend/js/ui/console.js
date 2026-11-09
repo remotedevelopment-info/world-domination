@@ -13,6 +13,13 @@ import { kingdomPolygons } from "../map/polygons.js";
 import { applyActionResult } from "./actions.js";
 import { isCountryOwnedByCurrentUser } from "../map/renderer.js";
 import { isPureOverseer, getCurrentGameYear } from "./clock.js";
+import {
+  renderMileometer,
+  syncPopulationMileometerAnchor,
+  setPopulationMileometerRate,
+  startPopulationMileometerTicker,
+  stopPopulationMileometerTicker,
+} from "./mileometer.js";
 
 let currentConsoleBay = "all";
 let taxRate = 50;
@@ -76,6 +83,7 @@ export function closeKingdomCommandCenter() {
   const cc = document.getElementById("kingdom-command-center");
   if (cc) cc.classList.add("hidden");
   stopTerritoryRoundRobinUpdater();
+  stopPopulationMileometerTicker();
   activeCommandCenterKingdom = null;
   lastEconomyUserActionTime = 0;
   if (debouncedPushSettingsTimer) {
@@ -158,6 +166,13 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   renderTerritoryPills();
   applyLiveCommandCenterUpdate(kingdom);
 
+  // Initialize and start rotational mileometer ticker for population
+  const popVal = document.getElementById("cc-meter-pop-val");
+  if (popVal) {
+    syncPopulationMileometerAnchor(kingdom.population ?? 1000);
+    startPopulationMileometerTicker(popVal);
+  }
+
   // Wire controls and meters
   renderMeters();
   wireConsoleDials();
@@ -201,7 +216,7 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   setMeter("cc-meter-troops", central, 200);
 
   const popVal = document.getElementById("cc-meter-pop-val");
-  if (popVal) popVal.textContent = pop.toLocaleString();
+  if (popVal) syncPopulationMileometerAnchor(pop);
   const resVal = document.getElementById("cc-meter-res-val");
   if (resVal) resVal.textContent = resAmt.toLocaleString();
   const troopVal = document.getElementById("cc-meter-troop-val");
@@ -320,7 +335,7 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   setMeter("cc-meter-troops", central, 200);
 
   const popVal = document.getElementById("cc-meter-pop-val");
-  if (popVal) popVal.textContent = pop.toLocaleString();
+  if (popVal) syncPopulationMileometerAnchor(pop);
   const resVal = document.getElementById("cc-meter-res-val");
   if (resVal) resVal.textContent = resAmt.toLocaleString();
   const troopVal = document.getElementById("cc-meter-troop-val");
@@ -1067,6 +1082,7 @@ export function updateEconomyHintsLive() {
     growth *= Math.max(0, 1.0 - pop / effectiveCap);
     const naturalGrowth = Math.max(0, Math.round(growth));
     const netPopChange = naturalGrowth + netMigration;
+    setPopulationMileometerRate(netPopChange);
     popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange.toLocaleString()}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration.toLocaleString()})`;
     popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
   }

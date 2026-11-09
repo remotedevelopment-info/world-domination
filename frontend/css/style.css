@@ -692,6 +692,93 @@ body {
     letter-spacing: 0.6px;
 }
 
+/* Vintage Mechanical Mileometer / Odometer Drum Display */
+.mileometer-housing {
+    display: inline-flex;
+    align-items: center;
+    background: #090910;
+    border: 2px solid #b8860b;
+    border-radius: 4px;
+    padding: 2px 5px;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.95),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.95),
+        0 2px 8px rgba(0, 0, 0, 0.6),
+        0 0 6px rgba(184, 134, 11, 0.35);
+    height: 30px;
+    box-sizing: border-box;
+    position: relative;
+    user-select: none;
+}
+
+.mileometer-housing::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.mileometer-housing::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.8), transparent);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.mileometer-reel {
+    width: 14px;
+    height: 24px;
+    overflow: hidden;
+    position: relative;
+    background: linear-gradient(180deg, #0a0a12 0%, #1c1c28 20%, #2f2f44 50%, #1c1c28 80%, #0a0a12 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.8);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+        inset 0 3px 5px rgba(0, 0, 0, 0.85),
+        inset 0 -3px 5px rgba(0, 0, 0, 0.85);
+    box-sizing: border-box;
+}
+
+.mileometer-strip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
+}
+
+.mileometer-cell {
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: #fffae6;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 3px rgba(255, 215, 0, 0.35);
+}
+
+.mileometer-sep {
+    font-size: 15px;
+    font-weight: 800;
+    color: #ffd700;
+    margin: 0 2px;
+    line-height: 24px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
 /* Console Bays Grid */
 .console-bays {
     display: flex;
