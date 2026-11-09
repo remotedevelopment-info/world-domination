@@ -571,8 +571,10 @@ func ResetGameToYear1500(clearClaims bool) error {
 	if _, err := tx.Exec("DELETE FROM game_actions"); err != nil {
 		return fmt.Errorf("failed to clear game actions: %w", err)
 	}
-	if _, err := tx.Exec("DELETE FROM game_states"); err != nil {
-		return fmt.Errorf("failed to clear game states: %w", err)
+	if _, err := tx.Exec("TRUNCATE TABLE game_states"); err != nil {
+		if _, err := tx.Exec("DELETE FROM game_states"); err != nil {
+			return fmt.Errorf("failed to clear game states: %w", err)
+		}
 	}
 
 	// 2. Clear player territory claims if requested
@@ -695,7 +697,13 @@ func SaveGameState(gameDate time.Time, data string) error {
 	if DB == nil {
 		return nil
 	}
-	_, err := DB.Exec("INSERT INTO game_states (game_date, data) VALUES ($1, $2)", gameDate, data)
+	// Upsert into single canonical state record (id = 1) to eliminate multi-gigabyte table bloat and disk I/O stalls
+	_, err := DB.Exec(`
+		INSERT INTO game_states (id, game_date, data) 
+		VALUES (1, $1, $2::jsonb)
+		ON CONFLICT (id) DO UPDATE 
+		SET game_date = EXCLUDED.game_date, timestamp = CURRENT_TIMESTAMP, data = EXCLUDED.data
+	`, gameDate, data)
 	return err
 }
 
@@ -705,7 +713,11 @@ func GetLatestGameState() (string, int64, error) {
 	}
 	var data string
 	var tick int64
-	err := DB.QueryRow("SELECT data, tick FROM game_states ORDER BY id DESC LIMIT 1").Scan(&data, &tick)
+	err := DB.QueryRow("SELECT data, tick FROM game_states WHERE id = 1").Scan(&data, &tick)
+	if err == sql.ErrNoRows {
+		// Fallback for legacy tables where rows weren't locked to id 1
+		err = DB.QueryRow("SELECT data, tick FROM game_states ORDER BY id DESC LIMIT 1").Scan(&data, &tick)
+	}
 	if err == sql.ErrNoRows {
 		return "", 0, nil
 	}

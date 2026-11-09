@@ -1314,7 +1314,20 @@ func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	engine := game.GetEngine()
-	state := engine.SetSimYear(targetYear)
+	var state game.GameState
+	if targetYear == 1500.0 {
+		// Jumping back to Year 1500 (Age of Discovery baseline) restores all realms
+		// to authentic baseline starting demographics and treasuries, while preserving player kingdom assignments.
+		var err error
+		state, err = engine.ResetToYear1500(false)
+		if err != nil {
+			log.Printf("Error resetting to 1500 on timeline jump: %v", err)
+			state = engine.SetSimYear(1500.0)
+		}
+	} else {
+		state = engine.SetSimYear(targetYear)
+	}
+
 	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
 		log.Printf("Error saving jumped game state snapshot: %v", err)
 	}

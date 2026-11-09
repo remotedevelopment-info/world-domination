@@ -399,16 +399,22 @@ func ComputeMigrationDetailed(population, resources, gdp, taxRate, markets, infr
 		effExcess := math.Max(1.0, excess-relief)
 
 		prideDrag := 1.0 + (1.0-pride/100.0)*0.5
-		wRate := (effExcess / 32.0) * 0.030 * prideDrag
+		wRate := math.Min(0.040, (effExcess/32.0)*0.030*prideDrag)
 		wealthyMig = -int64(math.Ceil(float64(wealthyPop) * wRate))
-		if wealthyMig > -1 {
+		if wealthyMig > -1 && wealthyPop > 10 {
 			wealthyMig = -1
 		}
 
-		gRate := (effExcess / 32.0) * 0.012 * prideDrag
+		gRate := math.Min(0.015, (effExcess/32.0)*0.012*prideDrag)
 		generalMig = -int64(math.Ceil(float64(generalPop) * gRate))
-		if generalMig > -1 {
+		if generalMig > -1 && generalPop > 100 {
 			generalMig = -1
+		}
+
+		// Demographic resilience: if a realm is severely depopulated, agrarian peasants cannot easily flee
+		if population < 500 {
+			wealthyMig = 0
+			generalMig = 0
 		}
 		capitalDrain = wealthyMig * 10 // Capital flight (gold drains from treasury)
 	}
@@ -652,7 +658,8 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	if population <= 0 {
 		return 0
 	}
-	effectiveCapacity := int64(math.Max(float64(population)*1.5, 2000000.0) * (1.0 + float64(infrastructure)*0.20 + float64(markets)*0.10))
+	baseCap := 15000000.0 * (1.0 + float64(infrastructure)*0.15 + float64(markets)*0.10)
+	effectiveCapacity := int64(math.Max(baseCap, 3000000.0))
 	if population >= effectiveCapacity {
 		return 0
 	}
@@ -671,13 +678,9 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	// population itself, and budget balances grow unbounded.
 	damped := growth * (1.0 - float64(population)/float64(effectiveCapacity))
 	if damped < 0 {
-		damped = 0
+		return 0
 	}
-	g := int64(damped)
-	if g < 1 {
-		g = 1
-	}
-	return g
+	return int64(math.Round(damped))
 }
 
 // MarketIncomeAndRisk returns the base commercial trade revenue and volatility risk swing

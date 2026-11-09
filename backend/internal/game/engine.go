@@ -81,6 +81,7 @@ type GameEngine struct {
 	chronoScale        string
 	isPaused           bool
 	lastTimelineUpdate time.Time
+	lastInactiveCheck  time.Time
 	econDebtYears      float64
 }
 
@@ -95,6 +96,7 @@ func GetEngine() *GameEngine {
 			chronoScale:        "1d",
 			isPaused:           false,
 			lastTimelineUpdate: time.Now(),
+			lastInactiveCheck:  time.Now(),
 		}
 	})
 	return engine
@@ -321,6 +323,10 @@ func (g *GameEngine) TickTimeline() bool {
 func (g *GameEngine) Advance() GameState {
 	g.mu.Lock()
 	g.currentTick++
+	shouldCheckInactive := time.Since(g.lastInactiveCheck) > 10*time.Minute
+	if shouldCheckInactive {
+		g.lastInactiveCheck = time.Now()
+	}
 	g.mu.Unlock()
 
 	state := g.BuildState()
@@ -328,7 +334,7 @@ func (g *GameEngine) Advance() GameState {
 		log.Printf("Error saving game state snapshot: %v", err)
 	}
 
-	if g.ProcessInactivePlayers() {
+	if shouldCheckInactive && g.ProcessInactivePlayers() {
 		state = g.BuildState()
 	}
 	g.Notify(state)
@@ -422,6 +428,14 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		popGrowth := int64(math.Round(float64(PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)) * yearsPassed))
 		migrationDelta := int64(math.Round(float64(econ.NetMigration) * yearsPassed))
 		newPopulation += popGrowth + migrationDelta
+
+		// Frontier land abundance attractor: severely depopulated realms draw homesteaders to vacant arable land
+		if newPopulation < 100000 && yearsPassed > 0 {
+			homesteaders := int64(math.Round(float64(100000-newPopulation) * 0.05 * yearsPassed))
+			if homesteaders > 0 {
+				newPopulation += homesteaders
+			}
+		}
 
 		// Wealthy Capital Transfer: incoming wealthy inject specie, fleeing wealthy drain specie
 		if econ.CapitalFlightDrain != 0 && yearsPassed > 0 {
@@ -517,8 +531,10 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		if newResources < 0 {
 			newResources = 0
 		}
-		if newPopulation < 50 {
-			newPopulation = 50
+		// A realm's civilian population must be viable and support its standing army (minimum 10,000 civilians)
+		minPop := int64(math.Max(10000.0, float64(newTroops)*2.0))
+		if newPopulation < minPop {
+			newPopulation = minPop
 		}
 		if newLevy < 0 {
 			newLevy = 0

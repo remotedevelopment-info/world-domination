@@ -1057,14 +1057,15 @@ export function updateEconomyHintsLive() {
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
   if (popGrowthEl) {
-    const effectiveCap = Math.max(pop * 1.5, 2000000) * (1.0 + (infraLevel || 0) * 0.20 + (marketsLevel || 0) * 0.10);
+    const baseCap = 15000000 * (1.0 + (infraLevel || 0) * 0.15 + (marketsLevel || 0) * 0.10);
+    const effectiveCap = Math.max(baseCap, 3000000);
     let growth = pop * 0.005 * (gdp / (pop * 0.08 || 1));
     growth += (investmentRate + socialCostsRate) * 0.0005;
     if (taxRate > 50) {
       growth *= Math.max(0.15, 1.0 - (taxRate - 50) / 50.0);
     }
     growth *= Math.max(0, 1.0 - pop / effectiveCap);
-    const naturalGrowth = Math.max(1, Math.round(growth));
+    const naturalGrowth = Math.max(0, Math.round(growth));
     const netPopChange = naturalGrowth + netMigration;
     popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange.toLocaleString()}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration.toLocaleString()})`;
     popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
