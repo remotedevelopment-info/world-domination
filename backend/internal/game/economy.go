@@ -382,10 +382,10 @@ func ComputeEconomyWithInternals(
 	// Total military upkeep includes standing upkeep PLUS lingering delayed liabilities from past military campaigns/recruitment
 	milUpkeep := standingMilUpkeep + delayedCosts
 
-	// Cathedral tithes, civic administration, and court justice:
-	socialSpend := int64(math.Round(float64(socialCosts)*2.0 + float64(gdp)*(float64(socialCosts)/100.0)*0.08))
-	// Colonial expeditions, trading ventures, and infrastructure investment:
-	investmentSpend := int64(math.Round(float64(investment)*2.0 + float64(gdp)*(float64(investment)/100.0)*0.08))
+	// Cathedral tithes, civic administration, and court justice (scaled up to 30% of GDP at 100% dial):
+	socialSpend := int64(math.Round(float64(socialCosts)*2.0 + float64(gdp)*(float64(socialCosts)/100.0)*0.30))
+	// Colonial expeditions, trading ventures, and capital investment (scaled up to 30% of GDP at 100% dial):
+	investmentSpend := int64(math.Round(float64(investment)*2.0 + float64(gdp)*(float64(investment)/100.0)*0.30))
 	expenditure := milUpkeep + socialSpend + investmentSpend
 	balance := totalRev - expenditure
 

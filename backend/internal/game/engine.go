@@ -149,6 +149,7 @@ func (g *GameEngine) SetSimYear(year float64) GameState {
 	g.mu.Lock()
 	prevYearInt := int64(math.Floor(g.simYear))
 	newYearInt := int64(math.Floor(year))
+	elapsedYears := year - g.simYear
 	g.simYear = year
 	g.lastTimelineUpdate = time.Now()
 	g.currentTick++
@@ -156,7 +157,13 @@ func (g *GameEngine) SetSimYear(year float64) GameState {
 	g.mu.Unlock()
 
 	if yearRolledOver {
-		g.TickEconomyStep(0.0, true)
+		stepYears := elapsedYears
+		if stepYears <= 0 {
+			stepYears = 1.0
+		} else if stepYears > 10.0 {
+			stepYears = 10.0 // clamp single jump calculation to max 10 years to prevent numeric overflow
+		}
+		g.TickEconomyStep(stepYears, true)
 	}
 
 	state := g.BuildState()
@@ -284,11 +291,14 @@ func (g *GameEngine) TickTimeline() bool {
 
 	g.econDebtYears += deltaYears
 	var stepYears float64
-	if g.econDebtYears >= 0.05 {
+	yearRolledOver := newYearInt > prevYearInt
+	if g.econDebtYears >= 0.05 || yearRolledOver {
 		stepYears = g.econDebtYears
+		if stepYears <= 0 && yearRolledOver {
+			stepYears = deltaYears
+		}
 		g.econDebtYears = 0
 	}
-	yearRolledOver := newYearInt > prevYearInt
 	g.mu.Unlock()
 
 	econChanged := false

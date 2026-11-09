@@ -12,7 +12,7 @@ import { showToast, logMessage, escapeHtml } from "./toast.js";
 import { kingdomPolygons } from "../map/polygons.js";
 import { applyActionResult } from "./actions.js";
 import { isCountryOwnedByCurrentUser } from "../map/renderer.js";
-import { isPureOverseer } from "./clock.js";
+import { isPureOverseer, getCurrentGameYear } from "./clock.js";
 
 let currentConsoleBay = "all";
 let taxRate = 50;
@@ -822,8 +822,8 @@ export function updateEconomyHintsLive() {
     ? Math.round(levy * 2.0 + regular * 6.0 + elite * 18.0)
     : Math.round(tr * 4.0);
 
-  const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.08);
-  const invExp = Math.round(investmentRate * 2.0 + gdp * (investmentRate / 100.0) * 0.08);
+  const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.30);
+  const invExp = Math.round(investmentRate * 2.0 + gdp * (investmentRate / 100.0) * 0.30);
 
   // Enforce Layer 1 Hard-Specie Fiscal Rules
   const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
@@ -874,7 +874,7 @@ export function updateEconomyHintsLive() {
   }
 
   // Update Dynamic Table Header with actual simulation years
-  const curSimYear = Math.floor(state.simYear || 1500);
+  const curSimYear = Math.floor(getCurrentGameYear() || state.timeline?.sim_year || 1500);
   const lastSimYear = curSimYear - 1;
   const thLast = document.getElementById("cc-th-last-year");
   if (thLast) {

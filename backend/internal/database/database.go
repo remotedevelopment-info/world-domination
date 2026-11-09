@@ -64,6 +64,11 @@ func InitDB() error {
 		return fmt.Errorf("error opening database: %v", err)
 	}
 
+	DB.SetMaxOpenConns(25)
+	DB.SetMaxIdleConns(10)
+	DB.SetConnMaxLifetime(5 * time.Minute)
+	DB.SetConnMaxIdleTime(1 * time.Minute)
+
 	if err := DB.Ping(); err != nil {
 		return fmt.Errorf("error connecting to database: %v", err)
 	}
