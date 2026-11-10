@@ -322,10 +322,12 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	econ := game.ComputeEconomyWithLayers(
+	simYear := game.GetEngine().GetSimYear()
+	econ := game.ComputeEconomyWithInternals(
 		detail.Population, detail.Resources, detail.Troops,
 		detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts,
 		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
+		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, simYear,
 	)
 	game.PopulateLastYearLedger(
 		&econ,
@@ -339,31 +341,33 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"country_id":     detail.CountryID,
-		"name":           detail.Name,
-		"code":           detail.Code,
-		"population":     detail.Population,
-		"resources":      detail.Resources,
-		"troops":         detail.Troops,
-		"troops_levy":    detail.TroopsLevy,
-		"troops_regular": detail.TroopsRegular,
-		"troops_elite":   detail.TroopsElite,
-		"fort_n":         detail.FortN,
-		"fort_s":         detail.FortS,
-		"fort_e":         detail.FortE,
-		"fort_w":         detail.FortW,
-		"central_troops": detail.CentralTroops,
-		"border_troops":  detail.BorderTroops,
-		"economy_rate":   detail.EconomyRate,
-		"investment":     detail.Investment,
-		"social_costs":   detail.SocialCosts,
-		"markets":        detail.Markets,
-		"infrastructure": detail.Infrastructure,
-		"gdp":            detail.GDP,
-		"currency_value": detail.CurrencyValue,
-		"inflation_rate": detail.InflationRate,
-		"owner_name":     detail.OwnerName,
-		"economy":        econ,
+		"country_id":            detail.CountryID,
+		"name":                  detail.Name,
+		"code":                  detail.Code,
+		"population":            detail.Population,
+		"resources":             detail.Resources,
+		"troops":                detail.Troops,
+		"troops_levy":           detail.TroopsLevy,
+		"troops_regular":        detail.TroopsRegular,
+		"troops_elite":          detail.TroopsElite,
+		"fort_n":                detail.FortN,
+		"fort_s":                detail.FortS,
+		"fort_e":                detail.FortE,
+		"fort_w":                detail.FortW,
+		"central_troops":        detail.CentralTroops,
+		"border_troops":         detail.BorderTroops,
+		"economy_rate":          detail.EconomyRate,
+		"investment":            detail.Investment,
+		"social_costs":          detail.SocialCosts,
+		"markets":               detail.Markets,
+		"infrastructure":        detail.Infrastructure,
+		"gdp":                   detail.GDP,
+		"currency_value":        detail.CurrencyValue,
+		"inflation_rate":        detail.InflationRate,
+		"owner_name":            detail.OwnerName,
+		"entrepreneurial_pride": detail.EntrepreneurialPride,
+		"military_delayed_costs": detail.MilitaryDelayedCosts,
+		"economy":               econ,
 	})
 }
 
@@ -690,12 +694,15 @@ func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionReq
 		batchCount = *req.TroopCount
 	}
 
+	// Population pressure: high population makes military recruitment less expensive (up to 50% discount)
+	manpowerDiscount := math.Max(0.50, 1.0-(float64(country.Population)/20000000.0)*0.50)
+
 	switch tier {
 	case "levy", "conscript", "militia":
-		// Levy: 150 gold per 10 troops (15 gold/troop)
-		cost := (batchCount / 10) * 150
-		if cost < 150 {
-			cost = 150
+		// Levy: base 150 gold per 10 troops
+		cost := int64(math.Round(float64((batchCount/10)*150) * manpowerDiscount))
+		if cost < 50 {
+			cost = 50
 		}
 		if country.Resources < cost {
 			return fmt.Errorf("insufficient resources in treasury: levying %d recruits requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
@@ -708,15 +715,17 @@ func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionReq
 		if err := database.UpdateCountryTroopLayers(pc.CountryID, newLevy, country.TroopsRegular, country.TroopsElite); err != nil {
 			return err
 		}
+		// Delayed effect: commits ongoing delayed liabilities (quartermaster supply lines & munition debt)
+		_ = database.AddMilitaryDelayedCost(pc.CountryID, int64(math.Round(float64(cost)*0.25)))
 		return database.LogAction(userID, pc.CountryID, "military",
-			fmt.Sprintf("levied %d raw conscripts (-%d gold from treasury)", batchCount, cost),
+			fmt.Sprintf("levied %d raw conscripts (-%d gold from treasury, delayed tail committed)", batchCount, cost),
 			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 
 	case "regular", "line", "footmen":
-		// Regulars: 450 gold per 10 troops (45 gold/troop)
-		cost := (batchCount / 10) * 450
-		if cost < 450 {
-			cost = 450
+		// Regulars: base 450 gold per 10 troops
+		cost := int64(math.Round(float64((batchCount/10)*450) * manpowerDiscount))
+		if cost < 150 {
+			cost = 150
 		}
 		if country.Resources < cost {
 			return fmt.Errorf("insufficient resources in treasury: recruiting %d line regulars requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
@@ -729,15 +738,16 @@ func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionReq
 		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, newRegular, country.TroopsElite); err != nil {
 			return err
 		}
+		_ = database.AddMilitaryDelayedCost(pc.CountryID, int64(math.Round(float64(cost)*0.25)))
 		return database.LogAction(userID, pc.CountryID, "military",
-			fmt.Sprintf("enlisted %d disciplined line regulars (-%d gold from treasury)", batchCount, cost),
+			fmt.Sprintf("enlisted %d disciplined line regulars (-%d gold from treasury, delayed tail committed)", batchCount, cost),
 			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 
 	case "elite", "guard", "knights", "veteran":
-		// Elite Guard: 1,200 gold per 10 troops (120 gold/troop)
-		cost := (batchCount / 10) * 1200
-		if cost < 1200 {
-			cost = 1200
+		// Elite Guard: base 1,200 gold per 10 troops
+		cost := int64(math.Round(float64((batchCount/10)*1200) * manpowerDiscount))
+		if cost < 400 {
+			cost = 400
 		}
 		if country.Resources < cost {
 			return fmt.Errorf("insufficient resources in treasury: commissioning %d royal elite guards requires %d gold, treasury holds %d", batchCount, cost, country.Resources)
@@ -750,8 +760,9 @@ func handleMilitaryRecruit(userID int64, pc *models.PlayerCountry, req ActionReq
 		if err := database.UpdateCountryTroopLayers(pc.CountryID, country.TroopsLevy, country.TroopsRegular, newElite); err != nil {
 			return err
 		}
+		_ = database.AddMilitaryDelayedCost(pc.CountryID, int64(math.Round(float64(cost)*0.25)))
 		return database.LogAction(userID, pc.CountryID, "military",
-			fmt.Sprintf("commissioned %d elite royal guards (-%d gold from treasury)", batchCount, cost),
+			fmt.Sprintf("commissioned %d elite royal guards (-%d gold from treasury, delayed tail committed)", batchCount, cost),
 			req.TargetCountryID, req.Direction, req.Speed, req.MovementType)
 
 	case "drill", "promote", "train":
@@ -1303,7 +1314,20 @@ func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	engine := game.GetEngine()
-	state := engine.SetSimYear(targetYear)
+	var state game.GameState
+	if targetYear == 1500.0 {
+		// Jumping back to Year 1500 (Age of Discovery baseline) restores all realms
+		// to authentic baseline starting demographics and treasuries, while preserving player kingdom assignments.
+		var err error
+		state, err = engine.ResetToYear1500(false)
+		if err != nil {
+			log.Printf("Error resetting to 1500 on timeline jump: %v", err)
+			state = engine.SetSimYear(1500.0)
+		}
+	} else {
+		state = engine.SetSimYear(targetYear)
+	}
+
 	if err := database.SaveGameState(time.Now(), state.JSON()); err != nil {
 		log.Printf("Error saving jumped game state snapshot: %v", err)
 	}
@@ -1417,5 +1441,369 @@ func SetTimelinePauseHandler(w http.ResponseWriter, r *http.Request) {
 		"is_paused": state.IsPaused,
 		"sim_year":  state.SimYear,
 		"year_int":  state.YearInt,
+	})
+}
+
+// AdminGameMonitorHandler returns real-time telemetry categorized into the 5 core game variable classes:
+// 1. User Setting (policy dials)
+// 2. User State (hidden/intangible variables: entrepreneurial pride, delayed military liabilities, fiscal stress)
+// 3. Game State (environmental and common macro factors)
+// 4. Seasonal & Climatic (Milankovitch cycles, Little Ice Age, harvest yields, winter logistics)
+// 5. Population Pressure (manpower recruitment discount vs welfare squalor burden)
+func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	engine := game.GetEngine()
+	simYear := engine.GetSimYear()
+	seasonState := game.GetClimaticAndSeasonalState(simYear)
+
+	countries, err := database.GetCountries("medieval")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to load countries: "+err.Error())
+		return
+	}
+
+	activeWars, _ := database.GetActiveWars()
+	if activeWars == nil {
+		activeWars = make(map[int64]bool)
+	}
+
+	var globalPopulation int64
+	var globalTreasury int64
+	var globalTradeLiquidity int64
+
+	type KingdomMonitorEntry struct {
+		CountryID          int64                  `json:"country_id"`
+		Name               string                 `json:"name"`
+		Code               string                 `json:"code"`
+		Color              string                 `json:"color"`
+		OwnerName          *string                `json:"owner_name"`
+		UserSettings       map[string]interface{} `json:"user_settings"`
+		UserState          map[string]interface{} `json:"user_state"`
+		SeasonalImpact     map[string]interface{} `json:"seasonal_impact"`
+		PopulationPressure map[string]interface{} `json:"population_pressure"`
+	}
+
+	kingdomEntries := make([]KingdomMonitorEntry, 0)
+
+	for _, c := range countries {
+		globalPopulation += c.Population
+		globalTreasury += c.Resources
+		globalTradeLiquidity += c.Markets * 24
+
+		econ := game.ComputeEconomyWithInternals(
+			c.Population, c.Resources, c.Troops,
+			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
+			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
+		)
+
+		// Fiscal stress index: debt/deficit severity, reserve exhaustion, tax drag
+		fiscalStress := 0.0
+		if econ.BudgetBalance < 0 {
+			if c.Resources > 0 {
+				fiscalStress = math.Min(100.0, (float64(-econ.BudgetBalance)/float64(c.Resources+1))*50.0)
+			} else {
+				fiscalStress = 95.0 // Treasury exhausted
+			}
+		}
+		if c.EconomyRate > 60 {
+			fiscalStress = math.Min(100.0, fiscalStress+float64(c.EconomyRate-60)*1.2)
+		}
+
+		userSettings := map[string]interface{}{
+			"tax_rate":       c.EconomyRate,
+			"investment":     c.Investment,
+			"social_costs":   c.SocialCosts,
+			"central_troops": c.Troops,
+			"troops_levy":    c.TroopsLevy,
+			"troops_regular": c.TroopsRegular,
+			"troops_elite":   c.TroopsElite,
+			"fort_n":         c.FortN,
+			"fort_s":         c.FortS,
+			"fort_e":         c.FortE,
+			"fort_w":         c.FortW,
+			"markets":        c.Markets,
+			"infrastructure": c.Infrastructure,
+		}
+
+		userState := map[string]interface{}{
+			"entrepreneurial_pride":  econ.EntrepreneurialPride,
+			"military_delayed_costs": econ.MilitaryDelayedCosts,
+			"resources":              c.Resources,
+			"gdp":                    econ.GDP,
+			"tax_revenue":            econ.TaxRevenue,
+			"market_revenue":         econ.MarketRevenue,
+			"total_revenue":          econ.TotalRevenue,
+			"military_upkeep":        econ.MilitaryUpkeep,
+			"social_expenditure":     econ.SocialExpenditure,
+			"investment_expenditure": econ.InvestmentExpenditure,
+			"effective_total_exp":    econ.EffectiveTotalExp,
+			"effective_balance":      econ.EffectiveBalance,
+			"deficit_capped":         econ.DeficitCapped,
+			"fiscal_regime":          econ.FiscalRegime,
+			"currency_value":         econ.CurrencyValue,
+			"inflation_rate":         econ.InflationRate,
+			"fiscal_stress_index":    math.Round(fiscalStress*10) / 10,
+			"wealth_factor":          econ.WealthFactor,
+			"wealthy_ratio":          econ.WealthyRatio,
+			"wealthy_migration":      econ.WealthyMigration,
+			"general_migration":      econ.GeneralMigration,
+			"capital_flight_drain":  econ.CapitalFlightDrain,
+			"migration_status":       econ.MigrationStatus,
+		}
+
+		seasonalImpact := map[string]interface{}{
+			"season":                    seasonState.Season,
+			"season_name":               seasonState.SeasonName,
+			"harvest_yield_factor":      seasonState.HarvestYieldFactor,
+			"winter_severity_modifier":  seasonState.WinterSeverity,
+			"commercial_trade_velocity": seasonState.CommercialVelocity,
+			"little_ice_age_phase":      seasonState.LittleIceAgePhase,
+		}
+
+		popGrowth := game.PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)
+		workforce := c.Population - c.Troops
+		if workforce < 0 {
+			workforce = 0
+		}
+
+		popPressureMap := map[string]interface{}{
+			"population":                    c.Population,
+			"workforce":                     workforce,
+			"population_pressure_index":     econ.PopulationPressure,
+			"manpower_recruitment_discount": math.Round(econ.ManpowerRecruitDiscount*1000) / 1000,
+			"welfare_squalor_burden":        econ.WelfareSqualorBurden,
+			"birth_growth_annual":           popGrowth,
+			"net_migration_annual":          econ.NetMigration,
+		}
+
+		kingdomEntries = append(kingdomEntries, KingdomMonitorEntry{
+			CountryID:          c.ID,
+			Name:               c.Name,
+			Code:               c.Code,
+			Color:              c.Color,
+			OwnerName:          c.OwnerName,
+			UserSettings:       userSettings,
+			UserState:          userState,
+			SeasonalImpact:     seasonalImpact,
+			PopulationPressure: popPressureMap,
+		})
+	}
+
+	activeWarsCount := 0
+	for _, atWar := range activeWars {
+		if atWar {
+			activeWarsCount++
+		}
+	}
+
+	gameState := map[string]interface{}{
+		"authoritative_era":      engine.GetCurrentEra(),
+		"sim_year":               simYear,
+		"chrono_scale":           engine.GetChronoScale(),
+		"is_paused":              engine.IsPaused(),
+		"active_wars_count":      activeWarsCount,
+		"global_population":      globalPopulation,
+		"global_treasury_gold":   globalTreasury,
+		"global_trade_liquidity": globalTradeLiquidity,
+		"macro_fiscal_regime":    "Layer 1: Hard-Specie Specie Regime",
+	}
+
+	era := engine.GetCurrentEra()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"timestamp":    time.Now().Unix(),
+		"sim_year":     simYear,
+		"era":          era.Name,
+		"chrono_scale": engine.GetChronoScale(),
+		"is_paused":    engine.IsPaused(),
+		"seasonal_climatic": map[string]interface{}{
+			"season":                           seasonState.Season,
+			"season_name":                      seasonState.SeasonName,
+			"little_ice_age_phase":             seasonState.LittleIceAgePhase,
+			"is_little_ice_age":                strings.Contains(seasonState.LittleIceAgePhase, "Minimum"),
+			"harvest_yield_factor":             seasonState.HarvestYieldFactor,
+			"winter_logistics_modifier":        seasonState.WinterSeverity,
+			"commercial_velocity":              seasonState.CommercialVelocity,
+			"milankovitch_eccentricity_factor": 1.0 + seasonState.MilankovitchFactor,
+			"orbital_forcing_description":      fmt.Sprintf("Milankovitch Variance %+.3f", seasonState.MilankovitchFactor),
+		},
+		"global_macro_metrics": map[string]interface{}{
+			"total_realms":                   len(kingdomEntries),
+			"total_world_population":         globalPopulation,
+			"total_global_treasury":          globalTreasury,
+			"total_mobilized_armies":         globalTradeLiquidity,
+			"global_carrying_capacity":       int64(3000000000),
+			"world_carrying_capacity_stress": math.Round((float64(globalPopulation)/3000000000.0)*1000) / 1000,
+		},
+		"game_state":     gameState,
+		"seasonal_state": seasonState,
+		"kingdoms":       kingdomEntries,
+	})
+}
+
+// AdminScenarioTuneHandler allows administrators to inject scenario states
+// (e.g. setting entrepreneurial pride, delayed military liabilities, or gold reserves) for testing.
+func AdminScenarioTuneHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	var raw struct {
+		CountryID            interface{} `json:"country_id"`
+		CountryCode          string      `json:"country_code"`
+		Preset               string      `json:"preset"`
+		TaxRate              *int64      `json:"tax_rate"`
+		Investment           *int64      `json:"investment"`
+		SocialCosts          *int64      `json:"social_costs"`
+		EntrepreneurialPride *float64    `json:"entrepreneurial_pride"`
+		MilitaryDelayedCosts *int64      `json:"military_delayed_costs"`
+		Resources            *int64      `json:"resources"`
+		Population           *int64      `json:"population"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	var targetCountryID int64
+	switch v := raw.CountryID.(type) {
+	case float64:
+		targetCountryID = int64(v)
+	case int64:
+		targetCountryID = v
+	case string:
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			targetCountryID = id
+		} else if raw.CountryCode == "" {
+			raw.CountryCode = v
+		}
+	}
+
+	if targetCountryID <= 0 && raw.CountryCode != "" {
+		all, _ := database.GetCountries("medieval")
+		for _, c := range all {
+			if strings.EqualFold(c.Code, raw.CountryCode) || strings.EqualFold(c.Name, raw.CountryCode) {
+				targetCountryID = c.ID
+				break
+			}
+		}
+	}
+
+	if targetCountryID <= 0 {
+		writeJSONError(w, http.StatusBadRequest, "Missing or invalid country_id/country_code")
+		return
+	}
+
+	country, err := database.GetKingdomDetail(targetCountryID)
+	if err != nil || country == nil {
+		writeJSONError(w, http.StatusNotFound, "Country not found")
+		return
+	}
+
+	pride := country.EntrepreneurialPride
+	delayedCosts := country.MilitaryDelayedCosts
+	resources := country.Resources
+	population := country.Population
+	taxRate := country.EconomyRate
+	inv := country.Investment
+	soc := country.SocialCosts
+
+	if raw.Preset != "" {
+		switch strings.ToLower(raw.Preset) {
+		case "debt_shock":
+			pride = 25.0
+			delayedCosts += 50000
+			if resources > 5000 {
+				resources = 5000
+			}
+		case "golden_age":
+			pride = 100.0
+			delayedCosts = 0
+			resources += 20000
+		case "severe_winter":
+			pride = 60.0
+			delayedCosts += 15000
+		}
+	}
+
+	if raw.EntrepreneurialPride != nil {
+		pride = *raw.EntrepreneurialPride
+	}
+	if raw.MilitaryDelayedCosts != nil {
+		delayedCosts = *raw.MilitaryDelayedCosts
+	}
+	if raw.Resources != nil {
+		resources = *raw.Resources
+	}
+	if raw.Population != nil {
+		population = *raw.Population
+	}
+	if raw.TaxRate != nil {
+		taxRate = *raw.TaxRate
+	}
+	if raw.Investment != nil {
+		inv = *raw.Investment
+	}
+	if raw.SocialCosts != nil {
+		soc = *raw.SocialCosts
+	}
+
+	if err := database.SetEconomySettings(targetCountryID, taxRate, inv, soc); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to update economy settings: "+err.Error())
+		return
+	}
+	if err := database.UpdateCountryResources(targetCountryID, resources); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to update resources: "+err.Error())
+		return
+	}
+	if err := database.UpdateCountryInternalMetrics(targetCountryID, pride, delayedCosts); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to update internal metrics: "+err.Error())
+		return
+	}
+
+	game.GetEngine().Advance()
+	log.Printf("Admin %s tuned scenario for country %d: Tax=%d, Pride=%.1f, Delayed=%d, Res=%d",
+		user.Email, targetCountryID, taxRate, pride, delayedCosts, resources)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":                "Scenario variables updated successfully",
+		"country_id":             targetCountryID,
+		"country_name":           country.Name,
+		"country_code":           country.Code,
+		"entrepreneurial_pride":  pride,
+		"military_delayed_costs": delayedCosts,
+		"resources":              resources,
+		"population":             population,
+		"tax_rate":               taxRate,
+		"investment":             inv,
+		"social_costs":           soc,
 	})
 }

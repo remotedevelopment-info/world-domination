@@ -160,6 +160,17 @@ export async function apiGetAdminDashboard() {
   return apiFetch("/admin/dashboard");
 }
 
+export async function apiGetAdminGameMonitor() {
+  return apiFetch("/admin/game-monitor");
+}
+
+export async function apiPostScenarioTune(payload) {
+  return apiFetch("/admin/scenario-tune", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function apiAdminResetGame(confirmation, clearClaims = true) {
   return apiFetch("/admin/reset-game", {
     method: "POST",

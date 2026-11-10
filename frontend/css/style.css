@@ -590,6 +590,7 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
+    align-items: stretch;
 }
 
 .analog-gauge-card {
@@ -600,6 +601,9 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
+    min-height: 205px;
+    box-sizing: border-box;
     box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.5);
     position: relative;
     overflow: hidden;
@@ -614,10 +618,13 @@ body {
 
 .gauge-header {
     width: 100%;
+    height: 24px;
+    box-sizing: border-box;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 4px 6px;
+    padding: 0 4px;
+    flex-shrink: 0;
 }
 .gauge-title {
     font-size: 0.72em;
@@ -633,6 +640,10 @@ body {
 }
 .gauge-delta.negative {
     color: #ff6b6b;
+}
+.gauge-delta.surplus,
+.gauge-delta.positive {
+    color: #4ade80;
 }
 
 .military-tier-badge {
@@ -658,6 +669,7 @@ body {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
     margin: 4px 0 6px;
     border: 2px solid #b8860b;
+    flex-shrink: 0;
 }
 .analog-gauge.gold-gauge {
     background: conic-gradient(#ffd700 0deg, rgba(255, 215, 0, 0.12) 0deg);
@@ -672,11 +684,63 @@ body {
     border-color: #4ecdc4;
 }
 
+/* Center-Zero Rate / Trend Variometer Gauges (Population & Gold Reserves) */
+.analog-gauge.rate-gauge {
+    background: radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.08) 0%, rgba(0, 0, 0, 0.4) 100%);
+    border-color: #b8860b;
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks {
+    transform: rotate(0deg);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0.4) 22%, transparent 22%);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    margin-left: -1px;
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-zero {
+    width: 3px;
+    margin-left: -1.5px;
+    background: linear-gradient(180deg, #ffd700 0, #ffd700 36%, transparent 36%);
+    z-index: 3;
+    box-shadow: 0 0 4px rgba(255, 215, 0, 0.6);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-pos {
+    background: linear-gradient(180deg, #4ade80 0, #4ade80 24%, transparent 24%);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-neg {
+    background: linear-gradient(180deg, #ff6b6b 0, #ff6b6b 24%, transparent 24%);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-major.tick-pos {
+    width: 2.5px;
+    margin-left: -1.25px;
+    background: linear-gradient(180deg, #4ade80 0, #4ade80 32%, transparent 32%);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-major.tick-neg {
+    width: 2.5px;
+    margin-left: -1.25px;
+    background: linear-gradient(180deg, #ff6b6b 0, #ff6b6b 32%, transparent 32%);
+}
+
 .gauge-readout {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 100%;
     margin-top: 2px;
+    flex-shrink: 0;
 }
 .gauge-value {
     font-size: 1.25em;
@@ -684,12 +748,106 @@ body {
     color: #fff;
     letter-spacing: 0.5px;
     font-family: Georgia, serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
 }
 .gauge-sub {
     font-size: 0.68em;
     color: #888;
     text-transform: uppercase;
     letter-spacing: 0.6px;
+}
+
+/* Vintage Mechanical Mileometer / Odometer Drum Display */
+.mileometer-housing {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #090910;
+    border: 2px solid #b8860b;
+    border-radius: 4px;
+    padding: 2px 5px;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.95),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.95),
+        0 2px 8px rgba(0, 0, 0, 0.6),
+        0 0 6px rgba(184, 134, 11, 0.35);
+    height: 30px;
+    box-sizing: border-box;
+    position: relative;
+    user-select: none;
+    min-width: 80px;
+    margin-bottom: 3px;
+}
+
+.mileometer-housing::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.mileometer-housing::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.8), transparent);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.mileometer-reel {
+    width: 14px;
+    height: 24px;
+    overflow: hidden;
+    position: relative;
+    background: linear-gradient(180deg, #0a0a12 0%, #1c1c28 20%, #2f2f44 50%, #1c1c28 80%, #0a0a12 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.8);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+        inset 0 3px 5px rgba(0, 0, 0, 0.85),
+        inset 0 -3px 5px rgba(0, 0, 0, 0.85);
+    box-sizing: border-box;
+}
+
+.mileometer-strip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
+}
+
+.mileometer-cell {
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: #fffae6;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 3px rgba(255, 215, 0, 0.35);
+}
+
+.mileometer-sep {
+    font-size: 15px;
+    font-weight: 800;
+    color: #ffd700;
+    margin: 0 2px;
+    line-height: 24px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 /* Console Bays Grid */
@@ -3320,6 +3478,38 @@ body {
     max-height: 90vh;
 }
 
+.progress-modal-dialog.overseer-dialog {
+    max-width: 1140px;
+    width: 96vw;
+    max-height: 92vh;
+}
+
+.admin-view-switch-btn {
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    color: #ffd700;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-view-switch-btn:hover {
+    background: linear-gradient(180deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 1) 100%);
+    color: #ffffff;
+    border-color: #ffd700;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+}
+
+.overseer-badge-gold {
+    background: rgba(129, 140, 248, 0.2) !important;
+    border: 1px solid #818cf8 !important;
+    color: #e0e7ff !important;
+}
+
 .admin-dialog-body {
     display: flex;
     flex-direction: column;
@@ -4181,6 +4371,671 @@ body {
     color: #fff;
     border-color: rgba(255, 255, 255, 0.4);
 }
+
+/* ==========================================================================
+   Admin Game Monitor & 5-Tier Variable Classification Matrix
+   ========================================================================== */
+.admin-monitor-section {
+    background: radial-gradient(circle at 50% 0%, rgba(15, 30, 48, 0.85) 0%, rgba(10, 16, 24, 0.95) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.7), 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.monitor-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.monitor-class-count-tag {
+    font-family: monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #7dd3fc;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* Seasonal & Climatic Atmospheric Gauge Bar */
+.admin-seasonal-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    background: rgba(6, 12, 18, 0.75);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+}
+
+.seasonal-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.season-badge {
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    color: #fbbf24;
+}
+
+.season-badge.season-spring {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(74, 222, 128, 0.5);
+    color: #4ade80;
+}
+
+.season-badge.season-summer {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.6);
+    color: #fde047;
+}
+
+.season-badge.season-autumn {
+    background: rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 0.6);
+    color: #fb923c;
+}
+
+.season-badge.season-winter {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.7);
+    color: #bae6fd;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.climate-badge {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.45);
+    color: #c7d2fe;
+}
+
+.climate-badge.little-ice-age-active {
+    background: rgba(6, 182, 212, 0.2);
+    border: 1px solid rgba(6, 182, 212, 0.7);
+    color: #67e8f9;
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.35);
+}
+
+.seasonal-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.seasonal-metric .metric-label {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.seasonal-metric .metric-val {
+    font-family: monospace;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+/* Taxonomy Filter Controls & Realm Selection */
+.monitor-controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.monitor-taxonomy-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+}
+
+.monitor-pill-btn {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #cbd5e1;
+    font-family: inherit;
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.monitor-pill-btn:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(212, 175, 55, 0.5);
+    color: #fff;
+}
+
+.monitor-pill-btn.active {
+    background: rgba(56, 189, 248, 0.25);
+    border: 1px solid #38bdf8;
+    color: #7dd3fc;
+    font-weight: 700;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.monitor-realm-selector-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.monitor-realm-selector-box label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.06em;
+}
+
+.admin-select {
+    background: #0b131e;
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    color: #ffd700;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    outline: none;
+}
+
+.admin-select:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.5);
+}
+
+/* Live Telemetry Grid & Cards */
+.admin-monitor-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 12px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.monitor-card {
+    background: rgba(8, 14, 22, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.monitor-card:hover {
+    border-color: rgba(212, 175, 55, 0.45);
+    transform: translateY(-1px);
+}
+
+.card-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.class-tier-tag {
+    font-family: monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.class-tier-tag.class-user_setting {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #7dd3fc;
+}
+
+.class-tier-tag.class-user_state {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    color: #fbbf24;
+}
+
+.class-tier-tag.class-game_state {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.5);
+    color: #c084fc;
+}
+
+.class-tier-tag.class-seasonal {
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.5);
+    color: #67e8f9;
+}
+
+.class-tier-tag.class-population_pressure {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+}
+
+.card-realm-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.card-var-title {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.card-var-val {
+    font-family: monospace;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
+.card-var-val.val-good {
+    color: #4ade80;
+}
+
+.card-var-val.val-warn {
+    color: #fbbf24;
+}
+
+.card-var-val.val-danger {
+    color: #f87171;
+}
+
+.card-meter-track {
+    width: 100%;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.card-meter-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.card-meter-fill.fill-green {
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.card-meter-fill.fill-yellow {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.card-meter-fill.fill-red {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.card-meta-notes {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    line-height: 1.35;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-top: 6px;
+    margin-top: 2px;
+}
+
+/* Scenario Injection & Fine Tuner */
+.admin-scenario-tuner-panel {
+    background: rgba(8, 14, 22, 0.7);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.scenario-tuner-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.scenario-tuner-title {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #ffd700;
+}
+
+.scenario-tuner-hint {
+    font-size: 0.72rem;
+    color: #94a3b8;
+}
+
+.scenario-presets-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.presets-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #cbd5e1;
+}
+
+.scenario-preset-btn {
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.debt-shock-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    color: #fca5a5;
+}
+
+.debt-shock-btn:hover {
+    background: rgba(239, 68, 68, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.winter-btn {
+    background: rgba(56, 189, 248, 0.2);
+    border: 1px solid rgba(56, 189, 248, 0.6);
+    color: #7dd3fc;
+}
+
+.winter-btn:hover {
+    background: rgba(56, 189, 248, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+}
+
+.golden-age-btn {
+    background: rgba(251, 191, 36, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.6);
+    color: #fde047;
+}
+
+.golden-age-btn:hover {
+    background: rgba(251, 191, 36, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.scenario-custom-tune-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.tune-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tune-field label {
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+}
+
+.admin-input-num {
+    background: #0b131e;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    color: #f8fafc;
+    font-family: monospace;
+    font-size: 0.82rem;
+    padding: 5px 8px;
+    border-radius: 4px;
+    outline: none;
+}
+
+.admin-input-num:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.4);
+}
+
+.admin-btn-action-primary {
+    background: linear-gradient(180deg, #854d0e 0%, #452606 100%);
+    border: 1px solid #eab308;
+    color: #fef08a;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.admin-btn-action-primary:hover {
+    background: linear-gradient(180deg, #a16207 0%, #593108 100%);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
+}
+
+.scenario-tune-feedback {
+    font-size: 0.75rem;
+    font-family: monospace;
+    min-height: 18px;
+    transition: all 0.2s ease;
+}
+
+/* ==========================================================================
+   Pure Admin Deep Analytics & Macro Visualizer Deck
+   ========================================================================== */
+.admin-analytics-btn {
+    background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+    border: 1px solid #818cf8;
+    color: #c7d2fe;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.admin-analytics-btn:hover {
+    background: linear-gradient(180deg, #312e81 0%, #1e1b4b 100%);
+    color: #ffffff;
+    border-color: #a5b4fc;
+    box-shadow: 0 0 12px rgba(129, 140, 248, 0.7);
+}
+
+.admin-analytics-section {
+    background: radial-gradient(circle at 50% 0%, rgba(20, 25, 45, 0.9) 0%, rgba(8, 12, 20, 0.98) 100%);
+    border: 1px solid rgba(129, 140, 248, 0.45);
+    box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.8), 0 0 15px rgba(99, 102, 241, 0.25);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.analytics-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.analytics-icon {
+    font-size: 1.15rem;
+}
+
+.overseer-tag {
+    font-family: monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(129, 140, 248, 0.15);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    color: #c7d2fe;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.analytics-chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.analytics-chart-controls label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+}
+
+.analytics-tabs-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 2px;
+}
+
+.analytics-tab-btn {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #cbd5e1;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.analytics-tab-btn:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(212, 175, 55, 0.5);
+    color: #ffffff;
+}
+
+.analytics-tab-btn.active {
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.3) 0%, rgba(49, 46, 129, 0.4) 100%);
+    border: 1px solid #818cf8;
+    color: #e0e7ff;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+.analytics-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: 280px;
+    background: #091019;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+#admin-analytics-canvas {
+    width: 100%;
+    height: 320px;
+    display: block;
+}
+
+.admin-chart-tooltip {
+    position: fixed;
+    background: rgba(10, 16, 26, 0.96);
+    border: 1px solid #d4af37;
+    border-radius: 5px;
+    padding: 8px 12px;
+    color: #f8fafc;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    pointer-events: none;
+    z-index: 10500;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8), 0 0 8px rgba(212, 175, 55, 0.3);
+    backdrop-filter: blur(4px);
+    max-width: 280px;
+}
+
+.analytics-summary-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    background: rgba(8, 14, 22, 0.75);
+    border: 1px solid rgba(129, 140, 248, 0.25);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.analytics-kpi-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.analytics-kpi-item .kpi-label {
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.analytics-kpi-item .kpi-val {
+    font-family: monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.analytics-kpi-item .kpi-val.kpi-good {
+    color: #4ade80;
+}
+
+.analytics-kpi-item .kpi-val.kpi-warn {
+    color: #f87171;
+}
+
+
 
 
 

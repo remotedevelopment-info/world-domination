@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kingdom Conquest - Medieval Strategy Game</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=4.1">
 </head>
 
 <body>
@@ -47,6 +47,7 @@
                     <span id="player-name">Player</span>
                     <span id="player-kingdom" class="kingdom-badge">No Kingdom</span>
                     <button type="button" id="admin-console-btn" class="admin-console-btn hidden" onclick="toggleAdminDashboard()" title="Open Imperial Overseer &amp; Admin Dashboard">👑 Admin Console</button>
+                    <button type="button" id="admin-analytics-quick-btn" class="admin-analytics-btn hidden" onclick="openPureAdminAnalytics()" title="Open Pure Overseer Planetary Analytics &amp; Graphs">📊 Overseer Analytics</button>
                     <span id="connection-status" class="status-indicator" title="Server Connection Status">●</span>
                 </div>
 
@@ -424,10 +425,11 @@
                     <div class="progress-modal-header">
                         <div class="progress-modal-title-group">
                             <span class="progress-crest">👑</span>
-                            <h2 id="admin-dialog-title">IMPERIAL OVERSEER &amp; ADMIN CONSOLE</h2>
-                            <span class="admin-live-badge">MASTER TELEMETRY</span>
+                            <h2 id="admin-dialog-title">IMPERIAL GAME MASTER &amp; ADMIN CONSOLE</h2>
+                            <span class="admin-live-badge">MASTER CONTROLS</span>
                         </div>
                         <div class="admin-header-actions">
+                            <button type="button" class="admin-view-switch-btn" onclick="toggleAdminDashboard(false); toggleOverseerAnalytics(true);" title="Open Pure Overseer Planetary Analytics Deck">📊 Overseer Analytics ↗</button>
                             <button type="button" class="admin-refresh-btn" onclick="refreshAdminDashboard()" title="Refresh telemetry">🔄 Refresh</button>
                             <button type="button" class="progress-modal-close-btn" onclick="toggleAdminDashboard(false)" title="Close (Esc)">✕</button>
                         </div>
@@ -619,6 +621,177 @@
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pure Overseer Deep Macro Analytics & Imperial Surveillance Modal -->
+            <div id="overseer-analytics-modal" class="progress-modal-overlay hidden" onclick="handleOverseerAnalyticsBackdrop(event)">
+                <div class="progress-modal-dialog steampunk-panel overseer-dialog" role="dialog" aria-modal="true" aria-labelledby="overseer-dialog-title">
+                    <div class="progress-modal-header">
+                        <div class="progress-modal-title-group">
+                            <span class="progress-crest">📊</span>
+                            <h2 id="overseer-dialog-title">PLANETARY OVERSEER MACRO ANALYTICS &amp; SURVEILLANCE</h2>
+                            <span class="admin-live-badge overseer-badge-gold">PURE OVERSEER DECK</span>
+                        </div>
+                        <div class="admin-header-actions">
+                            <button type="button" class="admin-view-switch-btn" onclick="toggleOverseerAnalytics(false); toggleAdminDashboard(true);" title="Switch to Imperial Game Master &amp; Admin Console">👑 Admin Console ↗</button>
+                            <button type="button" class="admin-refresh-btn" onclick="refreshOverseerAnalytics()" title="Refresh overseer telemetry">🔄 Refresh</button>
+                            <button type="button" class="progress-modal-close-btn" onclick="toggleOverseerAnalytics(false)" title="Close (Esc)">✕</button>
+                        </div>
+                    </div>
+                    <div class="progress-modal-body admin-dialog-body overseer-dialog-body">
+                        <!-- Pure Admin Deep Analytics & Macro Visualizer Deck -->
+                        <div class="admin-section admin-analytics-section" id="admin-analytics-section">
+                            <div class="admin-section-header">
+                                <div class="analytics-header-title">
+                                    <span class="analytics-icon">📊</span>
+                                    <span class="section-title">Pure Overseer Macro Analytics &amp; Visualizer Deck</span>
+                                    <span class="overseer-tag" id="admin-overseer-badge">Planetary Analysis</span>
+                                </div>
+                                <div class="analytics-chart-controls">
+                                    <label for="admin-chart-scope">SCOPE:</label>
+                                    <select id="admin-chart-scope" class="admin-select" onchange="switchAdminChartScope(this.value)">
+                                        <option value="top10">Top 10 Powers</option>
+                                        <option value="top20">Top 20 Powers</option>
+                                        <option value="all">All 206 Realms</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Chart Navigation Tabs -->
+                            <div class="analytics-tabs-bar">
+                                <button type="button" class="analytics-tab-btn active" data-chart="wealth_gdp" onclick="switchAdminChartTab('wealth_gdp')">
+                                    💰 Wealth &amp; GDP
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="solvency_matrix" onclick="switchAdminChartTab('solvency_matrix')">
+                                    ⚔️ Solvency vs Military Risk
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="tax_pride" onclick="switchAdminChartTab('tax_pride')">
+                                    ⚖️ Tax vs Pride Curve
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="demographics" onclick="switchAdminChartTab('demographics')">
+                                    👥 Population &amp; Squalor
+                                </button>
+                                <button type="button" class="analytics-tab-btn" data-chart="climatic_wave" onclick="switchAdminChartTab('climatic_wave')">
+                                    ☀️ Milankovitch Climatic Wave
+                                </button>
+                            </div>
+
+                            <!-- Interactive Canvas & Tooltip Container -->
+                            <div class="analytics-canvas-wrapper" id="admin-chart-wrapper">
+                                <canvas id="admin-analytics-canvas" width="900" height="340"></canvas>
+                                <div id="admin-chart-tooltip" class="admin-chart-tooltip hidden"></div>
+                            </div>
+
+                            <!-- Chart Macro Insights Summary Footer -->
+                            <div class="analytics-summary-bar" id="admin-chart-summary-bar"></div>
+                        </div>
+
+                        <!-- Game Monitor & Dynamic Internal Variable Matrix -->
+                        <div class="admin-section admin-monitor-section">
+                            <div class="admin-section-header">
+                                <div class="monitor-header-left">
+                                    <span class="section-title">🔭 Imperial Game Monitor &amp; Variable Matrix</span>
+                                    <span class="monitor-class-count-tag">5 Classified Tiers</span>
+                                </div>
+                                <div class="monitor-header-right">
+                                    <span id="admin-monitor-last-sync" class="admin-sync-tag">Telemetry: Live</span>
+                                </div>
+                            </div>
+
+                            <!-- Seasonal & Climatic Atmospheric Indicator Strip -->
+                            <div class="admin-seasonal-bar" id="admin-seasonal-bar">
+                                <div class="seasonal-pill season-badge" id="admin-climate-season">
+                                    <span class="pill-icon">☀️</span>
+                                    <span class="pill-val" id="admin-climate-season-name">Summer</span>
+                                </div>
+                                <div class="seasonal-pill climate-badge" id="admin-climate-phase-box">
+                                    <span class="pill-label">CLIMATE CYCLE:</span>
+                                    <span class="pill-val" id="admin-climate-phase">Baseline Holocene</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">HARVEST YIELD:</span>
+                                    <span class="metric-val" id="admin-climate-harvest">100%</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">WINTER ATTRITION:</span>
+                                    <span class="metric-val" id="admin-climate-winter-logistics">1.00x</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">TRADE VELOCITY:</span>
+                                    <span class="metric-val" id="admin-climate-velocity">1.00x</span>
+                                </div>
+                                <div class="seasonal-metric">
+                                    <span class="metric-label">ORBITAL FORCING:</span>
+                                    <span class="metric-val" id="admin-climate-orbital">Neutral</span>
+                                </div>
+                            </div>
+
+                            <!-- Taxonomy Classification Filter Bar & Realm Selection -->
+                            <div class="monitor-controls-row">
+                                <div class="monitor-taxonomy-filters">
+                                    <span class="filter-label">VARIABLE CLASS:</span>
+                                    <button type="button" class="monitor-pill-btn active" data-class="all" onclick="setMonitorClassFilter('all')">🌐 All Classes</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="user_setting" onclick="setMonitorClassFilter('user_setting')">⚙️ 1. User Settings</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="user_state" onclick="setMonitorClassFilter('user_state')">👁️ 2. User State (Hidden)</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="game_state" onclick="setMonitorClassFilter('game_state')">🌍 3. Game State</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="seasonal" onclick="setMonitorClassFilter('seasonal')">❄️ 4. Seasonal</button>
+                                    <button type="button" class="monitor-pill-btn" data-class="population_pressure" onclick="setMonitorClassFilter('population_pressure')">👥 5. Population Pressure</button>
+                                </div>
+                                <div class="monitor-realm-selector-box">
+                                    <label for="admin-monitor-realm-select">REALM FOCUS:</label>
+                                    <select id="admin-monitor-realm-select" class="admin-select" onchange="renderGameMonitorCards()">
+                                        <option value="ALL">🌐 All Realms Matrix</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Live Telemetry Matrix Grid -->
+                            <div class="admin-monitor-cards-grid" id="admin-monitor-cards-container">
+                                <div class="loading-cell" style="grid-column: 1 / -1; padding: 20px; text-align: center; color: #8da4b8;">
+                                    Reading internal variable matrix from authoritative server...
+                                </div>
+                            </div>
+
+                            <!-- Scenario Injection & Dynamic Variable Fine-Tuner -->
+                            <div class="admin-scenario-tuner-panel">
+                                <div class="scenario-tuner-header">
+                                    <span class="scenario-tuner-title">⚡ Scenario Injection &amp; Live Variable Calibration</span>
+                                    <span class="scenario-tuner-hint">Inject stress tests and macroeconomic shocks to fine-tune balancing</span>
+                                </div>
+
+                                <div class="scenario-presets-bar">
+                                    <span class="presets-label">QUICK PRESETS:</span>
+                                    <button type="button" class="scenario-preset-btn debt-shock-btn" onclick="applyScenarioPreset('debt_shock')">📉 Fiscal Debt Shock</button>
+                                    <button type="button" class="scenario-preset-btn winter-btn" onclick="applyScenarioPreset('severe_winter')">❄️ Severe Frost &amp; Attrition</button>
+                                    <button type="button" class="scenario-preset-btn golden-age-btn" onclick="applyScenarioPreset('golden_age')">🌟 Entrepreneurial Golden Age</button>
+                                </div>
+
+                                <div class="scenario-custom-tune-form">
+                                    <div class="tune-field">
+                                        <label for="tune-realm-id">TARGET REALM:</label>
+                                        <select id="tune-realm-id" class="admin-select"></select>
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-pride">ENTREPRENEURIAL PRIDE (0-100%):</label>
+                                        <input type="number" id="tune-pride" class="admin-input-num" min="0" max="100" step="1" placeholder="e.g. 75">
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-delayed-costs">DELAYED MILITARY LIABILITIES ($):</label>
+                                        <input type="number" id="tune-delayed-costs" class="admin-input-num" min="0" step="100" placeholder="e.g. 2500">
+                                    </div>
+                                    <div class="tune-field">
+                                        <label for="tune-resources">TREASURY RESERVES ($):</label>
+                                        <input type="number" id="tune-resources" class="admin-input-num" min="0" step="1000" placeholder="Leave blank for unchanged">
+                                    </div>
+                                    <div class="tune-action">
+                                        <button type="button" class="admin-btn-action-primary" onclick="submitCustomScenarioTune()">Apply Variable Calibration</button>
+                                    </div>
+                                </div>
+                                <div id="scenario-tune-status" class="scenario-tune-feedback"></div>
                             </div>
                         </div>
                     </div>
@@ -1362,7 +1535,7 @@
         </div>
         <div id="toast-container" aria-live="polite"></div>
     </div>
-    <script type="module" src="js/main.js?v=3.2"></script>
+    <script type="module" src="js/main.js?v=4.1"></script>
 </body>
 
 </html>

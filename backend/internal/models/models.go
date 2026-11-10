@@ -49,6 +49,8 @@ type Country struct {
 	LastTotalExp      int64 `json:"last_total_exp"`
 	LastBudgetBalance int64 `json:"last_budget_balance"`
 	LastMigration     int64 `json:"last_migration"`
+	EntrepreneurialPride float64 `json:"entrepreneurial_pride"` // Intangible commercial confidence 0-100%
+	MilitaryDelayedCosts int64   `json:"military_delayed_costs"` // Lingering military commitments/pensions
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`

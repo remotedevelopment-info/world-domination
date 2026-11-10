@@ -53,6 +53,8 @@ type CountryState struct {
 	TerritoryType  string       `json:"territory_type"`
 	Borders        string       `json:"borders"`
 	IsIsland       bool         `json:"is_island"`
+	EntrepreneurialPride float64 `json:"entrepreneurial_pride"`
+	MilitaryDelayedCosts int64   `json:"military_delayed_costs"`
 	Economy        EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
@@ -79,6 +81,7 @@ type GameEngine struct {
 	chronoScale        string
 	isPaused           bool
 	lastTimelineUpdate time.Time
+	lastInactiveCheck  time.Time
 	econDebtYears      float64
 }
 
@@ -93,6 +96,7 @@ func GetEngine() *GameEngine {
 			chronoScale:        "1d",
 			isPaused:           false,
 			lastTimelineUpdate: time.Now(),
+			lastInactiveCheck:  time.Now(),
 		}
 	})
 	return engine
@@ -147,6 +151,7 @@ func (g *GameEngine) SetSimYear(year float64) GameState {
 	g.mu.Lock()
 	prevYearInt := int64(math.Floor(g.simYear))
 	newYearInt := int64(math.Floor(year))
+	elapsedYears := year - g.simYear
 	g.simYear = year
 	g.lastTimelineUpdate = time.Now()
 	g.currentTick++
@@ -154,7 +159,13 @@ func (g *GameEngine) SetSimYear(year float64) GameState {
 	g.mu.Unlock()
 
 	if yearRolledOver {
-		g.TickEconomyStep(0.0, true)
+		stepYears := elapsedYears
+		if stepYears <= 0 {
+			stepYears = 1.0
+		} else if stepYears > 10.0 {
+			stepYears = 10.0 // clamp single jump calculation to max 10 years to prevent numeric overflow
+		}
+		g.TickEconomyStep(stepYears, true)
 	}
 
 	state := g.BuildState()
@@ -227,6 +238,30 @@ func (g *GameEngine) GetTimeline() (float64, int64, Era, string, bool) {
 	return g.simYear, yearInt, GetEraForYear(yearInt), g.chronoScale, g.isPaused
 }
 
+func (g *GameEngine) GetSimYear() float64 {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.simYear
+}
+
+func (g *GameEngine) GetCurrentEra() Era {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return GetEraForYear(int64(math.Floor(g.simYear)))
+}
+
+func (g *GameEngine) GetChronoScale() string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.chronoScale
+}
+
+func (g *GameEngine) IsPaused() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.isPaused
+}
+
 // TickTimeline advances the continuous timeline based on elapsed real-world time
 // and the current ChronoScale. When time passes (especially under accelerated ChronoScales
 // such as 1s = 1 yr or 5s = 1 yr), economic expenses (troop upkeep, taxes, social costs,
@@ -258,11 +293,14 @@ func (g *GameEngine) TickTimeline() bool {
 
 	g.econDebtYears += deltaYears
 	var stepYears float64
-	if g.econDebtYears >= 0.05 {
+	yearRolledOver := newYearInt > prevYearInt
+	if g.econDebtYears >= 0.05 || yearRolledOver {
 		stepYears = g.econDebtYears
+		if stepYears <= 0 && yearRolledOver {
+			stepYears = deltaYears
+		}
 		g.econDebtYears = 0
 	}
-	yearRolledOver := newYearInt > prevYearInt
 	g.mu.Unlock()
 
 	econChanged := false
@@ -285,6 +323,10 @@ func (g *GameEngine) TickTimeline() bool {
 func (g *GameEngine) Advance() GameState {
 	g.mu.Lock()
 	g.currentTick++
+	shouldCheckInactive := time.Since(g.lastInactiveCheck) > 10*time.Minute
+	if shouldCheckInactive {
+		g.lastInactiveCheck = time.Now()
+	}
 	g.mu.Unlock()
 
 	state := g.BuildState()
@@ -292,7 +334,7 @@ func (g *GameEngine) Advance() GameState {
 		log.Printf("Error saving game state snapshot: %v", err)
 	}
 
-	if g.ProcessInactivePlayers() {
+	if shouldCheckInactive && g.ProcessInactivePlayers() {
 		state = g.BuildState()
 	}
 	g.Notify(state)
@@ -331,10 +373,11 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			continue // unclaimed kingdoms stagnate
 		}
 
-		econ := ComputeEconomyWithLayers(
+		econ := ComputeEconomyWithInternals(
 			c.Population, c.Resources, c.Troops,
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
 		)
 
 		// 1. Markets: Income and Risk
@@ -385,6 +428,23 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		popGrowth := int64(math.Round(float64(PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)) * yearsPassed))
 		migrationDelta := int64(math.Round(float64(econ.NetMigration) * yearsPassed))
 		newPopulation += popGrowth + migrationDelta
+
+		// Frontier land abundance attractor: severely depopulated realms draw homesteaders to vacant arable land
+		if newPopulation < 100000 && yearsPassed > 0 {
+			homesteaders := int64(math.Round(float64(100000-newPopulation) * 0.05 * yearsPassed))
+			if homesteaders > 0 {
+				newPopulation += homesteaders
+			}
+		}
+
+		// Wealthy Capital Transfer: incoming wealthy inject specie, fleeing wealthy drain specie
+		if econ.CapitalFlightDrain != 0 && yearsPassed > 0 {
+			capDelta := int64(math.Round(float64(econ.CapitalFlightDrain) * yearsPassed))
+			newResources += capDelta
+			if newResources < 0 {
+				newResources = 0
+			}
+		}
 
 		// 4. Warfare, Multi-Layered Troops, Continuous Conscription & Demobilization
 		newTroops := c.Troops
@@ -471,8 +531,10 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		if newResources < 0 {
 			newResources = 0
 		}
-		if newPopulation < 50 {
-			newPopulation = 50
+		// A realm's civilian population must be viable and support its standing army (minimum 10,000 civilians)
+		minPop := int64(math.Max(10000.0, float64(newTroops)*2.0))
+		if newPopulation < minPop {
+			newPopulation = minPop
 		}
 		if newLevy < 0 {
 			newLevy = 0
@@ -485,6 +547,33 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		}
 		newTroops = newLevy + newRegular + newElite
 
+		// 5. Dynamic Evolution of Hidden Internal States (Pride & Delayed Military Costs)
+		newPride := c.EntrepreneurialPride
+		if newPride <= 0 {
+			newPride = 100.0 // default initialize
+		}
+		if c.EconomyRate > 40 {
+			// High taxation erodes entrepreneurial pride & risk appetite
+			loss := float64(c.EconomyRate-40) * 0.40 * yearsPassed
+			newPride -= loss
+		} else if c.EconomyRate <= 35 && c.Resources > 0 {
+			// Fair taxation and solvent treasury gradually restores merchant confidence (+2.0/yr)
+			newPride += 2.0 * yearsPassed
+		}
+		if newPride < 5.0 {
+			newPride = 5.0
+		}
+		if newPride > 100.0 {
+			newPride = 100.0
+		}
+		newPride = math.Round(newPride*10) / 10
+
+		// Delayed military commitments decay by 20% annually (half-life ~3.1 years)
+		newDelayedCosts := c.MilitaryDelayedCosts
+		if newDelayedCosts > 0 {
+			newDelayedCosts = int64(math.Round(float64(newDelayedCosts) * math.Pow(0.80, yearsPassed)))
+		}
+
 		if yearRolledOver {
 			// A calendar year has officially turned over: commit the completed year's actuals
 			// into the historical Last Year ledger, rolling over previous actuals.
@@ -492,21 +581,28 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
 				econ.TaxRevenue, annualMarketActual, effMilAnnual, effSocAnnual, effInvAnnual,
 				effTotalExpAnnual, effBalanceAnnual, econ.NetMigration,
+				newPride, newDelayedCosts,
 			); err != nil {
 				log.Printf("Error committing annual budget rollover for country %d: %v", c.ID, err)
 				continue
 			}
 			changed = true
+			c.EntrepreneurialPride = newPride
+			c.MilitaryDelayedCosts = newDelayedCosts
 		} else if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
-			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite {
+			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite ||
+			newPride != c.EntrepreneurialPride || newDelayedCosts != c.MilitaryDelayedCosts {
 			// Intra-year incremental tick: update dynamic vitals without overwriting Last Year's budget ledger
 			if err := database.UpdateCountryVitalsAndTroopLayers(
 				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
+				newPride, newDelayedCosts,
 			); err != nil {
 				log.Printf("Error updating intra-year vitals for country %d: %v", c.ID, err)
 				continue
 			}
 			changed = true
+			c.EntrepreneurialPride = newPride
+			c.MilitaryDelayedCosts = newDelayedCosts
 		}
 	}
 
@@ -542,12 +638,17 @@ func (g *GameEngine) BuildState() GameState {
 		log.Printf("Error getting countries: %v", err)
 	}
 
+	g.mu.RLock()
+	simYear := g.simYear
+	g.mu.RUnlock()
+
 	var countryStates []CountryState
 	for _, c := range countries {
-		econ := ComputeEconomyWithLayers(
+		econ := ComputeEconomyWithInternals(
 			c.Population, c.Resources, c.Troops,
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
 		)
 		PopulateLastYearLedger(
 			&econ,
@@ -556,29 +657,31 @@ func (g *GameEngine) BuildState() GameState {
 			c.LastBudgetBalance, c.LastMigration,
 		)
 		cs := CountryState{
-			ID:             c.ID,
-			Name:           c.Name,
-			Code:           c.Code,
-			Color:          c.Color,
-			Population:     c.Population,
-			Resources:      c.Resources,
-			Troops:         c.Troops,
-			TroopsLevy:     c.TroopsLevy,
-			TroopsRegular:  c.TroopsRegular,
-			TroopsElite:    c.TroopsElite,
-			FortN:          c.FortN,
-			FortS:          c.FortS,
-			FortE:          c.FortE,
-			FortW:          c.FortW,
-			EconomyRate:    c.EconomyRate,
-			Investment:     c.Investment,
-			SocialCosts:    c.SocialCosts,
-			Markets:        c.Markets,
-			Infrastructure: c.Infrastructure,
-			TerritoryType:  c.TerritoryType,
-			Borders:        c.Borders,
-			IsIsland:       c.IsIsland,
-			Economy:        econ,
+			ID:                   c.ID,
+			Name:                 c.Name,
+			Code:                 c.Code,
+			Color:                c.Color,
+			Population:           c.Population,
+			Resources:            c.Resources,
+			Troops:               c.Troops,
+			TroopsLevy:           c.TroopsLevy,
+			TroopsRegular:        c.TroopsRegular,
+			TroopsElite:          c.TroopsElite,
+			FortN:                c.FortN,
+			FortS:                c.FortS,
+			FortE:                c.FortE,
+			FortW:                c.FortW,
+			EconomyRate:          c.EconomyRate,
+			Investment:           c.Investment,
+			SocialCosts:          c.SocialCosts,
+			Markets:              c.Markets,
+			Infrastructure:       c.Infrastructure,
+			TerritoryType:        c.TerritoryType,
+			Borders:              c.Borders,
+			IsIsland:             c.IsIsland,
+			EntrepreneurialPride: c.EntrepreneurialPride,
+			MilitaryDelayedCosts: c.MilitaryDelayedCosts,
+			Economy:              econ,
 		}
 		if c.OwnerID != nil {
 			cs.OwnerID = c.OwnerID
@@ -619,7 +722,7 @@ func (g *GameEngine) BuildState() GameState {
 
 	g.mu.RLock()
 	tick := g.currentTick
-	simYear := g.simYear
+	simYear = g.simYear
 	chronoScale := g.chronoScale
 	isPaused := g.isPaused
 	g.mu.RUnlock()

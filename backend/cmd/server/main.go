@@ -35,12 +35,23 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	// Drain incoming control messages (pongs, close frames) in background
+	go func() {
+		defer conn.Close()
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				break
+			}
+		}
+	}()
+
 	engine := game.GetEngine()
 	stateChan := engine.Subscribe()
 	defer engine.Unsubscribe(stateChan)
 
 	// Send the full current state so the client renders immediately.
 	state := engine.BuildState()
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if err := conn.WriteJSON(map[string]interface{}{
 		"type":  "init",
 		"state": state,
@@ -48,15 +59,21 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reusable ping ticker to prevent timer channel allocation leak
+	pingTicker := time.NewTicker(25 * time.Second)
+	defer pingTicker.Stop()
+
 	// Listen for game state updates
 	for {
 		select {
 		case state := <-stateChan:
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.WriteJSON(state); err != nil {
 				return
 			}
-		case <-time.After(30 * time.Second):
+		case <-pingTicker.C:
 			// Send ping to keep connection alive
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -102,6 +119,8 @@ func setupRouter() *mux.Router {
 	api.HandleFunc("/timeline/scale", handlers.SetTimelineScaleHandler).Methods("POST")
 	api.HandleFunc("/timeline/pause", handlers.SetTimelinePauseHandler).Methods("POST")
 	api.HandleFunc("/admin/dashboard", handlers.GetAdminDashboardHandler).Methods("GET")
+	api.HandleFunc("/admin/game-monitor", handlers.AdminGameMonitorHandler).Methods("GET")
+	api.HandleFunc("/admin/scenario-tune", handlers.AdminScenarioTuneHandler).Methods("POST")
 	api.HandleFunc("/admin/reset-game", handlers.AdminResetGameHandler).Methods("POST")
 	api.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 	api.HandleFunc("/assign-country", handlers.AssignCountryHandler).Methods("POST")

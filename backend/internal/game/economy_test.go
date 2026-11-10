@@ -282,3 +282,127 @@ func TestComputeEconomyWithLayersAndSocialScaling(t *testing.T) {
 			highSoc.SocialExpenditure, midSoc.SocialExpenditure)
 	}
 }
+
+func TestSeasonalAndClimaticCycles(t *testing.T) {
+	// Verify 4 seasons across simulation year fractions
+	spring := GetClimaticAndSeasonalState(1500.10)
+	summer := GetClimaticAndSeasonalState(1500.35)
+	autumn := GetClimaticAndSeasonalState(1500.65)
+	winter := GetClimaticAndSeasonalState(1500.85)
+
+	if spring.Season != "Spring" {
+		t.Errorf("expected Spring at 1500.10, got %s", spring.Season)
+	}
+	if summer.Season != "Summer" {
+		t.Errorf("expected Summer at 1500.35, got %s", summer.Season)
+	}
+	if autumn.Season != "Autumn" {
+		t.Errorf("expected Autumn at 1500.65, got %s", autumn.Season)
+	}
+	if winter.Season != "Winter" {
+		t.Errorf("expected Winter at 1500.85, got %s", winter.Season)
+	}
+
+	// Autumn harvest yields should be greater than winter yields
+	if autumn.HarvestYieldFactor <= winter.HarvestYieldFactor {
+		t.Errorf("expected autumn harvest factor (%f) > winter harvest factor (%f)",
+			autumn.HarvestYieldFactor, winter.HarvestYieldFactor)
+	}
+
+	// Winter severity modifier increases military winter upkeep
+	if winter.WinterSeverity <= spring.WinterSeverity {
+		t.Errorf("expected winter severity (%f) > spring severity (%f)",
+			winter.WinterSeverity, spring.WinterSeverity)
+	}
+
+	// Little Ice Age solar minimums (Maunder Minimum 1645-1715)
+	maunderWinter := GetClimaticAndSeasonalState(1680.85)
+	if maunderWinter.WinterSeverity <= winter.WinterSeverity {
+		t.Errorf("expected Maunder minimum winter (%f) to be more severe than 1500 winter (%f)",
+			maunderWinter.WinterSeverity, winter.WinterSeverity)
+	}
+}
+
+func TestInternalStateEntrepreneurialPrideAndDelayedCosts(t *testing.T) {
+	// 1. Entrepreneurial Pride modulates market income
+	highPrideEcon := ComputeEconomyWithInternals(10000, 2000, 0, 30, 5, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.20)
+	crushedPrideEcon := ComputeEconomyWithInternals(10000, 2000, 0, 30, 5, 0, 0, 0, 0, 0, 0, 20.0, 0, 1500.20)
+
+	if crushedPrideEcon.MarketRevenue >= highPrideEcon.MarketRevenue {
+		t.Errorf("expected crushed pride market revenue (%d) to be lower than high pride revenue (%d)",
+			crushedPrideEcon.MarketRevenue, highPrideEcon.MarketRevenue)
+	}
+
+	// 2. Delayed Military Liabilities add to total military upkeep
+	noDelayedEcon := ComputeEconomyWithInternals(10000, 2000, 100, 30, 0, 0, 0, 0, 0, 100, 0, 100.0, 0, 1500.20)
+	withDelayedEcon := ComputeEconomyWithInternals(10000, 2000, 100, 30, 0, 0, 0, 0, 0, 100, 0, 100.0, 500, 1500.20)
+
+	if withDelayedEcon.MilitaryUpkeep != noDelayedEcon.MilitaryUpkeep+500 {
+		t.Errorf("expected total military upkeep to reflect delayed liabilities (%d vs %d)",
+			withDelayedEcon.MilitaryUpkeep, noDelayedEcon.MilitaryUpkeep+500)
+	}
+
+	// 3. Manpower Recruitment Discount scales with population size
+	smallPopEcon := ComputeEconomyWithInternals(500000, 2000, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.0)
+	largePopEcon := ComputeEconomyWithInternals(15000000, 2000, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.0)
+
+	if largePopEcon.ManpowerRecruitDiscount >= smallPopEcon.ManpowerRecruitDiscount {
+		t.Errorf("expected large kingdom manpower discount (%f) to be more generous than small kingdom (%f)",
+			largePopEcon.ManpowerRecruitDiscount, smallPopEcon.ManpowerRecruitDiscount)
+	}
+}
+
+func TestWealthFactorAndSegmentedMigrationThresholds(t *testing.T) {
+	// 1. Wealth factor & percentage of wealthy: agrarian vs advanced merchant hub
+	agrarianScore, agrarianRatio := ComputeWealthFactor(1000000, 100, 80000, 0, 0, 50.0)
+	merchantScore, merchantRatio := ComputeWealthFactor(1000000, 100000, 240000, 5, 5, 100.0)
+
+	if merchantScore <= agrarianScore {
+		t.Errorf("expected merchant hub wealth score (%f) to exceed agrarian score (%f)", merchantScore, agrarianScore)
+	}
+	if merchantRatio <= agrarianRatio {
+		t.Errorf("expected higher proportion of wealthy in developed merchant hub (%f vs %f)", merchantRatio, agrarianRatio)
+	}
+	if agrarianRatio < 0.02 || agrarianRatio > 0.10 {
+		t.Errorf("expected agrarian wealthy ratio between 2%% and 10%%, got %f", agrarianRatio)
+	}
+	if merchantRatio < 0.10 || merchantRatio > 0.18 {
+		t.Errorf("expected merchant hub wealthy ratio between 10%% and 18%%, got %f", merchantRatio)
+	}
+
+	// 2. Low Tax Threshold (<= 20%): Capital Haven attracting wealthy relocations and capital injection
+	havenMig := ComputeMigrationDetailed(1000000, 10000, 120000, 15, 3, 2, 0, 90.0)
+	if havenMig.MigrationStatus != "CAPITAL_HAVEN" {
+		t.Errorf("expected CAPITAL_HAVEN status at 15%% tax, got %s", havenMig.MigrationStatus)
+	}
+	if havenMig.WealthyMigration <= 0 {
+		t.Errorf("expected positive wealthy immigration under 15%% tax haven, got %d", havenMig.WealthyMigration)
+	}
+	if havenMig.CapitalFlightDrain <= 0 {
+		t.Errorf("expected positive capital injection (+gold) under tax haven, got %d", havenMig.CapitalFlightDrain)
+	}
+
+	// 3. Fair Tax Threshold (21% - 35%): Fair Prosperity attracting general settlers
+	fairMig := ComputeMigrationDetailed(1000000, 10000, 120000, 28, 2, 2, 20, 85.0)
+	if fairMig.MigrationStatus != "FAIR_PROSPERITY" {
+		t.Errorf("expected FAIR_PROSPERITY status at 28%% tax, got %s", fairMig.MigrationStatus)
+	}
+	if fairMig.GeneralMigration <= 0 {
+		t.Errorf("expected positive general settler immigration at 28%% tax, got %d", fairMig.GeneralMigration)
+	}
+
+	// 4. Extreme Tax Threshold (> 68%): Confiscatory Wealth Flight
+	flightMig := ComputeMigrationDetailed(1000000, 10000, 120000, 80, 2, 2, 0, 40.0)
+	if flightMig.MigrationStatus != "WEALTH_FLIGHT" {
+		t.Errorf("expected WEALTH_FLIGHT status at 80%% tax, got %s", flightMig.MigrationStatus)
+	}
+	if flightMig.WealthyMigration >= 0 {
+		t.Errorf("expected negative wealthy migration (flight) under 80%% tax, got %d", flightMig.WealthyMigration)
+	}
+	if flightMig.CapitalFlightDrain >= 0 {
+		t.Errorf("expected capital flight specie drain (negative) under 80%% tax, got %d", flightMig.CapitalFlightDrain)
+	}
+	if flightMig.NetMigration >= 0 {
+		t.Errorf("expected negative net migration under 80%% tax, got %d", flightMig.NetMigration)
+	}
+}
