@@ -1,8 +1,13 @@
 // renderer.js - Steampunk Cartographic Rendering Engine with Dynamic Era Scaling
 // Shows full-screen projection of the known world in each Age, scaling smoothly as territories emerge
 
-import { state } from "../state.js";
-import { kingdomPolygons, getKingdomLabelPosition } from "./polygons.js";
+import { state, setMapResolutionState } from "../state.js";
+import {
+  kingdomPolygons,
+  getKingdomPolygon,
+  getKingdomLabelPosition,
+  invalidateCartographyCache,
+} from "./polygons.js";
 import { getCentroid, pointInPolygon, getPolygonBounds } from "./geometry.js";
 import { isPureOverseer } from "../ui/clock.js";
 
@@ -21,12 +26,37 @@ let viewportAnimFrame = null;
 const boundsCache = new Map();
 
 function getPolygonBoundsCached(code, poly) {
-  let b = boundsCache.get(code);
+  const key = `${code}:${state.currentSimYear || 1500}:${state.mapResolution || "fast"}:${poly.length}`;
+  let b = boundsCache.get(key);
   if (!b) {
     b = getPolygonBounds(poly);
-    boundsCache.set(code, b);
+    boundsCache.set(key, b);
   }
   return b;
+}
+
+export function getActiveKingdomPolygon(kingdom) {
+  if (!kingdom) return null;
+  const code = typeof kingdom === "string" ? kingdom : kingdom.code;
+  const customPoly = typeof kingdom === "object" ? kingdom.customPolygon : null;
+  return getKingdomPolygon(
+    code,
+    state.currentSimYear || 1500,
+    state.mapResolution || "fast",
+    customPoly
+  );
+}
+
+export function setMapResolution(resolution) {
+  const mode = setMapResolutionState(resolution);
+  boundsCache.clear();
+  invalidateCartographyCache();
+  const selectEl = document.getElementById("map-resolution-select");
+  if (selectEl && selectEl.value !== mode) {
+    selectEl.value = mode;
+  }
+  renderMap();
+  return mode;
 }
 
 export function computeTargetViewport(
@@ -50,7 +80,7 @@ export function computeTargetViewport(
     if (!isPolynesiaActive && POLYNESIAN_ISLES?.has(k.code)) {
       continue;
     }
-    const poly = kingdomPolygons[k.code];
+    const poly = getActiveKingdomPolygon(k);
     if (!poly) continue;
     for (let j = 0; j < poly.length; j++) {
       const px = poly[j][0];
@@ -343,7 +373,7 @@ export function getKingdomAtCanvasCoords(canvasX, canvasY, tolerancePx = 6) {
   // 1. Exact point-in-polygon raycasting (newest era kingdoms on top)
   for (let i = state.kingdoms.length - 1; i >= 0; i--) {
     const kingdom = state.kingdoms[i];
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (!poly) continue;
 
     const b = getPolygonBoundsCached(kingdom.code, poly);
@@ -362,7 +392,7 @@ export function getKingdomAtCanvasCoords(canvasX, canvasY, tolerancePx = 6) {
     let closestDistSq = tolerancePx * tolerancePx;
     for (let i = state.kingdoms.length - 1; i >= 0; i--) {
       const kingdom = state.kingdoms[i];
-      const poly = kingdomPolygons[kingdom.code];
+      const poly = getActiveKingdomPolygon(kingdom);
       if (!poly) continue;
 
       const [cNormX, cNormY] = getCentroid(poly);
@@ -809,7 +839,7 @@ export function renderMap(immediate = false) {
   // 5. Draw Sovereign Kingdoms with Steampunk Cartography (Multi-Pass Jigsaw Rendering)
   // 5a. Pass 1: Fill all kingdom territories with realm colors & subtle coastline contours
   state.kingdoms.forEach((kingdom) => {
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (!poly) return;
 
     ctx.beginPath();
@@ -846,7 +876,7 @@ export function renderMap(immediate = false) {
 
   // 5b. Pass 2: Draw all sovereign frontier borders on top of fills so boundaries never get clipped
   state.kingdoms.forEach((kingdom) => {
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (!poly) return;
 
     ctx.beginPath();
@@ -907,7 +937,7 @@ export function renderMap(immediate = false) {
   // ensuring the user's sovereign dominion is unmistakably obvious across any terrain or zoom level.
   state.kingdoms.forEach((kingdom) => {
     if (!isCountryOwnedByCurrentUser(kingdom)) return;
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (!poly || poly.length < 3) return;
 
     ctx.save();
@@ -960,7 +990,7 @@ export function renderMap(immediate = false) {
   // 5c. Pass 3: Kingdom Code Cartographic Plaques (Toggleable via ribbon control switch)
   if (state.showMapLabels !== false) {
     state.kingdoms.forEach((kingdom) => {
-      const poly = kingdomPolygons[kingdom.code];
+      const poly = getActiveKingdomPolygon(kingdom);
       if (!poly) return;
 
       const isPolynesian = POLYNESIAN_ISLES?.has(kingdom.code);
@@ -1057,7 +1087,7 @@ export function renderMap(immediate = false) {
 
   // 5d. Pass 4: Draw Troop Miniatures (Brass tokens & border rivets)
   state.kingdoms.forEach((kingdom) => {
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (poly) renderTroopDots(ctx, kingdom, poly);
   });
 
@@ -1205,7 +1235,7 @@ function drawMagnifierLoupe(ctx, mx, my) {
   // Re-draw kingdoms in magnified space with clean multi-pass jigsaw rendering
   // Pass 1: Fill all visible kingdom landmasses
   state.kingdoms.forEach((kingdom) => {
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (!poly) return;
 
     ctx.beginPath();
@@ -1223,7 +1253,7 @@ function drawMagnifierLoupe(ctx, mx, my) {
 
   // Pass 2: Stroke all frontier borders cleanly on top of fills
   state.kingdoms.forEach((kingdom) => {
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (!poly) return;
 
     ctx.beginPath();
@@ -1253,7 +1283,7 @@ function drawMagnifierLoupe(ctx, mx, my) {
 
   // Pass 3: Draw troop miniatures
   state.kingdoms.forEach((kingdom) => {
-    const poly = kingdomPolygons[kingdom.code];
+    const poly = getActiveKingdomPolygon(kingdom);
     if (poly) renderTroopDots(ctx, kingdom, poly);
   });
 

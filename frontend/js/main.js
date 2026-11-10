@@ -42,6 +42,7 @@ import {
   zoomCamera,
   resetCamera,
   isCountryOwnedByCurrentUser,
+  setMapResolution,
 } from "./map/renderer.js";
 import { showToast, logMessage } from "./ui/toast.js";
 import {
@@ -1770,9 +1771,23 @@ window.setMonitorClassFilter = setMonitorClassFilter;
 window.renderGameMonitorCards = renderGameMonitorCards;
 window.applyScenarioPreset = applyScenarioPreset;
 window.submitCustomScenarioTune = submitCustomScenarioTune;
+window.setMapResolution = (mode) => {
+  const activeMode = setMapResolution(mode);
+  const labels = {
+    fast: "Fast (Low-Poly)",
+    high_res: "High-Res (Historical)",
+    realistic: "Realistic (Ultra-HD)",
+  };
+  showToast(`Cartography switched to ${labels[activeMode] || activeMode}`, "info");
+};
 
 // Initialize when DOM is ready
 async function initApp() {
+  const resSelect = document.getElementById("map-resolution-select");
+  if (resSelect && state.mapResolution) {
+    resSelect.value = state.mapResolution;
+  }
+
   const canvas = document.getElementById("world-map");
   if (canvas) {
     initRenderer(canvas);

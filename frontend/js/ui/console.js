@@ -9,7 +9,7 @@ import {
   readErrorMessage,
 } from "../api.js";
 import { showToast, logMessage, escapeHtml } from "./toast.js";
-import { kingdomPolygons } from "../map/polygons.js";
+import { kingdomPolygons, getKingdomPolygon } from "../map/polygons.js";
 import { applyActionResult } from "./actions.js";
 import { isCountryOwnedByCurrentUser } from "../map/renderer.js";
 import { isPureOverseer, getCurrentGameYear } from "./clock.js";
@@ -1933,7 +1933,12 @@ export function setMeter(elementId, value, max) {
 }
 
 export function renderKingdomMinimap(ctx, kingdom, borders, central, activeBorder = "N") {
-  const poly = kingdomPolygons[kingdom.code];
+  const poly = getKingdomPolygon(
+    kingdom.code,
+    state.currentSimYear || 1500,
+    state.mapResolution || "fast",
+    kingdom.customPolygon
+  );
   if (!poly) return;
 
   const w = 240;

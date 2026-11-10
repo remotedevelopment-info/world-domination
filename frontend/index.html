@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kingdom Conquest - Medieval Strategy Game</title>
-    <link rel="stylesheet" href="css/style.css?v=4.1">
+    <link rel="stylesheet" href="css/style.css?v=4.2">
 </head>
 
 <body>
@@ -145,6 +145,16 @@
                         </div>
                     </div>
                 </nav>
+
+                <!-- Member Header Control: Cartographic Resolution Switcher -->
+                <div class="header-cartography-control" title="Switch Map Boundary Resolution (Fast / High-Res Historical / Realistic Ultra-HD)">
+                    <label for="map-resolution-select" class="carto-select-label">🗺️ MAP:</label>
+                    <select id="map-resolution-select" class="carto-resolution-select" onchange="setMapResolution(this.value)">
+                        <option value="fast">⚡ Fast (Low-Poly)</option>
+                        <option value="high_res">🧭 High-Res (Historical)</option>
+                        <option value="realistic">🌍 Realistic (Ultra-HD)</option>
+                    </select>
+                </div>
 
                 <!-- Header Control: Imperial Progress Modal Toggle -->
                 <button type="button" class="progress-modal-btn" id="progress-modal-toggle-btn"
@@ -1535,7 +1545,7 @@
         </div>
         <div id="toast-container" aria-live="polite"></div>
     </div>
-    <script type="module" src="js/main.js?v=4.1"></script>
+    <script type="module" src="js/main.js?v=4.2"></script>
 </body>
 
 </html>
