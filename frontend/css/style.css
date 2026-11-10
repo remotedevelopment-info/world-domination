@@ -641,6 +641,10 @@ body {
 .gauge-delta.negative {
     color: #ff6b6b;
 }
+.gauge-delta.surplus,
+.gauge-delta.positive {
+    color: #4ade80;
+}
 
 .military-tier-badge {
     font-size: 0.7em;
@@ -678,6 +682,56 @@ body {
 .analog-gauge.vitality-gauge {
     background: conic-gradient(#4ecdc4 0deg, rgba(78, 205, 196, 0.15) 0deg);
     border-color: #4ecdc4;
+}
+
+/* Center-Zero Rate / Trend Variometer Gauges (Population & Gold Reserves) */
+.analog-gauge.rate-gauge {
+    background: radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.08) 0%, rgba(0, 0, 0, 0.4) 100%);
+    border-color: #b8860b;
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks {
+    transform: rotate(0deg);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks span {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0.4) 22%, transparent 22%);
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    margin-left: -1px;
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-zero {
+    width: 3px;
+    margin-left: -1.5px;
+    background: linear-gradient(180deg, #ffd700 0, #ffd700 36%, transparent 36%);
+    z-index: 3;
+    box-shadow: 0 0 4px rgba(255, 215, 0, 0.6);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-pos {
+    background: linear-gradient(180deg, #4ade80 0, #4ade80 24%, transparent 24%);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-neg {
+    background: linear-gradient(180deg, #ff6b6b 0, #ff6b6b 24%, transparent 24%);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-major.tick-pos {
+    width: 2.5px;
+    margin-left: -1.25px;
+    background: linear-gradient(180deg, #4ade80 0, #4ade80 32%, transparent 32%);
+}
+
+.analog-gauge.rate-gauge .meter-ticks.rate-ticks .tick-major.tick-neg {
+    width: 2.5px;
+    margin-left: -1.25px;
+    background: linear-gradient(180deg, #ff6b6b 0, #ff6b6b 32%, transparent 32%);
 }
 
 .gauge-readout {

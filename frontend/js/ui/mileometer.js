@@ -3,11 +3,20 @@ import { getCurrentScaleSeconds } from "./clock.js";
 
 const DIGIT_HEIGHT = 24; // px height of one tumbler cell
 let mileometerTimer = null;
+
+// Population Drum State
 let anchorPopulation = 0;
 let anchorTimestamp = Date.now();
 let annualNetRate = 0;
 let currentDisplayedPop = 0;
 let activePopContainerEl = null;
+
+// Gold Reserves Drum State
+let anchorGold = 0;
+let anchorGoldTimestamp = Date.now();
+let annualGoldRate = 0;
+let currentDisplayedGold = 0;
+let activeGoldContainerEl = null;
 
 // Track last rendered value per container element to prevent redundant re-renders
 const containerValues = new WeakMap();
@@ -116,44 +125,115 @@ export function setPopulationMileometerRate(rate) {
 }
 
 /**
+ * Sets the authoritative server baseline gold reserves anchor.
+ */
+export function syncGoldMileometerAnchor(serverGold) {
+  anchorGold = Math.max(0, Math.round(Number(serverGold) || 0));
+  anchorGoldTimestamp = Date.now();
+  currentDisplayedGold = anchorGold;
+  if (!activeGoldContainerEl) {
+    activeGoldContainerEl = document.getElementById("cc-meter-res-val");
+  }
+  if (activeGoldContainerEl) {
+    renderMileometer(activeGoldContainerEl, anchorGold, true);
+  }
+}
+
+/**
+ * Updates the projected annual net gold balance rate (surplus or deficit).
+ */
+export function setGoldMileometerRate(rate) {
+  annualGoldRate = Number(rate) || 0;
+}
+
+/**
+ * Starts continuous unified sub-annual interpolation ticker for both Population and Gold Reserves.
+ */
+function ensureUnifiedMileometerTicker() {
+  if (mileometerTimer) return;
+
+  mileometerTimer = setInterval(() => {
+    const modal = document.getElementById("kingdom-command-center");
+    if (!modal || modal.classList.contains("hidden")) {
+      return;
+    }
+
+    const scaleSec = getCurrentScaleSeconds();
+    if (scaleSec <= 0) return;
+
+    // 1. Ticker for Population (if active & rate != 0)
+    if (!activePopContainerEl) {
+      activePopContainerEl = document.getElementById("cc-meter-pop-val");
+    }
+    if (activePopContainerEl && annualNetRate !== 0) {
+      const elapsedPopSec = Math.max(0, (Date.now() - anchorTimestamp) / 1000);
+      const deltaPopYears = elapsedPopSec / scaleSec;
+      const projectedPop = Math.max(0, Math.round(anchorPopulation + annualNetRate * deltaPopYears));
+      if (projectedPop !== currentDisplayedPop) {
+        currentDisplayedPop = projectedPop;
+        renderMileometer(activePopContainerEl, projectedPop, true);
+      }
+    }
+
+    // 2. Ticker for Gold Reserves (if active & rate != 0)
+    if (!activeGoldContainerEl) {
+      activeGoldContainerEl = document.getElementById("cc-meter-res-val");
+    }
+    if (activeGoldContainerEl && annualGoldRate !== 0) {
+      const elapsedGoldSec = Math.max(0, (Date.now() - anchorGoldTimestamp) / 1000);
+      const deltaGoldYears = elapsedGoldSec / scaleSec;
+      // Reserves drain down to 0 minimum in Era 1
+      const projectedGold = Math.max(0, Math.round(anchorGold + annualGoldRate * deltaGoldYears));
+      if (projectedGold !== currentDisplayedGold) {
+        currentDisplayedGold = projectedGold;
+        renderMileometer(activeGoldContainerEl, projectedGold, true);
+      }
+    }
+  }, 1000);
+}
+
+/**
  * Starts the continuous 1-second mileometer sub-annual interpolation ticker for population.
  */
 export function startPopulationMileometerTicker(containerEl) {
   if (containerEl) {
     activePopContainerEl = containerEl;
   }
-  if (mileometerTimer) return;
-
-  mileometerTimer = setInterval(() => {
-    if (!activePopContainerEl) {
-      activePopContainerEl = document.getElementById("cc-meter-pop-val");
-    }
-    if (!activePopContainerEl) return;
-
-    const modal = document.getElementById("kingdom-command-center");
-    if (!modal || modal.classList.contains("hidden")) {
-      return;
-    }
-
-    if (annualNetRate === 0) return;
-
-    const elapsedSec = Math.max(0, (Date.now() - anchorTimestamp) / 1000);
-    const scaleSec = getCurrentScaleSeconds();
-    if (scaleSec <= 0) return;
-
-    const deltaYears = elapsedSec / scaleSec;
-    const projectedPop = Math.max(0, Math.round(anchorPopulation + annualNetRate * deltaYears));
-
-    if (projectedPop !== currentDisplayedPop) {
-      renderMileometer(activePopContainerEl, projectedPop, true);
-    }
-  }, 1000);
+  ensureUnifiedMileometerTicker();
 }
 
 /**
- * Stops the continuous mileometer ticker.
+ * Starts the continuous 1-second mileometer sub-annual interpolation ticker for gold reserves.
+ */
+export function startGoldMileometerTicker(containerEl) {
+  if (containerEl) {
+    activeGoldContainerEl = containerEl;
+  }
+  ensureUnifiedMileometerTicker();
+}
+
+/**
+ * Stops the continuous mileometer tickers.
  */
 export function stopPopulationMileometerTicker() {
+  activePopContainerEl = null;
+  if (!activeGoldContainerEl && mileometerTimer) {
+    clearInterval(mileometerTimer);
+    mileometerTimer = null;
+  }
+}
+
+export function stopGoldMileometerTicker() {
+  activeGoldContainerEl = null;
+  if (!activePopContainerEl && mileometerTimer) {
+    clearInterval(mileometerTimer);
+    mileometerTimer = null;
+  }
+}
+
+export function stopAllMileometerTickers() {
+  activePopContainerEl = null;
+  activeGoldContainerEl = null;
   if (mileometerTimer) {
     clearInterval(mileometerTimer);
     mileometerTimer = null;

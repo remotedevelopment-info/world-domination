@@ -19,6 +19,10 @@ import {
   setPopulationMileometerRate,
   startPopulationMileometerTicker,
   stopPopulationMileometerTicker,
+  syncGoldMileometerAnchor,
+  setGoldMileometerRate,
+  startGoldMileometerTicker,
+  stopGoldMileometerTicker,
 } from "./mileometer.js";
 
 let currentConsoleBay = "all";
@@ -84,6 +88,7 @@ export function closeKingdomCommandCenter() {
   if (cc) cc.classList.add("hidden");
   stopTerritoryRoundRobinUpdater();
   stopPopulationMileometerTicker();
+  stopGoldMileometerTicker();
   activeCommandCenterKingdom = null;
   lastEconomyUserActionTime = 0;
   if (debouncedPushSettingsTimer) {
@@ -174,7 +179,8 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   }
   const resVal = document.getElementById("cc-meter-res-val");
   if (resVal) {
-    renderMileometer(resVal, kingdom.resources ?? 500, false);
+    syncGoldMileometerAnchor(kingdom.resources ?? 500);
+    startGoldMileometerTicker(resVal);
   }
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) {
@@ -223,14 +229,12 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   if (typeof kingdom.infrastructure === "number") infraLevel = kingdom.infrastructure;
 
   renderMeters();
-  setMeter("cc-meter-population", pop, 5000);
-  setMeter("cc-meter-resources", resAmt, 3000);
-  setMeter("cc-meter-troops", central, 200);
+  setMeter("cc-meter-troops", central, Math.max(100, Math.round(central * 1.5)));
 
   const popVal = document.getElementById("cc-meter-pop-val");
   if (popVal) syncPopulationMileometerAnchor(pop);
   const resVal = document.getElementById("cc-meter-res-val");
-  if (resVal) renderMileometer(resVal, resAmt, true);
+  if (resVal) syncGoldMileometerAnchor(resAmt);
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) renderMileometer(troopVal, central, true);
 
@@ -295,12 +299,6 @@ export function applyLiveCommandCenterUpdate(kingdom) {
       kingdom.economy.inflation_rate,
       kingdom.economy.effective_balance ?? kingdom.economy.budget_balance
     );
-    const balEl = document.getElementById("cc-budget-balance");
-    if (balEl) {
-      const b = kingdom.economy.effective_balance ?? Math.max(0, kingdom.economy.budget_balance || 0);
-      balEl.textContent = `+${b.toLocaleString()}/tick`;
-      balEl.classList.remove("negative");
-    }
   }
 
   updateStepperDisplay();
@@ -342,14 +340,12 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   infraLevel = detail?.infrastructure || 0;
 
   renderMeters();
-  setMeter("cc-meter-population", pop, 5000);
-  setMeter("cc-meter-resources", resAmt, 3000);
-  setMeter("cc-meter-troops", central, 200);
+  setMeter("cc-meter-troops", central, Math.max(100, Math.round(central * 1.5)));
 
   const popVal = document.getElementById("cc-meter-pop-val");
   if (popVal) syncPopulationMileometerAnchor(pop);
   const resVal = document.getElementById("cc-meter-res-val");
-  if (resVal) renderMileometer(resVal, resAmt, true);
+  if (resVal) syncGoldMileometerAnchor(resAmt);
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) renderMileometer(troopVal, central, true);
 
@@ -1096,7 +1092,11 @@ export function updateEconomyHintsLive() {
     const netPopChange = naturalGrowth + netMigration;
     setPopulationMileometerRate(netPopChange);
     popGrowthEl.textContent = `${netPopChange >= 0 ? "+" : ""}${netPopChange.toLocaleString()}/yr (Mig: ${netMigration >= 0 ? "+" : ""}${netMigration.toLocaleString()})`;
-    popGrowthEl.style.color = netPopChange < 0 ? "#ff6b6b" : "#4ade80";
+    popGrowthEl.className = netPopChange < 0 ? "gauge-delta negative" : "gauge-delta positive";
+
+    // Update Population Rate / Trend Variometer (Center-Zero: -75deg to +75deg)
+    const maxPopRate = Math.max(1000, Math.round(pop * 0.03));
+    setRateMeter("cc-meter-population", netPopChange, maxPopRate, "#4ade80", "#ff6b6b");
   }
 
   // Update Dynamic Table Header with actual simulation years
@@ -1166,6 +1166,11 @@ export function updateEconomyHintsLive() {
 
   setCell("cc-ly-balance", `<strong>${lyBalSign}${Math.abs(lyBal).toLocaleString()}</strong>`, lyBalClass);
   setCell("cc-ty-balance", `<strong>${tyBalSign}${Math.abs(tyBal).toLocaleString()}${tyBalSuffix}</strong>`, tyBalClass);
+
+  // Update Gold Reserves Mileometer Rate & Rate / Trend Variometer
+  setGoldMileometerRate(tyBal);
+  const maxGoldRate = Math.max(500, Math.round(Math.max(totalRevenue, cappedBudget.effTotal) * 0.5));
+  setRateMeter("cc-meter-resources", tyBal, maxGoldRate, "#ffd700", "#ff6b6b");
 
   const balRow = document.getElementById("cc-balance-row");
   const balLabel = document.getElementById("cc-balance-label");
@@ -1239,7 +1244,9 @@ export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance)
   const gdpValEl = document.getElementById("cc-meter-gdp-val");
   if (gdpValEl && typeof gdp === "number") {
     renderMileometer(gdpValEl, Math.round(gdp), true);
-    setMeter("cc-meter-gdp", gdp, 500);
+    const pop = commandCenterDetail?.population || activeCommandCenterKingdom?.population || 1000;
+    const maxGdp = Math.max(1000, Math.round(pop * 0.15));
+    setMeter("cc-meter-gdp", gdp, maxGdp);
   }
 
   const curEl = document.getElementById("cc-currency-val");
@@ -1249,8 +1256,16 @@ export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance)
 
   const balEl = document.getElementById("cc-budget-balance");
   if (balEl && typeof balance === "number") {
-    balEl.textContent = `${balance >= 0 ? "+" : ""}${balance}/tick`;
-    balEl.classList.toggle("negative", balance < 0);
+    if (balance < 0) {
+      balEl.textContent = `${balance.toLocaleString()}/yr (Draining)`;
+      balEl.className = "gauge-delta negative";
+    } else if (balance > 0) {
+      balEl.textContent = `+${balance.toLocaleString()}/yr (Surplus)`;
+      balEl.className = "gauge-delta surplus";
+    } else {
+      balEl.textContent = `0/yr (Balanced)`;
+      balEl.className = "gauge-delta";
+    }
   }
 }
 
@@ -1818,18 +1833,43 @@ export function renderMeters() {
     const el = document.getElementById(id);
     if (!el) return;
 
+    const isRateGauge = id === "cc-meter-population" || id === "cc-meter-resources";
+    if (isRateGauge) {
+      el.classList.add("rate-gauge");
+    }
+
     let ticks = el.querySelector(".meter-ticks");
     if (!ticks) {
       ticks = document.createElement("div");
-      ticks.className = "meter-ticks";
+      ticks.className = isRateGauge ? "meter-ticks rate-ticks" : "meter-ticks";
       el.appendChild(ticks);
+    } else if (isRateGauge) {
+      ticks.className = "meter-ticks rate-ticks";
     }
+
     if (!ticks.children.length) {
-      for (let v = 0; v <= 100; v += 10) {
-        const t = document.createElement("span");
-        if (v % 25 === 0) t.className = "tick-major";
-        t.style.transform = `rotate(${v * DIAL_DEG_PER_UNIT}deg)`;
-        ticks.appendChild(t);
+      if (isRateGauge) {
+        // Center-zero ticks from -75deg (decreasing) to +75deg (increasing)
+        const angles = [-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75];
+        angles.forEach((deg) => {
+          const t = document.createElement("span");
+          if (deg === 0) {
+            t.className = "tick-major tick-zero";
+          } else if (deg < 0) {
+            t.className = (Math.abs(deg) === 75 || Math.abs(deg) === 45) ? "tick-major tick-neg" : "tick-neg";
+          } else {
+            t.className = (deg === 75 || deg === 45) ? "tick-major tick-pos" : "tick-pos";
+          }
+          t.style.transform = `rotate(${deg}deg)`;
+          ticks.appendChild(t);
+        });
+      } else {
+        for (let v = 0; v <= 100; v += 10) {
+          const t = document.createElement("span");
+          if (v % 25 === 0) t.className = "tick-major";
+          t.style.transform = `rotate(${v * DIAL_DEG_PER_UNIT}deg)`;
+          ticks.appendChild(t);
+        }
       }
     }
 
@@ -1837,9 +1877,47 @@ export function renderMeters() {
     if (!needle) {
       needle = document.createElement("div");
       needle.className = "meter-needle";
+      if (isRateGauge) {
+        needle.style.transform = "rotate(0deg)";
+      }
       el.appendChild(needle);
     }
   });
+}
+
+export function setRateMeter(elementId, rate, maxRate, posColor = "#4ade80", negColor = "#ff6b6b") {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  const max = Math.max(1, maxRate);
+  const ratio = Math.min(1, Math.max(-1, rate / max));
+  const deg = Math.round(ratio * 75); // -75deg (decreasing) to +75deg (increasing)
+
+  const needle = el.querySelector(".meter-needle");
+  if (needle) {
+    needle.style.transform = `rotate(${deg}deg)`;
+    if (deg > 3) {
+      needle.style.background = `linear-gradient(180deg, ${posColor}, #8b6508)`;
+      needle.style.boxShadow = `0 0 6px ${posColor}`;
+    } else if (deg < -3) {
+      needle.style.background = `linear-gradient(180deg, ${negColor}, #8b1508)`;
+      needle.style.boxShadow = `0 0 6px ${negColor}`;
+    } else {
+      needle.style.background = `linear-gradient(180deg, #ffd700, #8b6508)`;
+      needle.style.boxShadow = `0 0 4px rgba(255,215,0,0.5)`;
+    }
+  }
+
+  // Illuminated directional arc from 12 o'clock (0deg):
+  if (deg > 1) {
+    el.style.background = `conic-gradient(from 0deg, ${posColor} 0deg, ${posColor} ${deg}deg, rgba(255,255,255,0.06) ${deg}deg, rgba(255,255,255,0.06) 360deg)`;
+  } else if (deg < -1) {
+    const absDeg = Math.abs(deg);
+    const startDeg = 360 - absDeg;
+    el.style.background = `conic-gradient(from ${startDeg}deg, ${negColor} 0deg, ${negColor} ${absDeg}deg, rgba(255,255,255,0.06) ${absDeg}deg, rgba(255,255,255,0.06) 360deg)`;
+  } else {
+    el.style.background = `radial-gradient(circle at 50% 50%, rgba(255,215,0,0.08) 0%, rgba(0,0,0,0.4) 100%)`;
+  }
 }
 
 export function setMeter(elementId, value, max) {
