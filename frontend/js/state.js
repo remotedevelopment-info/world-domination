@@ -1,6 +1,11 @@
 // state.js - Centralized application state store
 
-import { HISTORICAL_KINGDOMS, HISTORICAL_KINGDOM_BY_CODE } from "./map/polygons.js";
+import {
+  HISTORICAL_KINGDOMS,
+  HISTORICAL_KINGDOM_BY_CODE,
+  getKingdomPolygon,
+  evaluateSpatialEmergence,
+} from "./map/polygons.js";
 
 // Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
 export const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
@@ -18,6 +23,12 @@ export const IMPERIAL_SUCCESSORS = {
   OTT: "TUR", // Ottoman Empire -> Republic of Turkey
   HRE: "AUT", // Holy Roman Empire -> Archduchy/Empire of Austria (electorates sovereign)
   KAL: "SWE", // Kalmar Union -> Kingdom of Sweden (Sweden SWE inherited by Kalmar owner)
+  MOR: "MAR", // Sultanate of Morocco -> Kingdom of Morocco
+  PER_EM: "SAU", // Safavid/Qajar Persia -> Modern Middle East
+  MUG: "IND", // Mughal Empire -> India
+  CZE_SLO: "CZE", // Czechoslovakia -> Czechia
+  YUG: "SRB", // Yugoslavia -> Serbia
+  KOR: "KOR_S", // Unified Korea -> South Korea
 };
 
 export const state = {
@@ -42,6 +53,8 @@ export const state = {
     polynesiaIsles: false, // Optional advanced oceanic play meta theme
   },
   showMapLabels: true, // Control switch: show/hide name plate abbreviations on base map
+  mapResolution:
+    (typeof localStorage !== "undefined" && localStorage.getItem("mapResolution")) || "fast", // "fast" | "high_res" | "realistic"
 };
 
 // Initialize session from localStorage if available
@@ -102,6 +115,15 @@ export function setTroops(troops) {
   state.troops = troops;
 }
 
+export function setMapResolutionState(resolution) {
+  const valid = ["fast", "high_res", "realistic"].includes(resolution) ? resolution : "fast";
+  state.mapResolution = valid;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("mapResolution", valid);
+  }
+  return valid;
+}
+
 /**
  * Enriches server countries with historical era metadata, ensures all 32 era
  * countries exist in the master list, and filters `state.kingdoms` to those
@@ -142,6 +164,12 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
       ? meta.borders
       : [];
 
+    const customPolygon = Array.isArray(parsedBorders?.polygon)
+      ? parsedBorders.polygon
+      : Array.isArray(raw.polygon)
+      ? raw.polygon
+      : null;
+
     const birthYear =
       typeof parsedBorders?.birth_year === "number"
         ? parsedBorders.birth_year
@@ -180,6 +208,7 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
       parent,
       historical_note: historicalNote,
       borderList,
+      customPolygon,
     });
   });
 
@@ -355,6 +384,29 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
       k.isSibling = false;
       k.diplomaticStatus = "sovereign";
       k.tributeRate = 0.0;
+    }
+  });
+
+  // Three-Case Spatial Era Emergence & Overlap Evaluation:
+  // If a country's territory is enclosed (>= 85% overlap) by a larger active territory,
+  // it emerges as a Client State (vassal) of that outer state.
+  const activeWithPolys = active.map((k) => ({
+    code: k.code,
+    poly: getKingdomPolygon(k.code, currentYear, "fast", k.customPolygon),
+  }));
+  active.forEach((k) => {
+    if (!k.isClientState) {
+      const myPoly = getKingdomPolygon(k.code, currentYear, "fast", k.customPolygon);
+      const spatial = evaluateSpatialEmergence(k.code, myPoly, activeWithPolys);
+      k.spatialEmergenceStatus = spatial.status;
+      if (spatial.status === "client_state" && spatial.suzerainCode && activeCodes.has(spatial.suzerainCode)) {
+        k.isClientState = true;
+        k.suzerainCode = spatial.suzerainCode;
+        k.diplomaticStatus = "client";
+        k.tributeRate = 0.20;
+      }
+    } else {
+      k.spatialEmergenceStatus = "client_state";
     }
   });
 

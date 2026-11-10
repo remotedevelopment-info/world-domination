@@ -127,3 +127,8 @@ In a multi-user environment, arbitrary players cannot mutate the server timeline
    - The server engine checks for players who have been inactive for $> 7$ days.
    - Abandoned kingdoms have their ownership reset to `null` and are returned to unclaimed status across all players' screens.
 
+3. **Authoritative Map Geometry vs. Client-Side Resolution Switching**:
+   - **Baseline in `polygons.js`, Runtime Truth in Database**: The starting coordinates of countries at the beginning of each Era are seeded from `frontend/js/map/polygons.js`. Once gameplay progresses and new countries emerge at era boundaries, the PostgreSQL database (`countries` / `game_states` / `country_geometries`) is the single source of truth for territorial ownership, client-state suzerainty (when a new country's land is enclosed by a larger territory), and clipped boundaries (when a new country's land is partially overlapped by existing territories).
+   - **Per-User Cartographic Resolution Pull-Down (`fast` | `high_res` | `realistic`)**: Individual member users can switch their local rendering resolution via the header panel pull-down (`#map-resolution-select`) at any time during live multi-user play. Because all three resolution tiers (`fast`, `high_res`, `realistic`) share identical topological frontier anchors and symmetric arc subdivisions, switching resolution re-renders the player's board with higher geographic exactness without desynchronizing gameplay state or affecting other connected players.
+
+

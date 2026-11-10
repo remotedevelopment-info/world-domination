@@ -108,6 +108,46 @@ body {
 .kingdom-info h3 { color: #ffd700; margin-bottom: 10px; }
 .kingdom-info p { margin: 5px 0; font-size: 0.9em; }
 
+/* Member Header Cartographic Resolution Switcher */
+.header-cartography-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    margin-left: 10px;
+    background: linear-gradient(180deg, #1f2e3d 0%, #141e28 100%);
+    border: 1.5px solid #d4af37;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    white-space: nowrap;
+}
+.carto-select-label {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.76em;
+    font-weight: bold;
+    color: #f5d76e;
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+.carto-resolution-select {
+    background: #101820;
+    color: #fff2a8;
+    border: 1px solid rgba(212, 175, 55, 0.55);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-family: Georgia, serif;
+    font-size: 0.8em;
+    font-weight: bold;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.carto-resolution-select:hover,
+.carto-resolution-select:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.35);
+}
+
 /* Progress Modal & Header Button */
 .progress-modal-btn {
     display: inline-flex;

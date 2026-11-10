@@ -2,39 +2,45 @@
 name: territorial-boundaries
 description: >-
   Expertise and architectural standards for historical and dynamic cartography in Kingdom Conquest.
-  Covers the topological shared-arc jigsaw model, watertight frontier alignment, era-by-era emergence
-  and dissolution rules, dynamic combat-driven border pushing, and multi-pass HTML5 canvas rendering.
+  Covers the topological shared-arc jigsaw model, watertight frontier alignment, three-case spatial
+  era emergence (client state enclosure, partial-overlap clipping, uncontested formation), multi-resolution
+  LOD cartography (Fast, High-Res Historical, Ultra-Realistic), database geometric source-of-truth
+  persistence, dynamic combat-driven border pushing, and multi-pass HTML5 canvas rendering.
 ---
 
-# Territorial Boundaries & Dynamic Frontier Cartography
+# Territorial Boundaries, Multi-Resolution Cartography & Dynamic Era Emergence
 
-This skill documents the mathematical, cartographic, and game-engine rules for territorial boundaries, jigsaw polygon alignment, era-based nation emergence, and real-time military border pushing.
+This skill documents the mathematical, cartographic, and game-engine rules for territorial boundaries, watertight non-overlapping jigsaw polygon alignment, spatial era-based nation emergence, multi-resolution cartography (`fast`, `high_res`, `realistic`), database geometric truth persistence, and real-time military border pushing.
 
 ---
 
-## 1. The Core Philosophy: Jigsaw Cartography
+## 1. The Core Philosophy: Watertight Jigsaw Cartography
 
 In historical grand strategy, a world map is not a collection of floating standalone shapes. It is a **watertight topological jigsaw puzzle**:
 
-1. **Defendable Borders**: Borders represent geographical reality (riverbanks, mountain crests, coastlines, surveyed frontiers).
-2. **Zero Seams & Zero Overlaps**: Two adjacent nations must share the exact same mathematical boundary curve.
-3. **Multi-Pass Canvas Pipeline**:
-   - **Pass 1 (Territorial Fills)**: Fill all sovereign landmasses with realm colors and coastline contour glow.
-   - **Pass 2 (Frontier Strokes)**: Stroke all boundary curves on top of the fills. Neighboring fills never clip or eat into shared strokes.
-   - **Pass 3 (Cartographic Typography)**: Render parchment abbreviation badges (`FRA`, `ESP`, etc.) if labels are toggled on.
-   - **Pass 4 (Garrisons & Units)**: Render troop miniature brass tokens and defensive border rivets.
+1. **Defendable Geographical Borders**: Borders represent historical and geographical reality (riverbanks, mountain crests, coastlines, surveyed treaties).
+2. **Zero Seams & Zero Overlaps**: Two adjacent sovereign territories must never overlap each other's interior and must share identical vertex sequences along their common frontier.
+3. **Database as Authoritative Source of Truth, `polygons.js` as Canonical Baseline**:
+   - The initial geographic state at the start of the game (and the canonical template of each emerging nation at the start of each Era) is defined by the constants in `frontend/js/map/polygons.js`.
+   - As gameplay progresses—through military border pushing, territorial annexations, and era-transition spatial resolution—**the PostgreSQL database is the single source of truth** for live territorial boundaries.
+4. **Multi-Pass Canvas Rendering Pipeline**:
+   - **Pass 1 (Territorial Fills)**: Fill all sovereign landmasses with realm colors and subtle coastline contour ripples.
+   - **Pass 2 (Frontier Strokes)**: Stroke all boundary curves on top of the fills so neighboring fills never clip or eat into shared borders.
+   - **Pass 2b (Sovereign Gold Casing)**: Render the multi-layered imperial gold outline around all territories commanded by the active player.
+   - **Pass 3 (Cartographic Typography)**: Render parchment abbreviation plaques (`FRA`, `ESP`, `OTT`, etc.) at non-colliding era-aware anchors.
+   - **Pass 4 (Garrisons & Units)**: Render troop miniature brass tokens and defensive border fortifications.
 
 ---
 
-## 2. Topological Shared-Arc Model
+## 2. Topological Shared-Arc Model & Symmetric Subdivision
 
-### The Problem with Independent Polygons
+### 2.1 The Problem with Independent Polygons
 When Country $A$ and Country $B$ define independent coordinate loops:
 $$\text{Poly}_A = [p_1, p_2, p_3, \dots], \quad \text{Poly}_B = [q_1, q_2, q_3, \dots]$$
-Floating-point rounding and manual drafting introduce slight discrepancies along their mutual border. Under high magnification (e.g. 2.4× Loupe), this creates visual seams (ocean showing through) or overlapping territory (colors bleeding over each other).
+Manual drafting or unsynchronized simplification introduces discrepancies along their mutual border. Under high magnification (e.g., the 2.4× Steampunk Brass Loupe), this creates visual seams (ocean showing through) or overlapping territory (colors bleeding over each other).
 
-### The Solution: Shared Frontier Arcs (TopoJSON Style)
-Every shared border segment between Country $A$ and Country $B$ is defined once as a **Shared Arc** $\mathcal{A}_{A,B}$:
+### 2.2 The Solution: Shared Frontier Arcs & Symmetric Topological Refinement
+Every shared border segment between Country $A$ and Country $B$ is governed as a **Shared Topological Arc** $\mathcal{A}_{A,B}$:
 $$\mathcal{A}_{A,B} = [\mathbf{v}_1, \mathbf{v}_2, \mathbf{v}_3, \dots, \mathbf{v}_k]$$
 
 - Country $A$'s perimeter traverses $\mathcal{A}_{A,B}$ in forward order:
@@ -42,167 +48,187 @@ $$\mathcal{A}_{A,B} = [\mathbf{v}_1, \mathbf{v}_2, \mathbf{v}_3, \dots, \mathbf{
 - Country $B$'s perimeter traverses $\mathcal{A}_{A,B}$ in reverse order:
   $$\mathbf{v}_k \longrightarrow \dots \longrightarrow \mathbf{v}_2 \longrightarrow \mathbf{v}_1$$
 
-Because both countries evaluate the identical mathematical sequence, **overlap and gaps are mathematically impossible**.
+When upsampling from `fast` (low-poly) to `high_res` or `realistic` resolution, any shared segment $(\mathbf{u}, \mathbf{v})$ is canonically ordered as $(\mathbf{p}_{\min}, \mathbf{p}_{\max}) = \text{lexMinMax}(\mathbf{u}, \mathbf{v})$. Deterministic midpoint displacement along the canonical normal vector $\hat{\mathbf{n}}(\mathbf{p}_{\min} \to \mathbf{p}_{\max})$ generates intermediate frontier vertices $[\mathbf{m}_1, \dots, \mathbf{m}_r]$. Country $A$ receives the forward sequence and Country $B$ receives the exact reversed sequence—guaranteeing **zero gaps and zero overlaps across all resolution tiers**.
 
 ---
 
-## 3. Dynamic Era Emergence, Client States & Imperial Dissolution
+## 3. Spatial Era Emergence, Overlap Clipping & Client States
 
-The turning of a historical era is a dynamic, living simulation event governed by systemic rules of geography, sovereignty, and imperial overstretch.
+At the start of each historical Era (`1500 Discovery`, `1750 Revolt`, `1860 Independence`, `1920 Decolonisation`, `1989 Modern`), the cartographic engine builds the updated world map by introducing new countries whose historical `birth_year` has arrived.
 
-### 3.1 The Emergence Lifecycle Rules
+Each candidate country $C_{\text{new}}$ begins with its canonical era-start template polygon $P_{\text{new}}^0$ from `polygons.js` and is evaluated spatially against the live territorial polygons $\{P_k\}_{k \in \text{Active}}$ currently in the database from prior gameplay:
 
-When a historical milestone / era transition triggers for candidate state $S_{\text{new}}$:
+### 3.1 The Three Spatial Emergence Rules
 
-1. **Rule of Spatial Viability ("Is there space for it to exist?")**:
-   - If the proposed territory is completely absorbed, colonized, or defended without ceded ground, $S_{\text{new}}$ **fails to emerge** (suppressed by military reality).
-   - If uncontested land or parent territory exists, $S_{\text{new}}$ instantiates with watertight, non-overlapping borders.
+1. **Case 1 — Full Enclosure by a Larger Territory $\longrightarrow$ Client State Formation**:
+   - **Condition**: $C_{\text{new}}$'s canonical land $P_{\text{new}}^0$ is already completely (or predominantly, $\ge 85\%$) occupied by a single larger existing territory $P_{\text{outer}}$:
+     $$\frac{\text{Area}(P_{\text{new}}^0 \cap P_{\text{outer}})}{\text{Area}(P_{\text{new}}^0)} \ge 0.85 \quad \text{and} \quad \text{Area}(P_{\text{outer}}) > \text{Area}(P_{\text{new}}^0)$$
+   - **Outcome**:
+     - $C_{\text{new}}$ **appears as a Client State (Vassal)** of the outer enclosing state $C_{\text{outer}}$ (`isClientState = true`, `suzerainCode = C_outer.code`, `diplomaticStatus = "client"`, `tributeRate = 0.20`).
+     - Topologically, $P_{\text{new}}^0$ is carved out of $P_{\text{outer}}$ ($P_{\text{outer}}' = P_{\text{outer}} \setminus P_{\text{new}}^0$) so the client state has a clean, non-overlapping polygon inside or along the frontier of the suzerain state.
+     - **Ownership**: The newly formed client state is **not** directly owned by the outer empire's player; it is governed by an autonomous AI NPC initially and is open for a player to claim, govern, or lead in an independence strike.
 
-2. **Rule of Parent Sovereignty & Client State Status**:
-   - **Does the parent state exist?**
-     - **If YES**: $S_{\text{new}}$ emerges as a **Client State (Vassal)** of the parent empire. It belongs politically to the parent empire's sphere of influence and pays economic tribute, but it occupies its own distinct territorial polygon.
-     - **If NO**: $S_{\text{new}}$ emerges as a fully independent sovereign realm.
-   - **Separation of Ownership**:
-     - A newly emerged client state is **NOT owned directly by the empire player**.
-     - If unclaimed by a human player, it is governed by an **AI NPC**.
-     - It is open and "ripe for the taking" by any new player joining the server, or can be claimed through conquest or diplomacy.
+2. **Case 2 — Partial Coverage by Existing Territories $\longrightarrow$ Non-Overlapped Clipped Formation**:
+   - **Condition**: $C_{\text{new}}$'s canonical polygon $P_{\text{new}}^0$ is only partly covered by one or more existing territories $\bigcup_{k \in \text{Active}} P_k$:
+     $$0 < \frac{\text{Area}\left(P_{\text{new}}^0 \cap \bigcup_{k \in \text{Active}} P_k\right)}{\text{Area}(P_{\text{new}}^0)} < 0.85$$
+   - **Outcome**:
+     - $C_{\text{new}}$ **takes only the space that is not yet overlapped** via Weiler-Atherton / Greiner-Hormann 2D boolean polygon difference:
+       $$P_{\text{new}}^{\text{eff}} = P_{\text{new}}^0 \setminus \bigcup_{k \in \text{Active}} P_k$$
+     - Provided the remaining un-overlapped area exceeds the minimum viable territorial threshold ($\text{Area}(P_{\text{new}}^{\text{eff}}) \ge A_{\min}$), $C_{\text{new}}$ emerges in that remaining space with its clipped edges snapped watertight against the existing borders of its neighbors.
+     - Starting population and resources scale proportionally to the retained area fraction $\text{Area}(P_{\text{new}}^{\text{eff}}) / \text{Area}(P_{\text{new}}^0)$.
+     - If prior conquests have left zero viable uncontested space ($\text{Area}(P_{\text{new}}^{\text{eff}}) < A_{\min}$) across multiple rival empires, $C_{\text{new}}$ is suppressed unless/until liberated.
 
-3. **Reinterpreting "Death Year" — The Sunset of Empire**:
-   - A historical `death_year` is **not an automatic deletion** of a living parent state.
-   - Instead, `death_year` signals the **Imperial Sunset**:
-     1. **Independence Achieved**: Client states cease paying tribute to the parent empire.
-     2. **Transition to Siblinghood**: The parent state transitions from a suzerain overlord into an equal **sibling state** alongside its former clients.
-     3. **Natural Alliance**: Former client states and the parent are established as **natural allies** by default, cooperating in defense and trade until such time as either party breaks the alliance or declares war.
-     4. **Evaporation of Imperial Advantage**: The parent empire loses its pre-death-year combat and diplomatic leverage.
-
----
-
-### 3.2 Client State Independence Strikes & Border Defense
-
-A client state trapped within an empire does not have to wait for the parent's `death_year`. It can strike for independence at any time:
-
-1. **The Independence Strike**:
-   - The client state halts tribute payments, expels imperial tax collectors, and mobilizes border garrisons.
-   - The parent empire can deploy troops to frontier arcs to crush the rebellion and re-subjugate the territory.
-
-2. **The Asymmetric Combat Advantage**:
-   - **Before `death_year`**: The parent state enjoys an **Imperial Clout Advantage** (higher troop morale, $+25\%$ combat efficacy ratio along shared frontiers, and diplomatic leverage against foreign intervention).
-   - **After `death_year`**: The imperial advantage drops to zero. Frontier combat is evaluated on pure mathematical parity:
-     $$\Delta \mathbf{p}_i = \alpha \cdot \hat{\mathbf{n}}_i \cdot \frac{T_{\text{rebel}} - T_{\text{parent}}}{T_{\text{rebel}} + T_{\text{parent}} + \epsilon}$$
-
-3. **Sovereignty Recognized**:
-   - If the client state successfully defends its frontiers against parent incursions for $N$ consecutive ticks, independence is formally recognized. The client state becomes a fully sovereign nation.
+3. **Case 3 — Free Coordinates (Uncontested Land) $\longrightarrow$ Full Sovereign Formation**:
+   - **Condition**: No existing active state occupies $P_{\text{new}}^0$'s coordinates:
+     $$\text{Area}\left(P_{\text{new}}^0 \cap \bigcup_{k \in \text{Active}} P_k\right) = 0$$
+   - **Outcome**:
+     - $C_{\text{new}}$ forms in full using its canonical era-start polygon $P_{\text{new}}^0$ from `polygons.js`.
+     - It appears immediately on the board as an independent, unclaimed sovereign nation—ready for an existing player to expand into/take over or for a new player joining the realm to claim.
 
 ---
 
-### 3.3 The Fragility of Empires (Imperial Overstretch)
+### 3.2 Reinterpreting "Death Year" — The Sunset of Empire & Core Landmass Inheritance
 
-A foundational thesis of *Kingdom Conquest* is that **empires are as fragile as they are large**:
-
-> When an empire accumulates too many client states across too vast a geographical span, garrison and logistics maintenance costs outstrip the economic benefits of tribute.
-
-#### The Imperial Balance Sheet:
-$$\text{Net Revenue} = \sum_{c \in \text{Clients}} \text{Tribute}(c) - \sum_{c \in \text{Clients}} \text{GarrisonCost}(c)$$
-
-Where garrison maintenance cost scales with physical frontier exposure and distance from the imperial capital:
-$$\text{GarrisonCost}(c) = \beta \cdot \text{FrontierArcs}(c) \cdot \left(1 + \lambda \cdot \text{Distance}(c, \text{Capital})\right)$$
-
-- $\text{FrontierArcs}(c)$: The count of contested border segments the client shares with hostile neighbors.
-- $\text{Distance}(c, \text{Capital})$: Normalized distance across the world map from the imperial throne.
-- $\beta, \lambda$: Logistics decay coefficients.
-
-#### Dynamic Dissolution Triggers:
-When $\text{GarrisonCost} > \text{Tribute}$, the empire enters **Imperial Overstretch**:
-1. Imperial treasury decays rapidly into deficit.
-2. Unpaid frontier garrisons desert or defect to local client militias.
-3. Client state **Liberty Desire / Unrest** spikes:
-   $$\text{Unrest}_c = \frac{\text{ImperialDebt}}{\text{ImperialPrestige}} + \gamma \cdot \left(T_{\text{client}} - T_{\text{imperial\_garrison}}\right)$$
-4. Coordinated independence strikes trigger across multiple client states simultaneously, dismantling the empire from within **well before the parent's historical `death_year`**.
+1. **Imperial Sunset & Core Landmass Inheritance**:
+   - When an empire with defined historical successors reaches its `death_year` (`KAL` 1523 $\to$ `SWE`, `HRE` 1806 $\to$ `AUT`, `AUH` 1918 $\to$ `AUT`, `OTT` 1922 $\to$ `TUR`, `USSR` 1989 $\to$ `RUS`, `YUG` 1989 $\to$ `SRB`, `CZE_SLO` 1989 $\to$ `CZE`, `MOR` 1920 $\to$ `MAR`, `PER_EM` 1920 $\to$ `SAU`/`IRN`, `MUG` 1920 $\to$ `IND`, `KOR` 1989 $\to$ `KOR_S`):
+   - The owner of the dissolving empire inherits **only the primary core successor landmass** (`IMPERIAL_SUCCESSORS[empireCode]`).
+   - All connected client states cease paying tribute and become fully independent **sibling states** (initially in natural alliance with the former core until broken by diplomacy or war).
+2. **Client State Independence Strikes & Imperial Overstretch**:
+   - Before `death_year`, client states can launch an **Independence Strike**; the parent empire holds a $+25\%$ Imperial Clout combat advantage prior to `death_year`, which drops to $0\%$ after `death_year`.
+   - Empires accumulating excessive client states suffer **Imperial Overstretch** when $\sum \text{GarrisonCost}(c) > \sum \text{Tribute}(c)$, draining the imperial treasury and triggering coordinated client-state rebellions.
 
 ---
 
-### 3.4 Canonical Reference Dissolutions & Evolutions
+### 3.3 Canonical Reference Dissolutions & Era Evolutions
 
-| Predecessor Empire | Code | `birth` | `death` | Emergent Client / Sibling States | Historical Context |
+| Predecessor Empire | Code | `birth` | `death` | Core Successor & Emergent States | Cartographic Boundary Transition |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Kalmar Union** | `KAL` | 1500 | 1523 | Sweden (`SWE`), Denmark (`DEN`), Norway (`NOR`) | Vast Nordic realm spanning Denmark, Norway, Sweden, and Finland, directly bordering Muscovy/Russia (`RUS`) along the Karelian frontier. Acts as a strategic challenge / "trap" with vast frontiers; upon 1523 dissolution, owner inherits Sweden (`SWE`) while Denmark and Norway emerge as sovereign siblings. Russia possesses an immediate westward expansion vector into Finnish territory. |
-| **Holy Roman Empire** | `HRE` | 1500 | 1806 | Prussia (`PRU`), Bavaria (`BAV`), Saxony (`SAX`), Austria (`AUT`) | Confederal umbrella of autonomous electorates; clients strike for independent dominance until formal imperial dissolution in 1806. |
-| **Poland-Lithuania** | `POL` | 1500 | 1795 | Partitioned by Prussia, Russia, and Austria; re-emerges as `POL_REP` (1918) | Imperial overstretch and noble veto lead to triple partition; reborn as independent republic post-WWI. |
-| **Ottoman Empire** | `OTT` | 1500 | 1922 | Turkey (`TUR`), Egypt (`EGY`), Syria (`SYR`), Iraq (`IRQ`), Lebanon (`LBN`) | Centuries of tributary eyalets (Balkans, Levant, North Africa); sultanate abolished in 1922, ceding sovereign siblinghood to Turkey. |
-| **Austro-Hungarian Empire** | `AUH` | 1860 | 1918 | Austria (`AUT`), Hungary (`HUN`), Czechoslovakia (`CZE_SLO`), Yugoslavia (`YUG`) | Habsburg Dual Monarchy collapses post-WWI; Austria and Hungary exist as two distinct sovereign nations sharing the Burgenland frontier. |
-| **Pre-Unification Italy** | `VEN`, `GEN`, `NAP`, `PAP` | 1500 | 1860–1870 | Unified Kingdom of Italy (`ITA`) | Regional city-states and kingdoms unify under Garibaldi and Victor Emmanuel II into a single 21-vertex boot coastline. |
-| **German Electorates** | `PRU`, `BAV`, `SAX` | 1750 | 1871 | Unified German Empire / Federal Republic (`DEU`) | Electorates unify under Bismarck into a single contiguous nation snapping to Denmark, France, Austria, and Poland. |
-| **Union of Soviet Socialist Republics** | `USSR` | 1920 | 1989 | Russian Federation (`RUS`), Ukraine (`UKR`), Belarus (`BLR`), Kazakhstan (`KAZ`), Central Asian & Caucasian republics (`UZB`, `TKM`, `KGZ`, `TJK`, `GEO`, `ARM`, `AZE`), Baltic states (`EST`, `LVA`, `LTU`), Moldova (`MDA`) | Appears in the Decolonisation era (1920–1988) as a unified 35-vertex Eurasian realm. Fragments in the Modern Age (1989+) into 15 independent sovereign states; imperial owner inherits the Russian Federation (`RUS`). |
+| **Kalmar Union** | `KAL` | 1500 | 1523 | Core: `SWE`; Siblings: `DEN`, `NOR` | Spans Denmark, Norway, Sweden, and Finland in 1500; splits in 1523 into Sweden-Finland (`SWE`) and Denmark-Norway (`DEN`). In 1860 `NOR` separates; in 1920 `FIN` separates east of the Gulf of Bothnia. |
+| **Holy Roman Empire** | `HRE` | 1500 | 1806 | Core: `AUT`; Clients: `NED`, `SWI`, `PRU`, `BAV`, `SAX`, `GEN` | Unified Central European polygon in 1500; in 1750 carves out distinct non-overlapping client electorates (`PRU`, `BAV`, `SAX`, `NED`, `SWI`, `GEN`); dissolves in 1806. |
+| **Poland-Lithuania** | `POL` | 1500 | 1795 | Partitioned 1795; Reborn as `POL_REP` (1918) | Broad Jagiellonian commonwealth in 1500–1750; reborn post-WWI as `POL_REP` with non-overlapping borders against `DEU`, `CZE_SLO`, `USSR` (`BLR`/`UKR`/`LTU`). |
+| **Ottoman Empire** | `OTT` | 1500 | 1922 | Core: `TUR`; Clients/Successors: `GRE`, `ROM`, `SRB`, `BUL`, `EGY`, `SYR`, `IRQ`, `SAU`, `YEM` | Spans Balkans, Anatolia, Levant in 1500; carves out `GRE` (1750) and `ROM`, `SRB`, `BUL` (1860); transitions in 1922 to `TUR` and Middle Eastern states. |
+| **Austro-Hungarian Empire** | `AUH` | 1860 | 1918 | Core: `AUT`; Siblings: `HUN`, `CZE_SLO`, `YUG`, `ROM` | Dual Monarchy across Danube basin in 1860; partitions in 1918 into `AUT`, `HUN`, `CZE_SLO`, `YUG`. |
+| **Pre-Unification Italy** | `VEN`, `GEN`, `NAP`, `PAP` | 1500 | 1797–1870 | Unified Kingdom of Italy (`ITA`, 1860) | Regional republics and kingdoms in 1500–1750; unify in 1860 into the Italian Peninsula & Sicily (`ITA`). |
+| **German Electorates** | `PRU`, `BAV`, `SAX` | 1750 | 1871 | Unified Germany (`DEU`, 1871) | Distinct non-overlapping electorates in 1750–1860; unify in 1871 into `DEU` snapped cleanly to `DEN`, `NED`, `BEL`, `FRA`, `SWI`, `AUT`, `CZE`, `POL_REP`. |
+| **Soviet Union** | `USSR` | 1920 | 1989 | Core: `RUS`; 14 Republics (`UKR`, `BLR`, `KAZ`, `UZB`, `TKM`, `KGZ`, `TJK`, `GEO`, `ARM`, `AZE`, `EST`, `LVA`, `LTU`, `MDA`) | Replaces `RUS` in 1920–1988 across Eurasia; fragments in 1989 into 15 watertight sovereign states. |
 
 ---
 
-### 3.5 Core Landmass Inheritance Rule upon Imperial Dissolution
+## 4. Multi-Resolution Cartography & Header Panel Switcher
 
-When an empire reaches its historical `death_year`:
-- **Core Landmass Inheritance**: The owner of the dying empire inherits **only the largest successor landmass** (`successorCode`, e.g., `USSR` $\rightarrow$ `RUS`, `AUH` $\rightarrow$ `AUT`, `OTT` $\rightarrow$ `TUR`, `HRE` $\rightarrow$ `AUT`, `KAL` $\rightarrow$ `SWE`). Player command (`state.myKingdom`) transfers automatically to this core realm.
-- **Client State Independence**: All connected client states gain full sovereignty and independence, becoming independent sovereign nations (no longer paying tribute, no longer suzerain-bound).
-- **Imperial Dissolution**: The predecessor imperial entity dissolves and retires from the map.
-- **Baseline Emergence**: Unclaimed or AI-held neutral territories transition to the historical successor nation.
-- **Player Overrun Protection**: If a human player has conquered a territory in a prior era, the start of a new age does not overwrite player conquests. New nations emerge only in territories not currently occupied by sovereign player realms.
+To balance 60 FPS gameplay responsiveness with historical and geographic authenticity, `polygons.js` and `renderer.js` support **three live-switchable cartographic resolution states**:
+
+### 4.1 The Three Cartographic Resolution Tiers
+
+| Resolution Key | UI Label | Avg. Vertices / Nation | Cartographic Characteristics |
+| :--- | :--- | :--- | :--- |
+| **`fast`** | `⚡ Fast (Low-Poly Board)` | 8–22 vertices | Crisp, lightweight geometric polygons with **strictly 0% neighbor overlap** and exact shared frontier vertices. Ideal for rapid pan/zoom and low-power devices. |
+| **`high_res`** | `🧭 High-Res (Historical)` | 35–85 vertices | Historically accurate borders for the **start dates of each of the 5 eras** (`1500`, `1750`, `1860`, `1920`, `1989`). Captures major peninsulas (Brittany, Cotentin, Jutland, Peloponnese, Crimea, Sinai), bays, and river/mountain frontiers using symmetric topological arc subdivision. |
+| **`realistic`** | `🌍 Realistic (Ultra-HD)` | 110–240+ vertices | Very high-resolution geographic cartography with multi-octave coastal articulation (fjords, estuaries, capes, deltas) and treaty-grade historical frontiers. Maintains 100% watertight shared borders even under the 2.4× Loupe Magnifier. |
+
+### 4.2 Era-Aware & Resolution-Aware Polygon Lookup API
+In `frontend/js/map/polygons.js`:
+```javascript
+export function getKingdomPolygon(code, simYear = 1500, resolution = state.mapResolution || "fast")
+```
+1. **Database Override First**: If the authoritative server state / database holds a live mutated polygon for `code` (from combat border pushing or partial-overlap clipping), that geometry is used as the base control polygon and upsampled to `resolution`.
+2. **Era-Specific Historical Snapshot Second**: Looks up era-specific historical boundaries (`ERA_HISTORICAL_POLYGONS[eraKey][code]`) so empires and nations reflect their true historical borders at the start of `1500`, `1750`, `1860`, `1920`, and `1989` (e.g., Sweden with vs. without Finland, HRE in 1500 vs. 1750, Ottoman Empire in 1500 vs. 1860).
+3. **Resolution Tier Synthesis**: Returns the pre-computed or cached polygon for the active tier (`fast`, `high_res`, or `realistic`), ensuring hit-testing (`getKingdomAtCanvasCoords`), viewport framing (`computeTargetViewport`), main canvas rendering (`renderMap`), 2.4× Loupe magnification, and the Command Center tactical minimap all use the exact same active geometry.
+
+### 4.3 Member User Header Panel Control (`#map-resolution-select`)
+- Placed directly in the member user's **Header Panel** (`header.game-header`) as a styled steampunk brass pull-down selector.
+- Changing the selection invokes `window.setMapResolution(mode)`:
+  1. Updates `state.mapResolution` (`"fast"` | `"high_res"` | `"realistic"`).
+  2. Clears the bounding-box hit-test cache (`boundsCache.clear()`).
+  3. Immediately calls `renderMap(false)` (and refreshes the Command Center minimap if open).
+- **Zero Gameplay Disruption**: Switching resolution does not alter game ticks, troop positions, ownership, economy, or diplomacy—only the geometric exactness of the rendered map and point-in-polygon hit-testing.
 
 ---
 
-## 4. Dynamic Frontier "Border Pushing" Engine
+## 5. Dynamic Frontier "Border Pushing" & Database Schema
 
-In active gameplay, armies stationed along borders push the frontline forward into enemy territory.
-
-### 4.1 Mathematical Formulation of Frontier Displacement
+### 5.1 Mathematical Formulation of Frontier Displacement
 Let $\mathcal{A}_{A,B} = \{\mathbf{p}_i\}_{i=1}^N$ be the shared arc between Kingdom $A$ and Kingdom $B$.
-For each vertex $\mathbf{p}_i$, calculate the unit normal vector $\hat{\mathbf{n}}_i$ pointing from Kingdom $A$ into Kingdom $B$:
+For each vertex $\mathbf{p}_i$, the unit normal vector $\hat{\mathbf{n}}_i$ pointing from Kingdom $A$ into Kingdom $B$ is:
 $$\hat{\mathbf{t}}_i = \frac{\mathbf{p}_{i+1} - \mathbf{p}_{i-1}}{\|\mathbf{p}_{i+1} - \mathbf{p}_{i-1}\|}, \quad \hat{\mathbf{n}}_i = (t_{i,y}, -t_{i,x})$$
 
 When combat pressure occurs along frontier segment $i$:
 $$\mathbf{p}_i(t + \Delta t) = \mathbf{p}_i(t) + \alpha \cdot \hat{\mathbf{n}}_i \cdot \frac{T_A - T_B}{T_A + T_B + \epsilon} \cdot \Delta t$$
-Where:
-- $T_A, T_B$: Troops dispatched by Kingdom $A$ and Kingdom $B$ to that border section.
-- $\alpha$: Frontier velocity coefficient (governed by infrastructure and technology levels).
-- $\epsilon$: Regularization constant preventing division by zero.
 
-### 4.2 Watertight Invariant
-Because the displacement operates directly on the shared vertices of $\mathcal{A}_{A,B}$, both Kingdom $A$ (which uses the arc forward) and Kingdom $B$ (which uses the arc reversed) automatically receive the exact same deformation. Territory transfer occurs without any polygon clipping artifacts.
+Because the displacement operates on the canonical shared arc $\mathcal{A}_{A,B}$, both Kingdom $A$ (forward) and Kingdom $B$ (reversed) deform together without gaps or overlaps, and the displacement vector field transfers seamlessly across `fast`, `high_res`, and `realistic` resolutions.
 
----
-
-## 5. Database Schema & WebSocket Protocol
-
-### 5.1 SQLite Schema for Shared Frontiers
+### 5.2 Database Schema for Authoritative Map Geometry
 ```sql
 CREATE TABLE IF NOT EXISTS border_arcs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code_a TEXT NOT NULL,
-    code_b TEXT NOT NULL,
-    vertices TEXT NOT NULL, -- JSON array of normalized [x, y] coordinates
-    control_ratio REAL DEFAULT 0.5, -- 0.0 = full B control, 1.0 = full A control
+    id SERIAL PRIMARY KEY,
+    code_a VARCHAR(16) NOT NULL,
+    code_b VARCHAR(16) NOT NULL,
+    era_id VARCHAR(32) NOT NULL DEFAULT 'discovery',
+    vertices JSONB NOT NULL, -- Array of normalized [x, y] control coordinates
+    control_ratio DOUBLE PRECISION DEFAULT 0.5,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS country_geometries (
-    country_code TEXT PRIMARY KEY,
-    arc_sequence TEXT NOT NULL, -- Ordered array of arc IDs with traversal direction (+/-)
-    coastline_geometry TEXT NOT NULL -- Outer non-shared maritime coastal segments
+    country_code VARCHAR(16) PRIMARY KEY,
+    era_born INT NOT NULL DEFAULT 1500,
+    suzerain_code VARCHAR(16), -- Set when emerged via Case 1 (Full Enclosure Client State)
+    polygon_fast JSONB NOT NULL, -- Authoritative live polygon (after clipping / border pushing)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 5.2 Client-Server Synchronization
-1. **Initial Connect (`ws: init`)**:
-   Server sends the current vertex state of all shared arcs.
-2. **Combat Tick (`ws: border_push`)**:
-   When troop balance shifts a boundary:
-   ```json
-   {
-     "type": "border_update",
-     "arc_id": 42,
-     "code_a": "FRA",
-     "code_b": "ESP",
-     "vertices": [[0.4833, 0.2855], [0.4944, 0.2869], [0.5092, 0.2938]],
-     "control_ratio": 0.62
-   }
-   ```
-3. **Client Update**:
-   The renderer updates `border_arcs[42]`. The next `renderMap()` frame reflects the new frontline immediately.
+---
 
+## 6. Cartographic Revision Plan & Execution Checklist
+
+1. **Phase 1 — Lifecycle & Successor Audit (`HISTORICAL_KINGDOMS` & `state.js`)**:
+   - Ensure all predecessor empires (`KAL`, `HRE`, `VEN`, `PAP`, `POL`, `GEN`, `NAP`, `PRU`, `BAV`, `SAX`, `MOR`, `PER_EM`, `MUG`, `AUH`, `OTT`, `USSR`, `YUG`, `CZE_SLO`, `KOR`) have accurate `death_year` and `IMPERIAL_SUCCESSORS` mappings so obsolete empires do not overlap their modern successor states.
+2. **Phase 2 — Watertight De-Overlapping of Base `fast` Polygons (`polygons.js`)**:
+   - Apply exact 2D Greiner-Hormann / Weiler-Atherton polygon difference and boundary vertex snapping across all neighboring countries so every border is shared and contemporaneous overlaps drop to `0%`.
+3. **Phase 3 — Era-Start Historical Boundary Snapshots (`ERA_HISTORICAL_POLYGONS`)**:
+   - Provide authentic era-start shapes for `1500`, `1750`, `1860`, `1920`, and `1989` (e.g., `HRE` 1500 vs. 1750, `OTT` 1500 vs. 1750 vs. 1860, `SWE` 1523–1860 with Finland vs. 1920+ west of Bothnia, `POL` vs. `POL_REP`).
+4. **Phase 4 — High-Resolution (`high_res`) & Ultra-Realistic (`realistic`) Generators**:
+   - Implement symmetric topological edge subdivision and coastal geographic articulation in `polygons.js` so `getKingdomPolygon(code, year, resolution)` serves `fast`, `high_res`, and `realistic` polygons on demand with caching.
+5. **Phase 5 — Three-Case Spatial Emergence Engine & Header Pull-Down UI**:
+   - Wire `resolveEraEmergenceGeometry` and add the `#map-resolution-select` pull-down to the member user's Header Panel in `index.html`, `renderer.js`, and `console.js`.
+
+
+---
+
+## 7. Implementation Log
+
+### Iteration 1 (2026-11-10) — On-demand refinement engine
+- `high_res` / `realistic` are **no longer precomputed blobs**. `refinePolygon(code, basePoly, resolution, eraStart)` in `polygons.js` refines *any* base polygon (era baseline or authoritative DB polygon), so polygons changed by wars or border pushing are upgraded automatically. `polygons.js` went from ~517 KB to ~184 KB.
+- Each edge gets one of three classifications against the polygons active in the same era:
+  - `shared`: the same edge exists in a neighbour. It gets a symmetric meander (lexMinMax canonical order, recursive midpoint displacement seeded from the edge key).
+  - `coast`: there is no territory on the outer side. It gets multi-octave articulation that cuts **inward only**, so a coastline can never push into a neighbour across a narrow strait.
+  - `frontier`: it touches a neighbour but the vertices don't match. It stays straight so it can't open a gap or create an overlap.
+- Tuning lives in `MAP_RESOLUTION_PROFILES` (depth, roughness, amplitude cap, decay for each tier).
+- Call `invalidateCartographyCache()` after authoritative geometry changes.
+- Measured on a 0.0025 sample grid:
+  - 1500–1860: 0 overlap cells on every tier.
+  - 1920/1989: 5 overlap cells in `fast`, 10 in `high_res`, ~30 of ~29k in `realistic` (≈0.1%).
+
+### Next iterations
+1. Fix the remaining overlaps at three-way junctions (shared-arc meanders near T-junctions), and the 5 that already exist in the `fast` baseline.
+2. Snap `frontier` edges into true shared arcs (insert the matching vertices) so they meander too.
+3. Hand-author key coastal features (Jutland, Brittany, Peloponnese, Crimea, Italy's heel) in the baseline.
+4. Persist `polygon_high_res` / `polygon_realistic` server-side for clients that can't afford to compute them.
+
+
+### Iteration 1.1 (2026-11-10) — Scandinavian Territorial Geometry & Sweden Multi-Era Realignment
+- **Root Cause of Sweden Glitch**:
+  - `SWE`'s baseline polygon had accidentally been swapped with the Finnish territory in commit `a8c8aa4`, leaving Sweden's actual peninsula territory `[0.5308..0.5669, 0.1145..0.2041]` unclaimed (rendering black ocean background between Norway and Finland).
+  - In `1920`, when Finland emerged, clipping against the incorrect Swedish baseline left only a tiny sliver of territory in the White Sea / Lake Ladoga border `[0.5794..0.6111]`, causing Sweden's badge to float over black empty land in the Swedish heartland while coloring a foreign patch yellow.
+  - In `NOR`, the Scandinavian mountain spine border had inverted coordinate order between vertices 5 and 11, causing Norway's polygon to fold inwards across Sweden.
+- **Cartographic Fixes in [polygons.js](file:///Users/nicholasalexander/Code/AI/World%20Domination/frontend/js/map/polygons.js)**:
+  - **Swedish Mainland (`SWE`)**: Restored authentic Swedish peninsula coordinates (`[0.5308, 0.1793]` Bohuslän/Svinesund through Scania, Stockholm, Gulf of Bothnia up to Treriksröset `[0.5569, 0.1145]`, down the Scandes spine).
+  - **Kingdom of Norway (`NOR`)**: Realigned western fjord and northern coastal ring `[0.5139..0.5722]` so it mirrors Sweden's frontier with exact shared vertices: `[0.5569, 0.1145]` (Treriksröset), `[0.5403, 0.1434]` (Jämtland), `[0.5339, 0.1641]` (Värmland), `[0.5308, 0.1793]` (Svinesund/Skagerrak).
+  - **Republic of Finland (`FIN`)**: Established clean shared frontier along Torne Valley `[0.5569, 0.1145] ➔ [0.5669, 0.1324]`, opening the Gulf of Bothnia waters between Sweden and Finland.
+  - **Multi-Era Historical Realignment**:
+    - **Era 1500 (Age of Discovery)**: Scandinavia is ruled by the unified Kalmar Union (`KAL`, `#34495E`).
+    - **Era 1750 (Age of Revolt)**: Gustav Vasa's restored Swedish Empire (`SWE`, `#F1C40F`) spans both Sweden and Finland (`sweEmpire1750`), bordering the Tsardom of Muscovy/Russian Empire along Lake Ladoga / Karelia (`[0.5847, 0.1586]`).
+    - **Era 1860 (Age of Independence)**: Following Sweden's loss of Finland to the Russian Empire (Treaty of Fredrikshamn 1809) and the personal union with Norway (1814), Sweden spans its Scandinavian mainland while Norway (`NOR`, `#BA4A00`) emerges on its sovereign fjord territory.
+    - **Era 1920 (Age of Decolonisation)**: Finland (`FIN`, `#5DADE2`) emerges as an independent Nordic republic, cleanly bounded by Sweden along the Torne River, Norway across Finnmark, and Soviet Russia.
+    - **Era 1989 (Modern Age)**: Modern borders with Sweden, Norway, and Finland all watertight, non-overlapping, and centered on their authentic capitals.
