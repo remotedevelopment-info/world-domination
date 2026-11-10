@@ -192,3 +192,43 @@ CREATE TABLE IF NOT EXISTS country_geometries (
    - Implement symmetric topological edge subdivision and coastal geographic articulation in `polygons.js` so `getKingdomPolygon(code, year, resolution)` serves `fast`, `high_res`, and `realistic` polygons on demand with caching.
 5. **Phase 5 — Three-Case Spatial Emergence Engine & Header Pull-Down UI**:
    - Wire `resolveEraEmergenceGeometry` and add the `#map-resolution-select` pull-down to the member user's Header Panel in `index.html`, `renderer.js`, and `console.js`.
+
+
+---
+
+## 7. Implementation Log
+
+### Iteration 1 (2026-11-10) — On-demand refinement engine
+- `high_res` / `realistic` are **no longer precomputed blobs**. `refinePolygon(code, basePoly, resolution, eraStart)` in `polygons.js` refines *any* base polygon (era baseline or authoritative DB polygon), so polygons changed by wars or border pushing are upgraded automatically. `polygons.js` went from ~517 KB to ~184 KB.
+- Each edge gets one of three classifications against the polygons active in the same era:
+  - `shared`: the same edge exists in a neighbour. It gets a symmetric meander (lexMinMax canonical order, recursive midpoint displacement seeded from the edge key).
+  - `coast`: there is no territory on the outer side. It gets multi-octave articulation that cuts **inward only**, so a coastline can never push into a neighbour across a narrow strait.
+  - `frontier`: it touches a neighbour but the vertices don't match. It stays straight so it can't open a gap or create an overlap.
+- Tuning lives in `MAP_RESOLUTION_PROFILES` (depth, roughness, amplitude cap, decay for each tier).
+- Call `invalidateCartographyCache()` after authoritative geometry changes.
+- Measured on a 0.0025 sample grid:
+  - 1500–1860: 0 overlap cells on every tier.
+  - 1920/1989: 5 overlap cells in `fast`, 10 in `high_res`, ~30 of ~29k in `realistic` (≈0.1%).
+
+### Next iterations
+1. Fix the remaining overlaps at three-way junctions (shared-arc meanders near T-junctions), and the 5 that already exist in the `fast` baseline.
+2. Snap `frontier` edges into true shared arcs (insert the matching vertices) so they meander too.
+3. Hand-author key coastal features (Jutland, Brittany, Peloponnese, Crimea, Italy's heel) in the baseline.
+4. Persist `polygon_high_res` / `polygon_realistic` server-side for clients that can't afford to compute them.
+
+
+### Iteration 1.1 (2026-11-10) — Scandinavian Territorial Geometry & Sweden Multi-Era Realignment
+- **Root Cause of Sweden Glitch**:
+  - `SWE`'s baseline polygon had accidentally been swapped with the Finnish territory in commit `a8c8aa4`, leaving Sweden's actual peninsula territory `[0.5308..0.5669, 0.1145..0.2041]` unclaimed (rendering black ocean background between Norway and Finland).
+  - In `1920`, when Finland emerged, clipping against the incorrect Swedish baseline left only a tiny sliver of territory in the White Sea / Lake Ladoga border `[0.5794..0.6111]`, causing Sweden's badge to float over black empty land in the Swedish heartland while coloring a foreign patch yellow.
+  - In `NOR`, the Scandinavian mountain spine border had inverted coordinate order between vertices 5 and 11, causing Norway's polygon to fold inwards across Sweden.
+- **Cartographic Fixes in [polygons.js](file:///Users/nicholasalexander/Code/AI/World%20Domination/frontend/js/map/polygons.js)**:
+  - **Swedish Mainland (`SWE`)**: Restored authentic Swedish peninsula coordinates (`[0.5308, 0.1793]` Bohuslän/Svinesund through Scania, Stockholm, Gulf of Bothnia up to Treriksröset `[0.5569, 0.1145]`, down the Scandes spine).
+  - **Kingdom of Norway (`NOR`)**: Realigned western fjord and northern coastal ring `[0.5139..0.5722]` so it mirrors Sweden's frontier with exact shared vertices: `[0.5569, 0.1145]` (Treriksröset), `[0.5403, 0.1434]` (Jämtland), `[0.5339, 0.1641]` (Värmland), `[0.5308, 0.1793]` (Svinesund/Skagerrak).
+  - **Republic of Finland (`FIN`)**: Established clean shared frontier along Torne Valley `[0.5569, 0.1145] ➔ [0.5669, 0.1324]`, opening the Gulf of Bothnia waters between Sweden and Finland.
+  - **Multi-Era Historical Realignment**:
+    - **Era 1500 (Age of Discovery)**: Scandinavia is ruled by the unified Kalmar Union (`KAL`, `#34495E`).
+    - **Era 1750 (Age of Revolt)**: Gustav Vasa's restored Swedish Empire (`SWE`, `#F1C40F`) spans both Sweden and Finland (`sweEmpire1750`), bordering the Tsardom of Muscovy/Russian Empire along Lake Ladoga / Karelia (`[0.5847, 0.1586]`).
+    - **Era 1860 (Age of Independence)**: Following Sweden's loss of Finland to the Russian Empire (Treaty of Fredrikshamn 1809) and the personal union with Norway (1814), Sweden spans its Scandinavian mainland while Norway (`NOR`, `#BA4A00`) emerges on its sovereign fjord territory.
+    - **Era 1920 (Age of Decolonisation)**: Finland (`FIN`, `#5DADE2`) emerges as an independent Nordic republic, cleanly bounded by Sweden along the Torne River, Norway across Finnmark, and Soviet Russia.
+    - **Era 1989 (Modern Age)**: Modern borders with Sweden, Norway, and Finland all watertight, non-overlapping, and centered on their authentic capitals.
