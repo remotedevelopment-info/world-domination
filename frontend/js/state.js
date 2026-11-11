@@ -115,6 +115,21 @@ export function setTroops(troops) {
   state.troops = troops;
 }
 
+export function clearAllMilitaryVariables() {
+  state.troops = {};
+  if (state.myKingdom) {
+    state.myKingdom.troops = 0;
+    state.myKingdom.troops_levy = 0;
+    state.myKingdom.troops_regular = 0;
+    state.myKingdom.troops_elite = 0;
+    state.myKingdom.fort_n = 0;
+    state.myKingdom.fort_s = 0;
+    state.myKingdom.fort_e = 0;
+    state.myKingdom.fort_w = 0;
+    state.myKingdom.military_delayed_costs = 0;
+  }
+}
+
 export function setMapResolutionState(resolution) {
   const valid = ["fast", "high_res", "realistic"].includes(resolution) ? resolution : "fast";
   state.mapResolution = valid;
@@ -193,6 +208,13 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
         state.troops[raw.id] = { central: raw.troops, borders: { N: 0, S: 0, E: 0, W: 0 } };
       } else {
         state.troops[raw.id].central = raw.troops;
+        if (raw.troops === 0 || currentYear <= 1500.01) {
+          state.troops[raw.id].borders = { N: 0, S: 0, E: 0, W: 0 };
+        }
+      }
+      if (currentYear <= 1500.01) {
+        state.troops[raw.id].central = 0;
+        state.troops[raw.id].borders = { N: 0, S: 0, E: 0, W: 0 };
       }
     }
 
@@ -256,6 +278,25 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
       if (typeof mk.population === "number") state.myKingdom.population = mk.population;
       if (typeof mk.resources === "number") state.myKingdom.resources = mk.resources;
       if (typeof mk.troops === "number") state.myKingdom.troops = mk.troops;
+      if (typeof mk.troops_levy === "number") state.myKingdom.troops_levy = mk.troops_levy;
+      if (typeof mk.troops_regular === "number") state.myKingdom.troops_regular = mk.troops_regular;
+      if (typeof mk.troops_elite === "number") state.myKingdom.troops_elite = mk.troops_elite;
+      if (typeof mk.fort_n === "number") state.myKingdom.fort_n = mk.fort_n;
+      if (typeof mk.fort_s === "number") state.myKingdom.fort_s = mk.fort_s;
+      if (typeof mk.fort_e === "number") state.myKingdom.fort_e = mk.fort_e;
+      if (typeof mk.fort_w === "number") state.myKingdom.fort_w = mk.fort_w;
+      if (typeof mk.military_delayed_costs === "number") state.myKingdom.military_delayed_costs = mk.military_delayed_costs;
+      if (currentYear <= 1500.01) {
+        state.myKingdom.troops = 0;
+        state.myKingdom.troops_levy = 0;
+        state.myKingdom.troops_regular = 0;
+        state.myKingdom.troops_elite = 0;
+        state.myKingdom.fort_n = 0;
+        state.myKingdom.fort_s = 0;
+        state.myKingdom.fort_e = 0;
+        state.myKingdom.fort_w = 0;
+        state.myKingdom.military_delayed_costs = 0;
+      }
       if (mk.economy) state.myKingdom.economy = mk.economy;
       if (mk.economy_rate !== undefined) state.myKingdom.economy_rate = mk.economy_rate;
       if (mk.investment !== undefined) state.myKingdom.investment = mk.investment;

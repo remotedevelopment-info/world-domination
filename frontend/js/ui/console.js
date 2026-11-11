@@ -145,7 +145,7 @@ export function switchActiveTerritory(territoryId) {
   isPushingEconomySettings = false;
   activeCommandCenterKingdom = territory;
   renderTerritoryPills();
-  applyLiveCommandCenterUpdate(territory);
+  applyLiveCommandCenterUpdate(territory, true);
   stepTerritoryRoundRobin(true);
 }
 window.switchActiveTerritory = switchActiveTerritory;
@@ -174,12 +174,12 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   // Initialize and start rotational mileometer ticker for population
   const popVal = document.getElementById("cc-meter-pop-val");
   if (popVal) {
-    syncPopulationMileometerAnchor(kingdom.population ?? 1000);
+    syncPopulationMileometerAnchor(kingdom.population ?? 1000, true);
     startPopulationMileometerTicker(popVal);
   }
   const resVal = document.getElementById("cc-meter-res-val");
   if (resVal) {
-    syncGoldMileometerAnchor(kingdom.resources ?? 500);
+    syncGoldMileometerAnchor(kingdom.resources ?? 500, true);
     startGoldMileometerTicker(resVal);
   }
   const troopVal = document.getElementById("cc-meter-troop-val");
@@ -216,15 +216,23 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   selectRecruitTier(selectedRecruitTier || "levy");
 }
 
-export function applyLiveCommandCenterUpdate(kingdom) {
+export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
   const modal = document.getElementById("kingdom-command-center");
   if (!modal || modal.classList.contains("hidden")) return;
   if (!kingdom) return;
 
   const pop = kingdom.population ?? 1000;
   const resAmt = kingdom.resources ?? 500;
-  const central = kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
-  const borders = state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  let central = kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
+  let borders = state.troops[kingdom.id]?.borders ?? { N: 0, S: 0, E: 0, W: 0 };
+  if (kingdom.troops === 0) {
+    central = 0;
+    borders = { N: 0, S: 0, E: 0, W: 0 };
+    if (state.troops[kingdom.id]) {
+      state.troops[kingdom.id].central = 0;
+      state.troops[kingdom.id].borders = { N: 0, S: 0, E: 0, W: 0 };
+    }
+  }
   if (typeof kingdom.markets === "number") marketsLevel = kingdom.markets;
   if (typeof kingdom.infrastructure === "number") infraLevel = kingdom.infrastructure;
 
@@ -232,15 +240,16 @@ export function applyLiveCommandCenterUpdate(kingdom) {
   setMeter("cc-meter-troops", central, Math.max(100, Math.round(central * 1.5)));
 
   const popVal = document.getElementById("cc-meter-pop-val");
-  if (popVal) syncPopulationMileometerAnchor(pop);
+  if (popVal) syncPopulationMileometerAnchor(pop, forceReset);
   const resVal = document.getElementById("cc-meter-res-val");
-  if (resVal) syncGoldMileometerAnchor(resAmt);
+  if (resVal) syncGoldMileometerAnchor(resAmt, forceReset);
   const troopVal = document.getElementById("cc-meter-troop-val");
   if (troopVal) renderMileometer(troopVal, central, true);
 
   // Safely sync detailed cache with live broadcast
   const detail = commandCenterDetail || kingdom;
   if (commandCenterDetail) {
+    if (kingdom.troops !== undefined) commandCenterDetail.central_troops = kingdom.troops;
     if (kingdom.troops_levy !== undefined) commandCenterDetail.troops_levy = kingdom.troops_levy;
     if (kingdom.troops_regular !== undefined) commandCenterDetail.troops_regular = kingdom.troops_regular;
     if (kingdom.troops_elite !== undefined) commandCenterDetail.troops_elite = kingdom.troops_elite;
@@ -248,7 +257,12 @@ export function applyLiveCommandCenterUpdate(kingdom) {
     if (kingdom.fort_s !== undefined) commandCenterDetail.fort_s = kingdom.fort_s;
     if (kingdom.fort_e !== undefined) commandCenterDetail.fort_e = kingdom.fort_e;
     if (kingdom.fort_w !== undefined) commandCenterDetail.fort_w = kingdom.fort_w;
+    if (kingdom.military_delayed_costs !== undefined) commandCenterDetail.military_delayed_costs = kingdom.military_delayed_costs;
     if (kingdom.economy) commandCenterDetail.economy = kingdom.economy;
+    if (kingdom.troops === 0) {
+      commandCenterDetail.central_troops = 0;
+      commandCenterDetail.border_troops = { N: 0, S: 0, E: 0, W: 0 };
+    }
   }
 
   const levy = kingdom.troops_levy ?? detail?.troops_levy ?? 0;
@@ -497,6 +511,46 @@ export function refreshKingdomCommandCenter(liveKingdom = null) {
 
   // Apply instant zero-lag update from authoritative WebSocket state
   applyLiveCommandCenterUpdate(kingdom);
+}
+
+export function resetCommandCenterMilitaryState() {
+  if (commandCenterDetail) {
+    commandCenterDetail.central_troops = 0;
+    commandCenterDetail.border_troops = { N: 0, S: 0, E: 0, W: 0 };
+    commandCenterDetail.troops_levy = 0;
+    commandCenterDetail.troops_regular = 0;
+    commandCenterDetail.troops_elite = 0;
+    commandCenterDetail.fort_n = 0;
+    commandCenterDetail.fort_s = 0;
+    commandCenterDetail.fort_e = 0;
+    commandCenterDetail.fort_w = 0;
+    commandCenterDetail.military_delayed_costs = 0;
+  }
+  const troopVal = document.getElementById("cc-meter-troop-val");
+  if (troopVal) renderMileometer(troopVal, 0, true);
+  setMeter("cc-meter-troops", 0, 100);
+
+  const levyEl = document.getElementById("cc-troops-levy");
+  if (levyEl) levyEl.textContent = "0";
+  const regEl = document.getElementById("cc-troops-regular");
+  if (regEl) regEl.textContent = "0";
+  const eliteEl = document.getElementById("cc-troops-elite");
+  if (eliteEl) eliteEl.textContent = "0";
+
+  const tierBadge = document.getElementById("cc-army-tier");
+  if (tierBadge) tierBadge.textContent = "MILITIA";
+
+  const fortNames = ["Outpost", "Bastion", "Citadel", "Star Fort", "Imperial Stronghold"];
+  ["n", "s", "e", "w"].forEach((dir) => {
+    const el = document.getElementById(`cc-fort-badge-${dir}`);
+    if (el) {
+      el.textContent = `🏰 Tier 0 (${fortNames[0]})`;
+      el.classList.remove("fort-active");
+    }
+  });
+
+  updateBorderGarrisonPods({ N: 0, S: 0, E: 0, W: 0 });
+  updateFortifyButtonLabel();
 }
 
 export function dialValueFromPoint(dialEl, clientX, clientY) {
@@ -765,7 +819,7 @@ export function triggerAutoBalanceBudget() {
 
   // Set tax rate to optimal non-emigration sweet spot (48%)
   const optimalTax = 48;
-  const baseProductivity = 0.08;
+  const baseProductivity = 0.02;
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
   const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
   const civilianWorkforce = Math.max(0, pop - tr);
@@ -1013,7 +1067,7 @@ export function updateEconomyHintsLive() {
   const res = commandCenterDetail?.resources ?? kingdom.resources ?? 500;
   const tr = commandCenterDetail?.central_troops ?? kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
 
-  const baseProductivity = 0.08;
+  const baseProductivity = 0.02;
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
   const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
   const invBonus = 1.0 + (investmentRate || 0) * 0.002;

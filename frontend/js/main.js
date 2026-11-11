@@ -1,6 +1,6 @@
 // main.js - Application bootstrap & orchestrator for Kingdom Conquest
 
-import { state, clearSession, syncKingdomsForYear } from "./state.js";
+import { state, clearSession, syncKingdomsForYear, clearAllMilitaryVariables } from "./state.js";
 
 // Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
 const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
@@ -76,6 +76,7 @@ import {
   openKingdomCommandCenter,
   closeKingdomCommandCenter,
   refreshKingdomCommandCenter,
+  resetCommandCenterMilitaryState,
   switchConsoleBay,
   triggerCollectTaxes,
   triggerUpgradeMarket,
@@ -108,6 +109,7 @@ registerActionCallbacks({
   openKingdomCommandCenter,
   closeKingdomCommandCenter,
   refreshKingdomCommandCenter,
+  resetCommandCenterMilitaryState,
   renderKingdomList,
   refreshMyKingdomStats,
   checkMyKingdom,
@@ -146,6 +148,10 @@ onSocketStateChange((payload) => {
 
 // React to Historical Era transitions (adding new unowned countries to the map in each Age)
 onEraChange((newEra, yearInt, prevEraId) => {
+  if (newEra.id === "discovery" || yearInt <= 1500) {
+    clearAllMilitaryVariables();
+    resetCommandCenterMilitaryState();
+  }
   syncKingdomsForYear(state.allKingdoms, yearInt);
   resizeCanvas();
   renderMap();
@@ -1279,11 +1285,14 @@ export async function adminResetStage3Execute() {
     const data = await res.json();
     showToast("🔥 " + (data.message || "World reset to Year 1500!"), "success");
     logMessage("CRITICAL: Master World Reset to Year 1500 executed by Imperial Admin.");
+    clearAllMilitaryVariables();
+    resetCommandCenterMilitaryState();
     adminResetSetStage(1);
     const input = document.getElementById("admin-reset-confirm-input");
     if (input) input.value = "";
     refreshAdminDashboard();
     checkMyKingdom();
+    renderMap();
   } catch (err) {
     console.error("Error executing world reset:", err);
     showToast(err.message || "Error executing world reset", "error");

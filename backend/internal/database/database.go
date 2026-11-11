@@ -64,8 +64,8 @@ func InitDB() error {
 		return fmt.Errorf("error opening database: %v", err)
 	}
 
-	DB.SetMaxOpenConns(25)
-	DB.SetMaxIdleConns(10)
+	DB.SetMaxOpenConns(50)
+	DB.SetMaxIdleConns(25)
 	DB.SetConnMaxLifetime(5 * time.Minute)
 	DB.SetConnMaxIdleTime(1 * time.Minute)
 
@@ -588,6 +588,14 @@ func ResetGameToYear1500(clearClaims bool) error {
 		if _, err := tx.Exec("UPDATE countries SET owner_id = NULL"); err != nil {
 			return fmt.Errorf("failed to reset country owners: %w", err)
 		}
+	} else {
+		// Even if retaining medieval claims, purge claims on future non-medieval realms
+		if _, err := tx.Exec("DELETE FROM player_countries WHERE country_id IN (SELECT id FROM countries WHERE era != 'medieval')"); err != nil {
+			return fmt.Errorf("failed to purge future era player claims: %w", err)
+		}
+		if _, err := tx.Exec("UPDATE countries SET owner_id = NULL WHERE era != 'medieval'"); err != nil {
+			return fmt.Errorf("failed to reset future era country owners: %w", err)
+		}
 	}
 
 	// 3. Blanket reset of all countries' tactical, military, and economic parameters
@@ -636,6 +644,16 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    borders = $6::jsonb,
 				    owner_id = NULL,
 				    troops = 0,
+				    troops_levy = 0,
+				    troops_regular = 0,
+				    troops_elite = 0,
+				    fort_n = 0,
+				    fort_s = 0,
+				    fort_e = 0,
+				    fort_w = 0,
+				    military_delayed_costs = 0,
+				    last_military_exp = 0,
+				    entrepreneurial_pride = 100.0,
 				    economy_rate = 50,
 				    markets = 0,
 				    infrastructure = 0,
@@ -643,7 +661,6 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    social_costs = 0,
 				    last_tax_revenue = 0,
 				    last_market_income = 0,
-				    last_military_exp = 0,
 				    last_social_exp = 0,
 				    last_investment_exp = 0,
 				    last_total_exp = 0,
@@ -662,6 +679,16 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    is_island = $5,
 				    borders = $6::jsonb,
 				    troops = 0,
+				    troops_levy = 0,
+				    troops_regular = 0,
+				    troops_elite = 0,
+				    fort_n = 0,
+				    fort_s = 0,
+				    fort_e = 0,
+				    fort_w = 0,
+				    military_delayed_costs = 0,
+				    last_military_exp = 0,
+				    entrepreneurial_pride = 100.0,
 				    economy_rate = 50,
 				    markets = 0,
 				    infrastructure = 0,
@@ -669,7 +696,6 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    social_costs = 0,
 				    last_tax_revenue = 0,
 				    last_market_income = 0,
-				    last_military_exp = 0,
 				    last_social_exp = 0,
 				    last_investment_exp = 0,
 				    last_total_exp = 0,
@@ -959,11 +985,12 @@ func MarkPlayerCountryInactive(userID, countryID int64) error {
 // LogAction records an action in the audit table.
 func LogAction(userID, countryID int64, actionType, description string,
 	targetCountryID *int64, direction, speed, movementType string) error {
-	return DB.QueryRow(
+	_, err := DB.Exec(
 		`INSERT INTO game_actions (user_id, country_id, action_type, description,
 		             target_country_id, direction, speed, movement_type, game_date)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
-		userID, countryID, actionType, description, targetCountryID, direction, speed, movementType).Err()
+		userID, countryID, actionType, description, targetCountryID, direction, speed, movementType)
+	return err
 }
 
 // UpdateCountryResources sets the resource total for a kingdom.
