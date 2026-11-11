@@ -161,6 +161,9 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_w INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS entrepreneurial_pride DOUBLE PRECISION DEFAULT 100.0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS military_delayed_costs BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_progress DOUBLE PRECISION DEFAULT 0.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_yield DOUBLE PRECISION DEFAULT 0.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_fleets INTEGER DEFAULT 0;
 	UPDATE countries SET troops_regular = troops WHERE troops > 0 AND (COALESCE(troops_levy, 0) + COALESCE(troops_regular, 0) + COALESCE(troops_elite, 0)) = 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
@@ -624,6 +627,9 @@ func ResetGameToYear1500(clearClaims bool) error {
 		    last_migration = 0,
 		    entrepreneurial_pride = 100.0,
 		    military_delayed_costs = 0,
+		    colonial_progress = 0.0,
+		    colonial_yield = 0.0,
+		    colonial_fleets = 0,
 		    updated_at = CURRENT_TIMESTAMP
 	`
 	if _, err := tx.Exec(blanketReset); err != nil {
@@ -654,6 +660,9 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    military_delayed_costs = 0,
 				    last_military_exp = 0,
 				    entrepreneurial_pride = 100.0,
+				    colonial_progress = 0.0,
+				    colonial_yield = 0.0,
+				    colonial_fleets = 0,
 				    economy_rate = 50,
 				    markets = 0,
 				    infrastructure = 0,
@@ -689,6 +698,9 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    military_delayed_costs = 0,
 				    last_military_exp = 0,
 				    entrepreneurial_pride = 100.0,
+				    colonial_progress = 0.0,
+				    colonial_yield = 0.0,
+				    colonial_fleets = 0,
 				    economy_rate = 50,
 				    markets = 0,
 				    infrastructure = 0,
@@ -831,6 +843,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
+		COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
 		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
@@ -854,6 +867,7 @@ func GetCountries(era string) ([]models.Country, error) {
 			&c.LastSocialExp, &c.LastInvestmentExp, &c.LastTotalExp,
 			&c.LastBudgetBalance, &c.LastMigration,
 			&c.EntrepreneurialPride, &c.MilitaryDelayedCosts,
+			&c.ColonialProgress, &c.ColonialYield, &c.ColonialFleets,
 			&c.TerritoryType, &c.Borders, &c.IsIsland,
 		); err != nil {
 			return nil, err
@@ -1112,6 +1126,7 @@ func UpdateCountryVitalsAndTroopLayers(
 	countryID int64,
 	population, resources, troops, levy, regular, elite int64,
 	pride float64, delayedCosts int64,
+	colonialProgress, colonialYield float64, colonialFleets int64,
 ) error {
 	if DB == nil {
 		return nil
@@ -1137,16 +1152,27 @@ func UpdateCountryVitalsAndTroopLayers(
 	if delayedCosts < 0 {
 		delayedCosts = 0
 	}
+	if colonialProgress < 0 {
+		colonialProgress = 0
+	}
+	if colonialYield < 0 {
+		colonialYield = 0
+	}
+	if colonialFleets < 0 {
+		colonialFleets = 0
+	}
 	_, err := DB.Exec(`
 		UPDATE countries
 		SET population = $1, resources = $2, troops = $3,
 		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
 		    entrepreneurial_pride = $7, military_delayed_costs = $8,
+		    colonial_progress = $9, colonial_yield = $10, colonial_fleets = $11,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $9`,
+		WHERE id = $12`,
 		population, resources, troops,
 		levy, regular, elite,
 		pride, delayedCosts,
+		colonialProgress, colonialYield, colonialFleets,
 		countryID)
 	return err
 }
@@ -1157,6 +1183,7 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 	population, resources, troops, levy, regular, elite int64,
 	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
 	pride float64, delayedCosts int64,
+	colonialProgress, colonialYield float64, colonialFleets int64,
 ) error {
 	if DB == nil {
 		return nil
@@ -1182,6 +1209,15 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 	if delayedCosts < 0 {
 		delayedCosts = 0
 	}
+	if colonialProgress < 0 {
+		colonialProgress = 0
+	}
+	if colonialYield < 0 {
+		colonialYield = 0
+	}
+	if colonialFleets < 0 {
+		colonialFleets = 0
+	}
 	_, err := DB.Exec(`
 		UPDATE countries
 		SET population = $1, resources = $2, troops = $3,
@@ -1190,12 +1226,14 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 		    last_social_exp = $10, last_investment_exp = $11, last_total_exp = $12,
 		    last_budget_balance = $13, last_migration = $14,
 		    entrepreneurial_pride = $15, military_delayed_costs = $16,
+		    colonial_progress = $17, colonial_yield = $18, colonial_fleets = $19,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $17`,
+		WHERE id = $20`,
 		population, resources, troops,
 		levy, regular, elite,
 		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
 		pride, delayedCosts,
+		colonialProgress, colonialYield, colonialFleets,
 		countryID)
 	return err
 }
@@ -1305,6 +1343,9 @@ type KingdomDetailRow struct {
 	LastMigration     int64
 	EntrepreneurialPride float64
 	MilitaryDelayedCosts int64
+	ColonialProgress     float64
+	ColonialYield        float64
+	ColonialFleets       int64
 	OwnerID           *int64
 	OwnerName         *string
 	CentralTroops     int64
@@ -1329,6 +1370,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		       COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		       COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
+		       COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
@@ -1343,6 +1385,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		&r.LastSocialExp, &r.LastInvestmentExp, &r.LastTotalExp,
 		&r.LastBudgetBalance, &r.LastMigration,
 		&r.EntrepreneurialPride, &r.MilitaryDelayedCosts,
+		&r.ColonialProgress, &r.ColonialYield, &r.ColonialFleets,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err

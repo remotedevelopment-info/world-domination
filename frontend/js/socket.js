@@ -94,7 +94,11 @@ export function connectWebSocket() {
       const actionKey = JSON.stringify(latest);
       if (actionKey !== lastLoggedActionKey) {
         lastLoggedActionKey = actionKey;
-        logMessage(`${latest.action_type}: ${latest.description}`);
+        if (latest.action_type === "news") {
+          logMessage(`📰 ${latest.description}`);
+        } else {
+          logMessage(`${latest.action_type}: ${latest.description}`);
+        }
       }
     }
 

@@ -323,11 +323,11 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	simYear := game.GetEngine().GetSimYear()
-	econ := game.ComputeEconomyWithInternals(
+	econ := game.ComputeEconomyFull(
 		detail.Population, detail.Resources, detail.Troops,
 		detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts,
 		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
-		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, simYear,
+		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, detail.ColonialYield, simYear,
 	)
 	game.PopulateLastYearLedger(
 		&econ,
@@ -367,6 +367,9 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"owner_name":            detail.OwnerName,
 		"entrepreneurial_pride": detail.EntrepreneurialPride,
 		"military_delayed_costs": detail.MilitaryDelayedCosts,
+		"colonial_progress":     detail.ColonialProgress,
+		"colonial_yield":        detail.ColonialYield,
+		"colonial_fleets":       detail.ColonialFleets,
 		"economy":               econ,
 	})
 }
@@ -1504,11 +1507,11 @@ func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
 		globalTreasury += c.Resources
 		globalTradeLiquidity += c.Markets * 24
 
-		econ := game.ComputeEconomyWithInternals(
+		econ := game.ComputeEconomyFull(
 			c.Population, c.Resources, c.Troops,
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
-			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
 		)
 
 		// Fiscal stress index: debt/deficit severity, reserve exhaustion, tax drag
@@ -1564,6 +1567,9 @@ func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
 			"general_migration":      econ.GeneralMigration,
 			"capital_flight_drain":  econ.CapitalFlightDrain,
 			"migration_status":       econ.MigrationStatus,
+			"colonial_progress":     c.ColonialProgress,
+			"colonial_yield":        c.ColonialYield,
+			"colonial_fleets":       c.ColonialFleets,
 		}
 
 		seasonalImpact := map[string]interface{}{

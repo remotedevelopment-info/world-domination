@@ -214,4 +214,47 @@ flowchart LR
 - **Manpower Recruitment Advantage**: Kingdoms with massive populations (e.g. France, Ottoman Empire) benefit from plentiful recruits; recruitment gold costs scale down by up to $50\%$.
 - **Welfare Squalor Burden**: Larger populations require proportionally higher baseline Cathedral and Social Welfare spending. If underfunded, urban squalor accelerates epidemic vulnerability and dampens economic productivity.
 
+#### F. Colonial & Capital Investment Gestation Pipeline
+- **Concept**: In the Age of Discovery, laying down caravels, outfitting expeditions, and establishing overseas trade outposts cannot yield instantaneous GDP dividends. Capital projects require continuous funding over a **Gestation Period** before returning merchant yields.
+- **The Capital Pipeline ($0\% \to 100\%$ Gestation)**:
+  - Annual investment allocations accumulate progress toward completing active flotillas and trading posts.
+  - Completion requires sustained capital outlays over an **Era-Dependent Gestation Period** ($T_{\text{gestation}}$).
+- **The Sunk-Cost & Abandonment Decay Penalty**:
+  - If a player abruptly slashes or zeroes the investment dial mid-project, unfinished ships rot in drydocks, dockworkers disperse, and supply chains spoil.
+  - **Decay Rate**: If funding drops to zero, uncompleted gestation progress degrades at $-25\%$ per simulation year. If not re-funded within 1–2 years, all invested capital is forfeited with zero trade return.
+- **Era Latency Acceleration Curve**:
+  As shipbuilding, propulsion, navigation, and telecommunications advance, the required gestation delay shrinks dramatically:
+  - **Age of Discovery (1500–1749)**: $T_{\text{gestation}} \approx 4.0\text{–}5.0\text{ years}$ (Wooden caravels, wind-dependent circumnavigation).
+  - **Age of Revolt (1750–1859)**: $T_{\text{gestation}} \approx 2.0\text{–}3.0\text{ years}$ (Galleons, charted trade corridors, naval shipyards).
+  - **Age of Independence (1860–1919)**: $T_{\text{gestation}} \approx 1.0\text{–}1.5\text{ years}$ (Steam clippers, telegraph-coordinated shipping, Suez Canal).
+  - **Age of Decolonisation & Modern (1920+)**: $T_{\text{gestation}} \le 0.5\text{ years}$ (Containerization, bulk freighters, globalized air freight).
+- **Conquest & Territory Re-allocation**:
+  - Conquering coastal provinces grants access to captured shipyards and overseas colonial trade lanes, accelerating the investor's cumulative trade productivity ceiling.
+
+---
+
+## 5. Era-Specific Strategic Commodity Matrix
+
+As historical ages roll over, the physical resources that power imperial expansion and economic supremacy evolve. Territories possess latent resource deposits that unlock and reshape national strength in their respective eras:
+
+```mermaid
+flowchart LR
+    E1["1500 Discovery\n💰 Gold, Silver & Spices"]
+    E2["1750 Revolt\n🪵 Timber, Sugar & Tobacco"]
+    E3["1860 Independence\n⛏️ Coal & Iron Ore"]
+    E4["1920 Decolonisation\n🛢️ Crude Oil & Bauxite"]
+    E5["1989 Modern\n🔬 Semiconductors & Rare Earths"]
+
+    E1 --> E2 --> E3 --> E4 --> E5
+```
+
+| Era | Primary Strategic Commodities | Economic Driver & Gameplay Impact | Historical Context |
+| :--- | :--- | :--- | :--- |
+| **Discovery** (1500–1749) | **Gold, Silver Bullion, Spices, Silk** | **Treasury Specie Backing**: High gold reserves directly strengthen currency value and allow funding expeditions and mercenary tercios without debasement. | Spanish Silver Fleets (Potosí), Portuguese Spice Monopoly (Malacca/Goa). |
+| **Revolt** (1750–1859) | **Naval Timber, Sugar, Tobacco, Cotton** | **Mercantile Windfalls & Naval Capacity**: Access to ship timber determines max armada size; plantation cash crops multiply market export liquidity. | Caribbean sugar trade, American cotton/tobacco, Baltic naval stores. |
+| **Independence** (1860–1919) | **Coal, Iron Ore, Steel** | **Industrial Multiplier**: Coal deposits fuel rail logistics, accelerate factory productivity, and power steam-driven naval ironclads. Territories lacking coal suffer severe industrial penalties and must import at exorbitant prices. | Industrial Revolution, Ruhr Valley, British Welsh Coalfields, Pittsburgh steel. |
+| **Decolonisation** (1920–1988) | **Crude Oil, Bauxite (Aluminum), Rubber, Uranium** | **Mechanized Warfare & Energy**: Oil fields dictate mechanized army and air force mobility; lack of domestic oil reserves triggers military paralysis during prolonged wars unless secured by conquest or diplomacy. | Middle Eastern concessions, Baku oil, WWII resource blockades. |
+| **Modern** (1989+) | **Semiconductors, Rare Earths, Natural Gas** | **High-Tech Capital Multiplier**: Microchip foundries and rare earth monopolies multiply financial sector productivity, telecommunications velocity, and smart defense systems. | Taiwan/East Asian foundries, global rare earth supply chains, LNG pipelines. |
+
+
 

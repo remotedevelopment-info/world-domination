@@ -1,6 +1,9 @@
 package game
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestComputeEconomyDirections(t *testing.T) {
 
@@ -406,3 +409,60 @@ func TestWealthFactorAndSegmentedMigrationThresholds(t *testing.T) {
 		t.Errorf("expected negative net migration under 80%% tax, got %d", flightMig.NetMigration)
 	}
 }
+
+func TestColonialGestationAndLexicon(t *testing.T) {
+	// 1. Gestation period shrinks as eras advance
+	discGest := GetColonialGestationYears(1500.0)
+	revoltGest := GetColonialGestationYears(1760.0)
+	indGest := GetColonialGestationYears(1880.0)
+	decolGest := GetColonialGestationYears(1940.0)
+	modGest := GetColonialGestationYears(2005.0)
+
+	if discGest != 5.0 || revoltGest != 2.5 || indGest != 1.25 || decolGest != 0.5 || modGest != 0.35 {
+		t.Errorf("unexpected gestation periods: disc=%f, revolt=%f, ind=%f, decol=%f, mod=%f",
+			discGest, revoltGest, indGest, decolGest, modGest)
+	}
+
+	// 2. Era keys
+	if GetEraKey(1500) != "discovery" || GetEraKey(1760) != "revolt" || GetEraKey(1880) != "independence" ||
+		GetEraKey(1940) != "decolonisation" || GetEraKey(2000) != "modern" {
+		t.Errorf("unexpected era key mapping")
+	}
+
+	// 3. Port naming
+	if RealmPort("ENG", "England") != "Portsmouth" {
+		t.Errorf("expected Portsmouth for ENG, got %s", RealmPort("ENG", "England"))
+	}
+	if RealmPort("SPA", "Spain") != "Seville" {
+		t.Errorf("expected Seville for SPA, got %s", RealmPort("SPA", "Spain"))
+	}
+
+	// 4. Milestone, Return, and Abandonment News generators
+	m1 := GenerateColonialMilestoneDispatch("discovery", "England", "Portsmouth", 20.0, 4.0)
+	if m1 == "" || !strings.Contains(m1, "Portsmouth") {
+		t.Errorf("expected valid milestone dispatch, got: %s", m1)
+	}
+
+	ret := GenerateColonialVoyageReturnDispatch("discovery", "England", "Portsmouth", 10, 2)
+	if !strings.Contains(ret, "Fleet 2") || !strings.Contains(ret, "+10%") {
+		t.Errorf("expected valid return dispatch, got: %s", ret)
+	}
+
+	abandon := GenerateColonialAbandonmentDispatch("discovery", "England", "Portsmouth")
+	if !strings.Contains(abandon, "unpaid shipwrights") {
+		t.Errorf("expected valid abandonment dispatch, got: %s", abandon)
+	}
+
+	// 5. Colonial trade yield bonus compounds GDP & market revenue in ComputeEconomyFull
+	zeroColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25)
+	boostedColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.15, 1500.25)
+
+	if boostedColonialEcon.GDP <= zeroColonialEcon.GDP {
+		t.Errorf("expected +15%% colonial yield to increase GDP (%d vs %d)", boostedColonialEcon.GDP, zeroColonialEcon.GDP)
+	}
+	if boostedColonialEcon.MarketRevenue <= zeroColonialEcon.MarketRevenue {
+		t.Errorf("expected +15%% colonial yield to boost market revenue (%d vs %d)",
+			boostedColonialEcon.MarketRevenue, zeroColonialEcon.MarketRevenue)
+	}
+}
+

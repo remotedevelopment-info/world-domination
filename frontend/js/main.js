@@ -96,6 +96,7 @@ import {
   setSocialRate,
   adjustBudgetDial,
   triggerAutoBalanceBudget,
+  updateGazetteHeadline,
 } from "./ui/console.js";
 import {
   initAdminCharts,
@@ -142,6 +143,14 @@ onSocketStateChange((payload) => {
       const resEl = document.getElementById("kingdom-resources");
       if (popEl) popEl.textContent = (shown.population || 0).toLocaleString();
       if (resEl) resEl.textContent = (shown.resources !== undefined ? shown.resources : 0).toLocaleString();
+    }
+  }
+
+  // Update live Imperial Gazette news ticker from broadcasted actions
+  if (Array.isArray(payload?.actions) && payload.actions.length > 0) {
+    const newsAction = payload.actions.find((a) => a.action_type === "news");
+    if (newsAction && newsAction.description) {
+      updateGazetteHeadline(newsAction.description);
     }
   }
 });

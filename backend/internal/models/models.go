@@ -51,6 +51,9 @@ type Country struct {
 	LastMigration     int64 `json:"last_migration"`
 	EntrepreneurialPride float64 `json:"entrepreneurial_pride"` // Intangible commercial confidence 0-100%
 	MilitaryDelayedCosts int64   `json:"military_delayed_costs"` // Lingering military commitments/pensions
+	ColonialProgress     float64 `json:"colonial_progress"`     // In-flight capital gestation progress 0-100%
+	ColonialYield        float64 `json:"colonial_yield"`        // Permanent compounded trade productivity yield
+	ColonialFleets       int64   `json:"colonial_fleets"`       // Total commissioned / returned expedition fleets
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`

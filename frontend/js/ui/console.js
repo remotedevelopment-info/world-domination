@@ -258,6 +258,9 @@ export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
     if (kingdom.fort_e !== undefined) commandCenterDetail.fort_e = kingdom.fort_e;
     if (kingdom.fort_w !== undefined) commandCenterDetail.fort_w = kingdom.fort_w;
     if (kingdom.military_delayed_costs !== undefined) commandCenterDetail.military_delayed_costs = kingdom.military_delayed_costs;
+    if (kingdom.colonial_progress !== undefined) commandCenterDetail.colonial_progress = kingdom.colonial_progress;
+    if (kingdom.colonial_yield !== undefined) commandCenterDetail.colonial_yield = kingdom.colonial_yield;
+    if (kingdom.colonial_fleets !== undefined) commandCenterDetail.colonial_fleets = kingdom.colonial_fleets;
     if (kingdom.economy) commandCenterDetail.economy = kingdom.economy;
     if (kingdom.troops === 0) {
       commandCenterDetail.central_troops = 0;
@@ -318,6 +321,11 @@ export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
   updateStepperDisplay();
   updateBorderGarrisonPods(borders);
   updateEconomyHintsLive();
+
+  const colProgress = kingdom.colonial_progress ?? detail?.colonial_progress ?? 0.0;
+  const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? 0.0;
+  const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? 0;
+  updateColonialGestationUI(colProgress, colYield, colFleets);
 
   const minimap = document.getElementById("cc-minimap");
   if (minimap) {
@@ -420,6 +428,11 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   updateStepperDisplay();
   updateBorderGarrisonPods(borders);
   updateEconomyHintsLive();
+
+  const colProgress = kingdom.colonial_progress ?? detail?.colonial_progress ?? 0.0;
+  const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? 0.0;
+  const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? 0;
+  updateColonialGestationUI(colProgress, colYield, colFleets);
 
   const minimap = document.getElementById("cc-minimap");
   if (minimap) {
@@ -685,6 +698,12 @@ export function setTaxRate(value, push = true) {
   if (readout) readout.textContent = taxRate;
 
   updateEconomyHintsLive();
+  const curDetail = commandCenterDetail;
+  const curProgress = curDetail?.colonial_progress ?? 0.0;
+  const curYield = curDetail?.colonial_yield ?? 0.0;
+  const curFleets = curDetail?.colonial_fleets ?? 0;
+  updateColonialGestationUI(curProgress, curYield, curFleets);
+
   if (push) {
     lastEconomyUserActionTime = Date.now();
     syncLocalEconomyCache();
@@ -705,6 +724,12 @@ export function setInvestmentRate(value, push = true) {
   if (readout) readout.textContent = investmentRate;
 
   updateEconomyHintsLive();
+  const curDetail = commandCenterDetail;
+  const curProgress = curDetail?.colonial_progress ?? 0.0;
+  const curYield = curDetail?.colonial_yield ?? 0.0;
+  const curFleets = curDetail?.colonial_fleets ?? 0;
+  updateColonialGestationUI(curProgress, curYield, curFleets);
+
   if (push) {
     lastEconomyUserActionTime = Date.now();
     syncLocalEconomyCache();
@@ -725,12 +750,96 @@ export function setSocialRate(value, push = true) {
   if (readout) readout.textContent = socialCostsRate;
 
   updateEconomyHintsLive();
+  const curDetail = commandCenterDetail;
+  const curProgress = curDetail?.colonial_progress ?? 0.0;
+  const curYield = curDetail?.colonial_yield ?? 0.0;
+  const curFleets = curDetail?.colonial_fleets ?? 0;
+  updateColonialGestationUI(curProgress, curYield, curFleets);
+
   if (push) {
     lastEconomyUserActionTime = Date.now();
     syncLocalEconomyCache();
     schedulePushEconomySettings(200);
   }
 }
+
+export function updateColonialGestationUI(progress = 0, yieldBonus = 0, fleets = 0) {
+  const bar = document.getElementById("cc-colonial-progress-fill");
+  const progVal = document.getElementById("cc-colonial-progress-val");
+  const etaVal = document.getElementById("cc-colonial-eta-val");
+  const yieldVal = document.getElementById("cc-colonial-yield-val");
+  const fleetsBadge = document.getElementById("cc-colonial-fleets-badge");
+  const statusMsg = document.getElementById("cc-colonial-status-msg");
+
+  const clampedProgress = Math.min(100, Math.max(0, progress));
+  if (bar) bar.style.width = `${clampedProgress}%`;
+  if (progVal) progVal.textContent = `${clampedProgress.toFixed(1)}%`;
+  if (yieldVal) yieldVal.textContent = `+${Math.round(yieldBonus * 100)}%`;
+  if (fleetsBadge) {
+    const eraName = state.historicalEra?.id || "discovery";
+    let unitName = "Armadas";
+    if (eraName === "modern") unitName = "Consortiums";
+    else if (eraName === "independence" || eraName === "decolonisation") unitName = "Freighter Lines";
+    fleetsBadge.textContent = `${fleets} ${unitName} Active`;
+  }
+
+  // Calculate Gestation Duration & Launch ETA based on investment dial
+  const simYear = (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
+  let gestationPeriod = 5.0;
+  if (simYear >= 1989) gestationPeriod = 0.35;
+  else if (simYear >= 1920) gestationPeriod = 0.5;
+  else if (simYear >= 1860) gestationPeriod = 1.25;
+  else if (simYear >= 1750) gestationPeriod = 2.5;
+
+  if (statusMsg && etaVal) {
+    if (investmentRate > 0) {
+      const remainingProgress = Math.max(0, 100.0 - clampedProgress);
+      const yearsRemaining = remainingProgress / (investmentRate / gestationPeriod);
+      etaVal.textContent = `${yearsRemaining.toFixed(1)} yrs`;
+      etaVal.style.color = "#38bdf8";
+
+      if (clampedProgress < 25) {
+        statusMsg.textContent = `🔨 Laying keels & hull frames (${investmentRate}% funding · est. ${yearsRemaining.toFixed(1)} yrs to sail)`;
+      } else if (clampedProgress < 75) {
+        statusMsg.textContent = `⚓ Outfitting hulls with oak & naval guns (${investmentRate}% funding · est. ${yearsRemaining.toFixed(1)} yrs)`;
+      } else {
+        statusMsg.textContent = `🌊 Loading sea biscuit, provisions & charts for voyage launch (est. ${yearsRemaining.toFixed(1)} yrs)`;
+      }
+      statusMsg.style.color = "#38bdf8";
+    } else {
+      if (clampedProgress > 0) {
+        etaVal.textContent = "HALTED";
+        etaVal.style.color = "#f87171";
+        statusMsg.textContent = `⚠️ DOCKYARDS UNPAID: Construction halted! -25%/yr sunk-cost timber rot & decay active!`;
+        statusMsg.style.color = "#f87171";
+      } else {
+        etaVal.textContent = "-- yrs";
+        etaVal.style.color = "#94a3b8";
+        statusMsg.textContent = `Keels waiting on exchequer investment dial...`;
+        statusMsg.style.color = "#94a3b8";
+      }
+    }
+  }
+}
+
+export function updateGazetteHeadline(headline) {
+  const banner = document.getElementById("gazette-news-banner");
+  const headlineEl = document.getElementById("gazette-headline");
+  if (!banner || !headlineEl || !headline) return;
+
+  banner.classList.remove("hidden");
+  headlineEl.textContent = headline;
+  headlineEl.style.animation = "none";
+  // eslint-disable-next-line no-unused-expressions
+  headlineEl.offsetHeight;
+  headlineEl.style.animation = "fadeInNews 0.5s ease-in-out";
+}
+
+export function dismissGazetteHeadline() {
+  const banner = document.getElementById("gazette-news-banner");
+  if (banner) banner.classList.add("hidden");
+}
+window.dismissGazetteHeadline = dismissGazetteHeadline;
 
 export function schedulePushEconomySettings(delayMs = 200) {
   if (debouncedPushSettingsTimer) clearTimeout(debouncedPushSettingsTimer);

@@ -164,6 +164,18 @@
                 </button>
             </header>
 
+            <!-- Imperial Gazette & Era News Dispatch Ticker -->
+            <div id="gazette-news-banner" class="gazette-news-banner" role="region" aria-label="Imperial Gazette Dispatches">
+                <div class="gazette-tag">
+                    <span class="gazette-icon">📰</span>
+                    <span class="gazette-title">IMPERIAL GAZETTE</span>
+                </div>
+                <div class="gazette-ticker-track">
+                    <span id="gazette-headline" class="gazette-headline">⚓ Royal Exchequers report calm seas and open merchant lanes across the realm...</span>
+                </div>
+                <button type="button" class="gazette-dismiss-btn" onclick="dismissGazetteHeadline()" title="Dismiss News Headline">×</button>
+            </div>
+
             <!-- Development Activated Chrono Regulator Drawer / Modal -->
             <div id="dev-chrono-drawer" class="hidden dev-chrono-panel">
                 <div class="dev-chrono-header">
@@ -1076,6 +1088,31 @@
                                                 <button type="button" class="dial-step-btn" onclick="adjustBudgetDial('social', 5)" title="Increase Social Welfare by 5%">+5%</button>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <!-- Colonial Gestation & Fleet Construction Bay -->
+                                <div class="gestation-dockyard-card" id="cc-gestation-dockyard-card">
+                                    <div class="dockyard-header">
+                                        <div class="dockyard-title-wrap">
+                                            <span class="dockyard-crest">⚓</span>
+                                            <div>
+                                                <span class="dockyard-title">ROYAL DRYDOCK &amp; EXPEDITION GESTATION</span>
+                                                <div class="dockyard-subtext">Continuous investment outfits caravels &amp; merchant armadas over multi-year gestation</div>
+                                            </div>
+                                        </div>
+                                        <span class="dockyard-fleets-badge" id="cc-colonial-fleets-badge">0 Active Fleets</span>
+                                    </div>
+                                    <div class="dockyard-progress-bar-container" title="Expedition Construction Progress (0% to 100%)">
+                                        <div class="dockyard-progress-fill" id="cc-colonial-progress-fill" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="dockyard-stats-row">
+                                        <span class="dockyard-stat-item">Construction: <strong id="cc-colonial-progress-val">0.0%</strong></span>
+                                        <span class="dockyard-stat-item">Estimated Launch: <strong id="cc-colonial-eta-val">-- yrs</strong></span>
+                                        <span class="dockyard-stat-item">Permanent Trade Bonus: <strong id="cc-colonial-yield-val">+0%</strong></span>
+                                    </div>
+                                    <div class="dockyard-status-msg" id="cc-colonial-status-msg">
+                                        Keels waiting on exchequer investment dial...
                                     </div>
                                 </div>
 

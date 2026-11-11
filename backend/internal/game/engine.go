@@ -55,6 +55,9 @@ type CountryState struct {
 	IsIsland       bool         `json:"is_island"`
 	EntrepreneurialPride float64 `json:"entrepreneurial_pride"`
 	MilitaryDelayedCosts int64   `json:"military_delayed_costs"`
+	ColonialProgress     float64 `json:"colonial_progress"`
+	ColonialYield        float64 `json:"colonial_yield"`
+	ColonialFleets       int64   `json:"colonial_fleets"`
 	Economy        EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
@@ -373,11 +376,11 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			continue // unclaimed kingdoms stagnate
 		}
 
-		econ := ComputeEconomyWithInternals(
+		econ := ComputeEconomyFull(
 			c.Population, c.Resources, c.Troops,
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
-			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
 		)
 
 		// 1. Markets: Income and Risk
@@ -574,6 +577,75 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			newDelayedCosts = int64(math.Round(float64(newDelayedCosts) * math.Pow(0.80, yearsPassed)))
 		}
 
+		// 6. Colonial Expedition Gestation & Sunk-Cost Pipeline:
+		// Multi-year construction gestation with sunk-cost decay (-25%/yr) upon defunding.
+		gestationPeriod := GetColonialGestationYears(simYear)
+		eraKey := GetEraKey(simYear)
+		portName := RealmPort(c.Code, c.Name)
+		var ownerID int64
+		if c.OwnerID != nil {
+			ownerID = *c.OwnerID
+		}
+
+		newProgress := c.ColonialProgress
+		newYield := c.ColonialYield
+		newFleets := c.ColonialFleets
+
+		effInvestmentRate := float64(c.Investment)
+		if econ.InvestmentExpenditure > 0 {
+			effInvestmentRate *= (float64(effInvAnnual) / float64(econ.InvestmentExpenditure))
+		} else if c.Investment > 0 && c.Resources <= 0 {
+			effInvestmentRate = 0.0
+		}
+
+		if effInvestmentRate > 0 {
+			progressGain := yearsPassed * (effInvestmentRate / 100.0) * (100.0 / gestationPeriod)
+			prevProgress := newProgress
+			newProgress += progressGain
+
+			// Announce milestone dispatches (first keel laid, 50% framed, 75% sea trials)
+			if (prevProgress == 0.0 && newProgress > 0.0) ||
+				(prevProgress < 50.0 && newProgress >= 50.0) ||
+				(prevProgress < 75.0 && newProgress >= 75.0) {
+				estYearsRemaining := math.Max(0.0, (100.0-newProgress)/(effInvestmentRate/gestationPeriod))
+				newsMsg := GenerateColonialMilestoneDispatch(eraKey, c.Name, portName, newProgress, estYearsRemaining)
+				_ = database.LogAction(ownerID, c.ID, "news", newsMsg, nil, "", "", "")
+			}
+
+			// Expedition voyage completion: charter fleet and grant permanent trade yield bonus
+			if newProgress >= 100.0 {
+				newFleets++
+				newProgress = 0.0
+				newYield += 0.05
+				newYield = math.Round(newYield*100) / 100
+				yieldPct := int(math.Round(newYield * 100.0))
+				newsMsg := GenerateColonialVoyageReturnDispatch(eraKey, c.Name, portName, yieldPct, newFleets)
+				_ = database.LogAction(ownerID, c.ID, "news", newsMsg, nil, "", "", "")
+			}
+		} else if newProgress > 0 {
+			// Sunk-cost rot & decay: unmaintained shipyards decay at -25% per annum
+			decay := 25.0 * yearsPassed
+			prevProgress := newProgress
+			newProgress -= decay
+			if newProgress <= 0.0 {
+				newProgress = 0.0
+				if prevProgress > 5.0 {
+					newsMsg := GenerateColonialAbandonmentDispatch(eraKey, c.Name, portName)
+					_ = database.LogAction(ownerID, c.ID, "news", newsMsg, nil, "", "", "")
+				}
+			}
+		}
+		newProgress = math.Round(newProgress*10) / 10
+
+		// Wealthy Merchant Capital Migration News Dispatch on Year Rollover
+		if yearRolledOver && econ.CapitalFlightDrain != 0 {
+			if math.Abs(float64(econ.CapitalFlightDrain)) >= 100 {
+				isArrival := econ.CapitalFlightDrain > 0
+				msg := GenerateWealthyMigrationDispatch(eraKey, c.Name, econ.CapitalFlightDrain, isArrival)
+				_ = database.LogAction(ownerID, c.ID, "news", msg, nil, "", "", "")
+			}
+		}
+
 		if yearRolledOver {
 			// A calendar year has officially turned over: commit the completed year's actuals
 			// into the historical Last Year ledger, rolling over previous actuals.
@@ -582,6 +654,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 				econ.TaxRevenue, annualMarketActual, effMilAnnual, effSocAnnual, effInvAnnual,
 				effTotalExpAnnual, effBalanceAnnual, econ.NetMigration,
 				newPride, newDelayedCosts,
+				newProgress, newYield, newFleets,
 			); err != nil {
 				log.Printf("Error committing annual budget rollover for country %d: %v", c.ID, err)
 				continue
@@ -589,13 +662,18 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			changed = true
 			c.EntrepreneurialPride = newPride
 			c.MilitaryDelayedCosts = newDelayedCosts
+			c.ColonialProgress = newProgress
+			c.ColonialYield = newYield
+			c.ColonialFleets = newFleets
 		} else if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
 			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite ||
-			newPride != c.EntrepreneurialPride || newDelayedCosts != c.MilitaryDelayedCosts {
+			newPride != c.EntrepreneurialPride || newDelayedCosts != c.MilitaryDelayedCosts ||
+			newProgress != c.ColonialProgress || newYield != c.ColonialYield || newFleets != c.ColonialFleets {
 			// Intra-year incremental tick: update dynamic vitals without overwriting Last Year's budget ledger
 			if err := database.UpdateCountryVitalsAndTroopLayers(
 				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
 				newPride, newDelayedCosts,
+				newProgress, newYield, newFleets,
 			); err != nil {
 				log.Printf("Error updating intra-year vitals for country %d: %v", c.ID, err)
 				continue
@@ -603,6 +681,9 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			changed = true
 			c.EntrepreneurialPride = newPride
 			c.MilitaryDelayedCosts = newDelayedCosts
+			c.ColonialProgress = newProgress
+			c.ColonialYield = newYield
+			c.ColonialFleets = newFleets
 		}
 	}
 
@@ -644,11 +725,11 @@ func (g *GameEngine) BuildState() GameState {
 
 	var countryStates []CountryState
 	for _, c := range countries {
-		econ := ComputeEconomyWithInternals(
+		econ := ComputeEconomyFull(
 			c.Population, c.Resources, c.Troops,
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
-			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
 		)
 		PopulateLastYearLedger(
 			&econ,
@@ -681,6 +762,9 @@ func (g *GameEngine) BuildState() GameState {
 			IsIsland:             c.IsIsland,
 			EntrepreneurialPride: c.EntrepreneurialPride,
 			MilitaryDelayedCosts: c.MilitaryDelayedCosts,
+			ColonialProgress:     c.ColonialProgress,
+			ColonialYield:        c.ColonialYield,
+			ColonialFleets:       c.ColonialFleets,
 			Economy:              econ,
 		}
 		if c.OwnerID != nil {

@@ -467,6 +467,20 @@ func ComputeEconomyWithInternals(
 	levy, regular, elite int64,
 	pride float64, delayedCosts int64, simYear float64,
 ) EconomyState {
+	return ComputeEconomyFull(
+		population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts,
+		levy, regular, elite,
+		pride, delayedCosts, 0.0, simYear,
+	)
+}
+
+// ComputeEconomyFull incorporates all user settings, internal states (entrepreneurial pride, delayed military liabilities,
+// compounded colonial expedition yields), and environmental factors (seasonal harvest and winter logistics modifiers).
+func ComputeEconomyFull(
+	population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64,
+	levy, regular, elite int64,
+	pride float64, delayedCosts int64, colonialYield float64, simYear float64,
+) EconomyState {
 	if pride < 0 {
 		pride = 0
 	}
@@ -476,17 +490,23 @@ func ComputeEconomyWithInternals(
 	if delayedCosts < 0 {
 		delayedCosts = 0
 	}
+	if colonialYield < 0 {
+		colonialYield = 0
+	}
 
 	season := GetClimaticAndSeasonalState(simYear)
 
 	gdp := gdpValue(population, troops, taxRate, markets, infrastructure)
-	// Investment compounds GDP; harvest factor modulates seasonal agricultural GDP output
-	gdp *= (1.0 + investmentBoost*float64(investment)) * season.HarvestYieldFactor
+	// Investment and completed colonial expedition yields compound GDP; harvest factor modulates seasonal agricultural GDP output
+	gdp *= (1.0 + investmentBoost*float64(investment) + colonialYield) * season.HarvestYieldFactor
 	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
 
-	// Entrepreneurial Pride & Seasonal Trade Velocity modulate market revenue
+	// Entrepreneurial Pride, Colonial Fleets Trade Yield & Seasonal Trade Velocity modulate market revenue
 	prideFactor := 0.40 + 0.60*(pride/100.0)
-	marketRev := int64(float64(markets*12) * prideFactor * season.CommercialVelocity)
+	marketRev := int64(float64(markets*12) * prideFactor * (1.0 + colonialYield) * season.CommercialVelocity)
+	if markets == 0 && colonialYield > 0 {
+		marketRev = int64(colonialYield * 250.0 * season.CommercialVelocity)
+	}
 	totalRev := revenue + marketRev
 	if totalRev < 0 {
 		totalRev = 0
