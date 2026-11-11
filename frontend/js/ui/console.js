@@ -188,7 +188,7 @@ export async function openKingdomCommandCenter(kingdom, bay = "all") {
   }
   const gdpValEl = document.getElementById("cc-meter-gdp-val");
   if (gdpValEl) {
-    renderMileometer(gdpValEl, kingdom.economy?.gdp ?? 0, false);
+    renderMileometer(gdpValEl, kingdom.economy?.market_revenue ?? 0, false);
   }
 
   // Wire controls and meters
@@ -311,7 +311,7 @@ export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
 
   if (kingdom.economy) {
     updateDerivedEconomyUI(
-      kingdom.economy.gdp,
+      kingdom.economy.market_revenue ?? 0,
       kingdom.economy.currency_value,
       kingdom.economy.inflation_rate,
       kingdom.economy.effective_balance ?? kingdom.economy.budget_balance
@@ -593,6 +593,10 @@ export function resetCommandCenterStateToDiscovery() {
     commandCenterDetail.last_total_exp = 0;
     commandCenterDetail.last_budget_balance = 0;
     commandCenterDetail.last_migration = 0;
+    if (commandCenterDetail.economy) {
+      commandCenterDetail.economy.market_revenue = 0;
+      commandCenterDetail.economy.last_market_income = 0;
+    }
     if (commandCenterDetail.base_resources) {
       commandCenterDetail.resources = commandCenterDetail.base_resources;
     }
@@ -996,7 +1000,7 @@ export function pushEconomySettings() {
         }
 
         updateDerivedEconomyUI(
-          data.gdp ?? econObj.gdp,
+          data.market_revenue ?? econObj.market_revenue ?? 0,
           data.currency_value ?? econObj.currency_value,
           data.inflation_rate ?? econObj.inflation_rate,
           econObj.effective_balance ?? Math.max(0, econObj.budget_balance || 0)
@@ -1322,7 +1326,7 @@ export function updateEconomyHintsLive() {
   const taxRevenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
 
   // Trade figures directly reflect capital investments (markets + colonial fleets) scaled by dynamic investor health:
-  const marketBase = (marketsLevel || 0) * 12 + (marketsLevel === 0 && colYield > 0 ? colYield * 80 : 0);
+  const marketBase = (marketsLevel || 0) * 12 + (marketsLevel === 0 && colYield > 0 ? colYield * 250 : 0);
   const marketRevenue = Math.round(marketBase * tradeFleetBonus * currentProductivityFactor);
   const totalRevenue = taxRevenue + marketRevenue;
 
@@ -1556,16 +1560,15 @@ export function updateEconomyHintsLive() {
     }
   }
 
-  updateDerivedEconomyUI(Math.round(gdp), value, inflation, cappedBudget.effBalance);
+  updateDerivedEconomyUI(Math.round(marketRevenue), value, inflation, cappedBudget.effBalance);
 }
 
-export function updateDerivedEconomyUI(gdp, currencyVal, inflationRate, balance) {
+export function updateDerivedEconomyUI(tradeFigure, currencyVal, inflationRate, balance) {
   const gdpValEl = document.getElementById("cc-meter-gdp-val");
-  if (gdpValEl && typeof gdp === "number") {
-    renderMileometer(gdpValEl, Math.round(gdp), true);
-    const pop = commandCenterDetail?.population || activeCommandCenterKingdom?.population || 1000;
-    const maxGdp = Math.max(1000, Math.round(pop * 0.15));
-    setMeter("cc-meter-gdp", gdp, maxGdp);
+  if (gdpValEl && typeof tradeFigure === "number") {
+    renderMileometer(gdpValEl, Math.round(tradeFigure), true);
+    const maxTrade = Math.max(250, Math.round(tradeFigure * 1.5));
+    setMeter("cc-meter-gdp", tradeFigure, maxTrade);
   }
 
   const curEl = document.getElementById("cc-currency-val");

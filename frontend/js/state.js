@@ -154,6 +154,10 @@ export function resetAllUserVariablesToDiscovery() {
     k.last_total_exp = 0;
     k.last_budget_balance = 0;
     k.last_migration = 0;
+    if (k.economy) {
+      k.economy.market_revenue = 0;
+      k.economy.last_market_income = 0;
+    }
 
     // Baseline resources & population if available
     if (k.base_resources) k.resources = k.base_resources;
