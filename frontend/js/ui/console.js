@@ -1263,14 +1263,15 @@ export function performEconomyAction(direction) {
   setTaxRate(taxRate + (direction === "increase" ? 5 : -5));
 }
 
+// lafferJs models tax drag on economic output and civilian productivity:
+// Productivity is full (1.0 = 100%) at 0% tax, and falls quadratically
+// (1 - r^2) as the tax rate rises toward 100% (floor 0.10).
+// Combined with Tax Revenue = GDP * (rate / 100), tax collections peak near 58%,
+// while economic productivity is inversely correlated with the tax rate.
 export function lafferJs(rate) {
-  const peak = 58.0;
-  const alpha = 1.35;
-  const beta = 0.98;
-  const r = Math.max(0, Math.min(100, rate));
-  const term1 = Math.pow(r / peak, alpha);
-  const term2 = Math.pow((100.0 - r) / (100.0 - peak), beta);
-  return term1 * term2;
+  const r = Math.max(0, Math.min(100, rate)) / 100.0;
+  const f = 1.0 - r * r;
+  return f < 0.1 ? 0.1 : f;
 }
 
 export function getActiveExpeditionPricing(simYear = 1500) {
