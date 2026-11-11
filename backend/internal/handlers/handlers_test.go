@@ -335,3 +335,56 @@ func TestActionHandlerMilitaryValidation(t *testing.T) {
 	}
 }
 
+func TestExpeditionPricingHandlers(t *testing.T) {
+	// 1. GET /api/expedition-pricing
+	req := httptest.NewRequest(http.MethodGet, "/api/expedition-pricing", nil)
+	rr := httptest.NewRecorder()
+	GetExpeditionPricingHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from GetExpeditionPricingHandler, got %d", rr.Code)
+	}
+	var getRes map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &getRes); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	pricingList, ok := getRes["pricing"].([]interface{})
+	if !ok || len(pricingList) < 5 {
+		t.Fatalf("expected at least 5 pricing entries, got %v", getRes["pricing"])
+	}
+
+	// 2. POST /api/admin/expedition-pricing without auth -> 401/403
+	updatePayload := []game.EraPricingConfig{
+		{EraKey: "discovery", EraName: "The Age of Discovery (1500–1749)", StartYear: 1500, EndYear: 1750, CostPerPct: 15.0, GestationYears: 2.0, YieldBonus: 0.05},
+		{EraKey: "revolt", EraName: "The Age of Revolt (1750–1859)", StartYear: 1750, EndYear: 1860, CostPerPct: 20.0, GestationYears: 1.5, YieldBonus: 0.05},
+		{EraKey: "independence", EraName: "The Age of Independence (1860–1919)", StartYear: 1860, EndYear: 1920, CostPerPct: 35.0, GestationYears: 1.0, YieldBonus: 0.06},
+		{EraKey: "decolonisation", EraName: "The Age of Decolonisation (1920–1988)", StartYear: 1920, EndYear: 1989, CostPerPct: 70.0, GestationYears: 0.5, YieldBonus: 0.08},
+		{EraKey: "modern", EraName: "The Modern Age (1989+)", StartYear: 1989, EndYear: 9999, CostPerPct: 130.0, GestationYears: 0.35, YieldBonus: 0.10},
+	}
+	bodyBytes, _ := json.Marshal(updatePayload)
+
+	unauthReq := httptest.NewRequest(http.MethodPost, "/api/admin/expedition-pricing", bytes.NewReader(bodyBytes))
+	unauthRr := httptest.NewRecorder()
+	UpdateExpeditionPricingHandler(unauthRr, unauthReq)
+	if unauthRr.Code != http.StatusUnauthorized && unauthRr.Code != http.StatusForbidden {
+		t.Errorf("expected 401 or 403 for unauthenticated update, got %d", unauthRr.Code)
+	}
+
+	// 3. POST with admin auth -> 200 and sets in-memory matrix
+	adminToken := &auth.Token{UserID: 1, Username: "admin", Email: "admin@example.com"}
+	authReq := httptest.NewRequest(http.MethodPost, "/api/admin/expedition-pricing", bytes.NewReader(bodyBytes))
+	authReq = authReq.WithContext(context.WithValue(authReq.Context(), "user", adminToken))
+	authRr := httptest.NewRecorder()
+	UpdateExpeditionPricingHandler(authRr, authReq)
+	if authRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin update, got %d (body: %s)", authRr.Code, authRr.Body.String())
+	}
+
+	if game.GetEraExpeditionCostPerPct(1500) != 15.0 {
+		t.Errorf("expected updated CostPerPct 15.0 for Discovery, got %f", game.GetEraExpeditionCostPerPct(1500))
+	}
+
+	// Restore default 12.0
+	updatePayload[0].CostPerPct = 12.0
+	game.SetExpeditionPricingTable(updatePayload)
+}
+

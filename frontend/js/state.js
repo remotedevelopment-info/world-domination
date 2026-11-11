@@ -55,6 +55,7 @@ export const state = {
   showMapLabels: true, // Control switch: show/hide name plate abbreviations on base map
   mapResolution:
     (typeof localStorage !== "undefined" && localStorage.getItem("mapResolution")) || "fast", // "fast" | "high_res" | "realistic"
+  expeditionPricing: [], // Dynamic era pricing table from server
 };
 
 // Initialize session from localStorage if available

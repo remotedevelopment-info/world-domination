@@ -79,6 +79,10 @@ export function connectWebSocket() {
       syncTimelineFromServer(payload);
     }
 
+    if (Array.isArray(payload.expedition_pricing) && payload.expedition_pricing.length > 0) {
+      state.expeditionPricing = payload.expedition_pricing;
+    }
+
     state.lastStateAt = Date.now();
     state.currentTick = payload.tick || 0;
     syncKingdomsForYear(payload.countries, state.currentSimYear);

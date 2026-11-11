@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -1105,7 +1106,7 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Announce commitment when raising investment dial
 	if errSettings == nil && req.Investment > oldSettings.Investment {
-		annualCost := int64(math.Round(game.GetEraExpeditionAnnualCost(simYear) * float64(req.Investment) / 100.0))
+		annualCost := int64(math.Round(game.GetEraExpeditionCostPerPct(simYear) * float64(req.Investment)))
 		gestation := game.GetColonialGestationYears(simYear)
 		portName := game.RealmPort(detail.Code, detail.Name)
 		msg := fmt.Sprintf("⚓ Royal Exchequer commits %d gold ducats per annum over %.1f years to outfit overseas expeditions in %s.", annualCost, gestation, portName)
@@ -1222,8 +1223,9 @@ func GetAdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			"is_paused":    isPaused,
 			"tick":         state.Tick,
 		},
-		"users":           users,
-		"total_countries": len(state.Countries),
+		"users":              users,
+		"total_countries":    len(state.Countries),
+		"expedition_pricing": game.GetExpeditionPricingTable(),
 	})
 }
 
@@ -1288,6 +1290,90 @@ func AdminResetGameHandler(w http.ResponseWriter, r *http.Request) {
 		"era_id":       "discovery",
 		"clear_claims": clearClaims,
 		"tick":         state.Tick,
+	})
+}
+
+// GetExpeditionPricingHandler returns the configured era expedition pricing matrix.
+func GetExpeditionPricingHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	pricing := game.GetExpeditionPricingTable()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pricing": pricing,
+	})
+}
+
+// UpdateExpeditionPricingRequest models the batch update payload for era expedition pricing.
+type UpdateExpeditionPricingRequest struct {
+	Pricing []game.EraPricingConfig `json:"pricing"`
+}
+
+// UpdateExpeditionPricingHandler updates the expedition pricing matrix and broadcasts new state.
+func UpdateExpeditionPricingHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	admin, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Failed to read request body")
+		return
+	}
+
+	var pricingList []game.EraPricingConfig
+	var wrapped UpdateExpeditionPricingRequest
+	if err := json.Unmarshal(bodyBytes, &wrapped); err == nil && len(wrapped.Pricing) > 0 {
+		pricingList = wrapped.Pricing
+	} else if err := json.Unmarshal(bodyBytes, &pricingList); err != nil || len(pricingList) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request payload: expected pricing array or object with 'pricing' field")
+		return
+	}
+
+	for i := range pricingList {
+		p := &pricingList[i]
+		if p.EraKey == "" && p.EraID != "" {
+			p.EraKey = p.EraID
+		}
+		if p.EraID == "" && p.EraKey != "" {
+			p.EraID = p.EraKey
+		}
+		if p.CostPerPct <= 0 {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Cost per %% for %s must be positive", p.EraKey))
+			return
+		}
+		if p.GestationYears <= 0 {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Gestation duration for %s must be positive", p.EraKey))
+			return
+		}
+		if err := database.UpdateExpeditionEraPricing(p.EraKey, p.CostPerPct, p.GestationYears, p.YieldBonus); err != nil {
+			log.Printf("Error persisting era expedition pricing for %s: %v", p.EraKey, err)
+		}
+	}
+
+	game.SetExpeditionPricingTable(pricingList)
+	game.GetEngine().Advance()
+
+	log.Printf("Admin %s (%s) updated expedition pricing table across %d eras", admin.Username, admin.Email, len(pricingList))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Expedition pricing table updated successfully across all historical eras.",
+		"pricing": game.GetExpeditionPricingTable(),
 	})
 }
 

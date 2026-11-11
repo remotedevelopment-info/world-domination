@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 )
 
 // RealmPort returns a historically flavored primary naval port or commercial capital for the realm.
@@ -188,37 +189,108 @@ func GetEraKey(simYear float64) string {
 	}
 }
 
-// GetColonialGestationYears returns the gestation duration in years needed to complete an expedition at 100% investment.
-func GetColonialGestationYears(simYear float64) float64 {
-	switch {
-	case simYear < 1750:
-		return 5.0
-	case simYear < 1860:
-		return 2.5
-	case simYear < 1920:
-		return 1.25
-	case simYear < 1989:
-		return 0.5
-	default:
-		return 0.35
+// EraPricingConfig models configurable expedition cost per % and gestation duration by era.
+type EraPricingConfig struct {
+	EraKey         string  `json:"era_key"`
+	EraID          string  `json:"era_id,omitempty"`
+	EraName        string  `json:"era_name"`
+	StartYear      float64 `json:"start_year"`
+	EndYear        float64 `json:"end_year"`
+	CostPerPct     float64 `json:"cost_per_pct"`
+	GestationYears float64 `json:"gestation_years"`
+	YieldBonus     float64 `json:"yield_bonus"`
+}
+
+var (
+	eraPricingMu   sync.RWMutex
+	eraPricingList = []EraPricingConfig{
+		{EraKey: "discovery", EraID: "discovery", EraName: "The Age of Discovery (1500–1749)", StartYear: 1500, EndYear: 1750, CostPerPct: 12.0, GestationYears: 2.0, YieldBonus: 0.05},
+		{EraKey: "revolt", EraID: "revolt", EraName: "The Age of Revolt (1750–1859)", StartYear: 1750, EndYear: 1860, CostPerPct: 18.0, GestationYears: 1.5, YieldBonus: 0.05},
+		{EraKey: "independence", EraID: "independence", EraName: "The Age of Independence (1860–1919)", StartYear: 1860, EndYear: 1920, CostPerPct: 30.0, GestationYears: 1.0, YieldBonus: 0.06},
+		{EraKey: "decolonisation", EraID: "decolonisation", EraName: "The Age of Decolonisation (1920–1988)", StartYear: 1920, EndYear: 1989, CostPerPct: 60.0, GestationYears: 0.5, YieldBonus: 0.08},
+		{EraKey: "modern", EraID: "modern", EraName: "The Modern Age (1989+)", StartYear: 1989, EndYear: 9999, CostPerPct: 120.0, GestationYears: 0.35, YieldBonus: 0.10},
+	}
+)
+
+// GetExpeditionPricingTable returns a thread-safe copy of the configured era pricing table.
+func GetExpeditionPricingTable() []EraPricingConfig {
+	eraPricingMu.RLock()
+	defer eraPricingMu.RUnlock()
+	res := make([]EraPricingConfig, len(eraPricingList))
+	for i, p := range eraPricingList {
+		if p.EraID == "" && p.EraKey != "" {
+			p.EraID = p.EraKey
+		}
+		if p.EraKey == "" && p.EraID != "" {
+			p.EraKey = p.EraID
+		}
+		res[i] = p
+	}
+	return res
+}
+
+// SetExpeditionPricingTable updates the active era expedition pricing parameters in memory.
+func SetExpeditionPricingTable(table []EraPricingConfig) {
+	eraPricingMu.Lock()
+	defer eraPricingMu.Unlock()
+	eraPricingList = make([]EraPricingConfig, len(table))
+	for i, t := range table {
+		if t.EraKey == "" && t.EraID != "" {
+			t.EraKey = t.EraID
+		}
+		if t.EraID == "" && t.EraKey != "" {
+			t.EraID = t.EraKey
+		}
+		eraPricingList[i] = t
 	}
 }
 
-// GetEraExpeditionAnnualCost returns the annual gold expenditure required at 100% investment for the historical era.
-// Age of Discovery: 150 gold/year. Later eras: greater annual expenditure over a shorter gestation duration.
-func GetEraExpeditionAnnualCost(simYear float64) float64 {
-	switch {
-	case simYear < 1750:
-		return 150.0 // Age of Discovery: 150 gold/yr for 5.0 yrs (Total: 750 gold)
-	case simYear < 1860:
-		return 360.0 // Age of Revolt: 360 gold/yr for 2.5 yrs (Total: 900 gold)
-	case simYear < 1920:
-		return 800.0 // Age of Independence: 800 gold/yr for 1.25 yrs (Total: 1,000 gold)
-	case simYear < 1989:
-		return 2400.0 // Age of Decolonisation: 2,400 gold/yr for 0.5 yrs (Total: 1,200 gold)
-	default:
-		return 4500.0 // The Modern Age: 4,500 gold/yr for 0.35 yrs (Total: 1,575 gold)
+// GetEraExpeditionPricing returns the pricing config for the era containing simYear.
+func GetEraExpeditionPricing(simYear float64) EraPricingConfig {
+	eraPricingMu.RLock()
+	defer eraPricingMu.RUnlock()
+	for _, p := range eraPricingList {
+		if simYear >= p.StartYear && simYear < p.EndYear {
+			return p
+		}
 	}
+	if len(eraPricingList) > 0 {
+		return eraPricingList[len(eraPricingList)-1]
+	}
+	return EraPricingConfig{EraKey: "discovery", CostPerPct: 12.0, GestationYears: 2.0, YieldBonus: 0.05}
+}
+
+// GetEraExpeditionCostPerPct returns the gold/year cost for 1% investment dial in the era.
+func GetEraExpeditionCostPerPct(simYear float64) float64 {
+	p := GetEraExpeditionPricing(simYear)
+	if p.CostPerPct <= 0 {
+		return 12.0
+	}
+	return p.CostPerPct
+}
+
+// GetColonialGestationYears returns the gestation duration in years needed to complete an expedition.
+func GetColonialGestationYears(simYear float64) float64 {
+	p := GetEraExpeditionPricing(simYear)
+	if p.GestationYears <= 0 {
+		return 2.0
+	}
+	return p.GestationYears
+}
+
+// GetColonialYieldBonus returns the base trade productivity yield bonus for a completed fleet in the era.
+func GetColonialYieldBonus(simYear float64) float64 {
+	p := GetEraExpeditionPricing(simYear)
+	if p.YieldBonus <= 0 {
+		return 0.05
+	}
+	return p.YieldBonus
+}
+
+// GetEraExpeditionAnnualCost returns the annual gold expenditure required at 100% investment for the historical era.
+// Cost = CostPerPct * 100.
+func GetEraExpeditionAnnualCost(simYear float64) float64 {
+	return GetEraExpeditionCostPerPct(simYear) * 100.0
 }
 
 // GetEraExpeditionTotalCost returns the total gold commitment required to complete an expedition at 100% investment.

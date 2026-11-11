@@ -1207,6 +1207,21 @@ export function lafferJs(rate) {
   return term1 * term2;
 }
 
+export function getActiveExpeditionPricing(simYear = 1500) {
+  if (Array.isArray(state.expeditionPricing) && state.expeditionPricing.length > 0) {
+    const found = state.expeditionPricing.find((p) => simYear >= p.start_year && simYear < p.end_year);
+    if (found) return found;
+    if (simYear >= 1989) return state.expeditionPricing[state.expeditionPricing.length - 1];
+    return state.expeditionPricing[0];
+  }
+  // Hardcoded default fallback (matching database defaults: 12.0 G/% in Discovery)
+  if (simYear >= 1989) return { era_id: "modern", era_name: "Modern Age", start_year: 1989, end_year: 9999, cost_per_pct: 120.0, gestation_years: 0.35, yield_bonus: 0.10 };
+  if (simYear >= 1920) return { era_id: "decolonisation", era_name: "Decolonisation & Cold War", start_year: 1920, end_year: 1989, cost_per_pct: 60.0, gestation_years: 0.50, yield_bonus: 0.08 };
+  if (simYear >= 1860) return { era_id: "independence", era_name: "Age of Independence", start_year: 1860, end_year: 1920, cost_per_pct: 30.0, gestation_years: 1.00, yield_bonus: 0.06 };
+  if (simYear >= 1750) return { era_id: "revolt", era_name: "Age of Revolt", start_year: 1750, end_year: 1860, cost_per_pct: 18.0, gestation_years: 1.50, yield_bonus: 0.05 };
+  return { era_id: "discovery", era_name: "Age of Discovery", start_year: 1500, end_year: 1750, cost_per_pct: 12.0, gestation_years: 2.00, yield_bonus: 0.05 };
+}
+
 export function updateEconomyHintsLive() {
   const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
   const kingdom =
@@ -1243,16 +1258,14 @@ export function updateEconomyHintsLive() {
   const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.30);
 
   const simYear = (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
-  let baseAnnualExpCost = 150.0;
-  let gestationYears = 5.0;
-  if (simYear >= 1989) { baseAnnualExpCost = 4500.0; gestationYears = 0.35; }
-  else if (simYear >= 1920) { baseAnnualExpCost = 2400.0; gestationYears = 0.5; }
-  else if (simYear >= 1860) { baseAnnualExpCost = 800.0; gestationYears = 1.25; }
-  else if (simYear >= 1750) { baseAnnualExpCost = 360.0; gestationYears = 2.5; }
+  const pricing = getActiveExpeditionPricing(simYear);
+  const costPerPct = pricing.cost_per_pct || 12.0;
+  const gestationYears = pricing.gestation_years || 2.0;
+  const baseAnnualExpCost = costPerPct * 100.0;
 
   const totalProjectCost100 = baseAnnualExpCost * gestationYears;
-  const invExp = Math.round(baseAnnualExpCost * (investmentRate / 100.0));
-  const totalCommitment = Math.round(totalProjectCost100 * (investmentRate / 100.0));
+  const invExp = Math.round(costPerPct * investmentRate);
+  const totalCommitment = Math.round(invExp * gestationYears);
   const isModern = simYear >= 1989;
   const maxAffordableInv = isModern ? 100 : Math.min(100, Math.max(0, Math.floor((res / totalProjectCost100) * 100)));
   const canAfford = isModern || investmentRate <= maxAffordableInv;
@@ -1290,13 +1303,13 @@ export function updateEconomyHintsLive() {
   const invHint = document.getElementById("cc-investment-hint");
   if (invHint) {
     if (!canAfford) {
-      invHint.textContent = `⚠️ Need ${totalCommitment} G for ${gestationYears} yrs (Max: ${maxAffordableInv}%)`;
+      invHint.textContent = `⚠️ Need ${totalCommitment} G for ${gestationYears} yrs (${costPerPct} G/% · Max: ${maxAffordableInv}%)`;
       invHint.style.color = "#ff6b6b";
     } else {
       const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` -${cappedBudget.effInv} G/yr`;
       const yieldBonus = Math.round(colYield * 100);
       const yieldNote = yieldBonus > 0 ? ` · +${yieldBonus}% Yield Active` : ` · ${gestationYears} yrs production`;
-      invHint.textContent = `Expeditions:${capNote} (${totalCommitment} G total${yieldNote})`;
+      invHint.textContent = `Expeditions:${capNote} (${costPerPct} G/% · ${totalCommitment} G total${yieldNote})`;
       invHint.style.color = "#38bdf8";
     }
   }

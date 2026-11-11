@@ -252,6 +252,26 @@ func InitSchema() error {
 	INSERT INTO eras (name, description, is_active) 
 	VALUES ('medieval', 'Medieval Europe - Kingdoms and Fiefdoms', true)
 	ON CONFLICT (name) DO NOTHING;
+
+	CREATE TABLE IF NOT EXISTS expedition_era_pricing (
+		era_key VARCHAR(32) PRIMARY KEY,
+		era_name VARCHAR(64) NOT NULL,
+		start_year DOUBLE PRECISION NOT NULL,
+		end_year DOUBLE PRECISION NOT NULL,
+		cost_per_pct DOUBLE PRECISION NOT NULL DEFAULT 12.0,
+		gestation_years DOUBLE PRECISION NOT NULL DEFAULT 2.0,
+		yield_bonus DOUBLE PRECISION NOT NULL DEFAULT 0.05,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+
+	INSERT INTO expedition_era_pricing (era_key, era_name, start_year, end_year, cost_per_pct, gestation_years, yield_bonus)
+	VALUES
+		('discovery', 'The Age of Discovery (1500–1749)', 1500, 1750, 12.0, 2.0, 0.05),
+		('revolt', 'The Age of Revolt (1750–1859)', 1750, 1860, 18.0, 1.5, 0.05),
+		('independence', 'The Age of Independence (1860–1919)', 1860, 1920, 30.0, 1.0, 0.06),
+		('decolonisation', 'The Age of Decolonisation (1920–1988)', 1920, 1989, 60.0, 0.5, 0.08),
+		('modern', 'The Modern Age (1989+)', 1989, 9999, 120.0, 0.35, 0.10)
+	ON CONFLICT (era_key) DO NOTHING;
 	`
 
 	_, err := DB.Exec(schema)
@@ -1746,3 +1766,67 @@ func GetAdminDashboardUsers() ([]AdminUserOverview, error) {
 	}
 	return result, rows.Err()
 }
+
+// ExpeditionPricingRow encapsulates era-specific expedition cost per percentage and gestation duration.
+type ExpeditionPricingRow struct {
+	EraKey         string    `json:"era_key"`
+	EraName        string    `json:"era_name"`
+	StartYear      float64   `json:"start_year"`
+	EndYear        float64   `json:"end_year"`
+	CostPerPct     float64   `json:"cost_per_pct"`
+	GestationYears float64   `json:"gestation_years"`
+	YieldBonus     float64   `json:"yield_bonus"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// GetExpeditionEraPricing loads the configured expedition pricing matrix across eras.
+func GetExpeditionEraPricing() ([]ExpeditionPricingRow, error) {
+	if DB == nil {
+		return nil, nil
+	}
+	rows, err := DB.Query(`
+		SELECT era_key, era_name, start_year, end_year, cost_per_pct, gestation_years, yield_bonus, updated_at
+		FROM expedition_era_pricing
+		ORDER BY start_year ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ExpeditionPricingRow
+	for rows.Next() {
+		var r ExpeditionPricingRow
+		if err := rows.Scan(
+			&r.EraKey, &r.EraName, &r.StartYear, &r.EndYear,
+			&r.CostPerPct, &r.GestationYears, &r.YieldBonus, &r.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// UpdateExpeditionEraPricing updates the pricing parameters for a specified era.
+func UpdateExpeditionEraPricing(eraKey string, costPerPct, gestationYears, yieldBonus float64) error {
+	if DB == nil {
+		return nil
+	}
+	if costPerPct <= 0 {
+		costPerPct = 1.0
+	}
+	if gestationYears <= 0 {
+		gestationYears = 0.1
+	}
+	if yieldBonus <= 0 {
+		yieldBonus = 0.01
+	}
+	_, err := DB.Exec(`
+		UPDATE expedition_era_pricing
+		SET cost_per_pct = $1, gestation_years = $2, yield_bonus = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE era_key = $4
+	`, costPerPct, gestationYears, yieldBonus, eraKey)
+	return err
+}
+

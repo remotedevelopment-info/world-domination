@@ -111,6 +111,8 @@ func setupRouter() *mux.Router {
 
 	// Global timeline read endpoint (authoritative server clock, public)
 	r.HandleFunc("/api/timeline", handlers.GetTimelineHandler).Methods("GET")
+	// Global expedition era pricing read endpoint (public read)
+	r.HandleFunc("/api/expedition-pricing", handlers.GetExpeditionPricingHandler).Methods("GET")
 
 	// Protected routes
 	api := r.PathPrefix("/api").Subrouter()
@@ -122,6 +124,9 @@ func setupRouter() *mux.Router {
 	api.HandleFunc("/admin/game-monitor", handlers.AdminGameMonitorHandler).Methods("GET")
 	api.HandleFunc("/admin/scenario-tune", handlers.AdminScenarioTuneHandler).Methods("POST")
 	api.HandleFunc("/admin/reset-game", handlers.AdminResetGameHandler).Methods("POST")
+	api.HandleFunc("/admin/expedition-pricing", handlers.GetExpeditionPricingHandler).Methods("GET")
+	api.HandleFunc("/admin/expedition-pricing", handlers.UpdateExpeditionPricingHandler).Methods("POST")
+	api.HandleFunc("/expedition-pricing", handlers.GetExpeditionPricingHandler).Methods("GET")
 	api.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST")
 	api.HandleFunc("/assign-country", handlers.AssignCountryHandler).Methods("POST")
 	api.HandleFunc("/my-country", handlers.GetPlayerCountryHandler).Methods("GET")
@@ -167,6 +172,24 @@ func main() {
 
 	if err := database.SeedInitialData(); err != nil {
 		log.Fatalf("Failed to seed initial data: %v", err)
+	}
+
+	// Load configured expedition pricing from database
+	if pricingRows, err := database.GetExpeditionEraPricing(); err == nil && len(pricingRows) > 0 {
+		var pricingTable []game.EraPricingConfig
+		for _, r := range pricingRows {
+			pricingTable = append(pricingTable, game.EraPricingConfig{
+				EraKey:         r.EraKey,
+				EraName:        r.EraName,
+				StartYear:      r.StartYear,
+				EndYear:        r.EndYear,
+				CostPerPct:     r.CostPerPct,
+				GestationYears: r.GestationYears,
+				YieldBonus:     r.YieldBonus,
+			})
+		}
+		game.SetExpeditionPricingTable(pricingTable)
+		log.Printf("Loaded %d era expedition pricing configurations from database", len(pricingTable))
 	}
 
 	// Start game engine (date-based, real-time gameplay with authoritative timeline)

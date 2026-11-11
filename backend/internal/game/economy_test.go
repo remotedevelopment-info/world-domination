@@ -418,7 +418,7 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	decolGest := GetColonialGestationYears(1940.0)
 	modGest := GetColonialGestationYears(2005.0)
 
-	if discGest != 5.0 || revoltGest != 2.5 || indGest != 1.25 || decolGest != 0.5 || modGest != 0.35 {
+	if discGest != 2.0 || revoltGest != 1.5 || indGest != 1.0 || decolGest != 0.5 || modGest != 0.35 {
 		t.Errorf("unexpected gestation periods: disc=%f, revolt=%f, ind=%f, decol=%f, mod=%f",
 			discGest, revoltGest, indGest, decolGest, modGest)
 	}
@@ -482,32 +482,32 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 			highInvestBuildingEcon.InvestmentExpenditure)
 	}
 
-	// 7. Era-specific annual expenditure and total multi-year project commitment costs
-	if GetEraExpeditionAnnualCost(1500) != 150.0 || GetEraExpeditionTotalCost(1500) != 750.0 {
-		t.Errorf("expected Discovery: 150 gold/yr for 5 yrs (total 750), got annual=%f, total=%f",
+	// 7. Era-specific annual expenditure and total multi-year project commitment costs (Default: 12 per %)
+	if GetEraExpeditionAnnualCost(1500) != 1200.0 || GetEraExpeditionTotalCost(1500) != 2400.0 {
+		t.Errorf("expected Discovery: 1200 gold/yr for 2 yrs (total 2400), got annual=%f, total=%f",
 			GetEraExpeditionAnnualCost(1500), GetEraExpeditionTotalCost(1500))
 	}
-	if GetEraExpeditionAnnualCost(1760) != 360.0 || GetEraExpeditionTotalCost(1760) != 900.0 {
-		t.Errorf("expected Revolt: 360 gold/yr for 2.5 yrs (total 900), got annual=%f, total=%f",
+	if GetEraExpeditionAnnualCost(1760) != 1800.0 || GetEraExpeditionTotalCost(1760) != 2700.0 {
+		t.Errorf("expected Revolt: 1800 gold/yr for 1.5 yrs (total 2700), got annual=%f, total=%f",
 			GetEraExpeditionAnnualCost(1760), GetEraExpeditionTotalCost(1760))
 	}
-	if GetEraExpeditionAnnualCost(1880) != 800.0 || GetEraExpeditionTotalCost(1880) != 1000.0 {
-		t.Errorf("expected Independence: 800 gold/yr for 1.25 yrs (total 1000), got annual=%f, total=%f",
+	if GetEraExpeditionAnnualCost(1880) != 3000.0 || GetEraExpeditionTotalCost(1880) != 3000.0 {
+		t.Errorf("expected Independence: 3000 gold/yr for 1.0 yrs (total 3000), got annual=%f, total=%f",
 			GetEraExpeditionAnnualCost(1880), GetEraExpeditionTotalCost(1880))
 	}
 
 	// 8. Solvency check: pre-modern realms must have adequate reserves to support expedition spending
-	// In Discovery with 600 gold: 100% requires 750 gold -> rejected, max affordable is 80% (600 gold)
+	// In Discovery with 600 gold: 100% requires 2400 gold -> rejected, max affordable is 25% (600 gold)
 	allowed100, maxAff100, req100, _ := CheckExpeditionAffordability(600, 100, 1500)
-	if allowed100 || maxAff100 != 80 || req100 != 750 {
+	if allowed100 || maxAff100 != 25 || req100 != 2400 {
 		t.Errorf("expected 100%% investment rejected with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
 			allowed100, maxAff100, req100)
 	}
 
-	allowed80, maxAff80, req80, _ := CheckExpeditionAffordability(600, 80, 1500)
-	if !allowed80 || maxAff80 != 80 || req80 != 600 {
-		t.Errorf("expected 80%% investment allowed with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
-			allowed80, maxAff80, req80)
+	allowed25, maxAff25, req25, _ := CheckExpeditionAffordability(600, 25, 1500)
+	if !allowed25 || maxAff25 != 25 || req25 != 600 {
+		t.Errorf("expected 25%% investment allowed with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
+			allowed25, maxAff25, req25)
 	}
 
 	// Modern Era (1989+): Deficits permitted, so investments are allowed even with 0 reserves
@@ -516,16 +516,16 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 		t.Errorf("expected deficit allowed in Modern Age even with 0 reserves")
 	}
 
-	// 9. Zero tax rate with 60% expedition investment strictly produces a -90 gold/year exchequer deficit
+	// 9. Zero tax rate with 60% expedition investment strictly produces a -720 gold/year exchequer deficit (12 * 60)
 	zeroTaxExpEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0)
 	if zeroTaxExpEcon.TaxRevenue != 0 {
 		t.Errorf("expected 0 tax revenue under 0%% tax rate, got %d", zeroTaxExpEcon.TaxRevenue)
 	}
-	if zeroTaxExpEcon.InvestmentExpenditure != 90 {
-		t.Errorf("expected 60%% investment in Discovery to cost 90 gold/yr (60%% of 150), got %d", zeroTaxExpEcon.InvestmentExpenditure)
+	if zeroTaxExpEcon.InvestmentExpenditure != 720 {
+		t.Errorf("expected 60%% investment in Discovery to cost 720 gold/yr (12 * 60), got %d", zeroTaxExpEcon.InvestmentExpenditure)
 	}
-	if zeroTaxExpEcon.BudgetBalance != -90 || zeroTaxExpEcon.EffectiveBalance != -90 {
-		t.Errorf("expected net budget balance of -90 gold/yr (reserves drain), got %d / %d",
+	if zeroTaxExpEcon.BudgetBalance != -720 || zeroTaxExpEcon.EffectiveBalance != -720 {
+		t.Errorf("expected net budget balance of -720 gold/yr (reserves drain), got %d / %d",
 			zeroTaxExpEcon.BudgetBalance, zeroTaxExpEcon.EffectiveBalance)
 	}
 
@@ -536,5 +536,22 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 		t.Errorf("expected +3%% trade yield from completed 60%% fleet to raise GDP (%d vs %d)",
 			completed60Econ.GDP, baseYieldEcon.GDP)
 	}
+
+	// 11. Custom admin pricing update adjusts annual cost and gestation
+	table := GetExpeditionPricingTable()
+	if len(table) < 5 {
+		t.Fatalf("expected at least 5 era pricing configs, got %d", len(table))
+	}
+	table[0].CostPerPct = 20.0
+	table[0].GestationYears = 1.0
+	SetExpeditionPricingTable(table)
+	if GetEraExpeditionCostPerPct(1500) != 20.0 || GetColonialGestationYears(1500) != 1.0 {
+		t.Errorf("expected updated admin pricing 20 G/%% and 1.0 yr gestation, got %f and %f",
+			GetEraExpeditionCostPerPct(1500), GetColonialGestationYears(1500))
+	}
+	// Restore default
+	table[0].CostPerPct = 12.0
+	table[0].GestationYears = 2.0
+	SetExpeditionPricingTable(table)
 }
 

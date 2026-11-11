@@ -516,6 +516,38 @@
                             </div>
                         </div>
 
+                        <!-- Colonial Expedition Era Pricing Matrix Configuration -->
+                        <div class="admin-section">
+                            <div class="admin-section-header">
+                                <span class="section-title">🚢 Colonial Expedition Era Pricing &amp; Capex Matrix</span>
+                                <span class="admin-sync-tag" id="admin-expedition-sync-tag">Authoritative Pricing</span>
+                            </div>
+                            <div class="admin-table-container">
+                                <table class="admin-users-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Era ID</th>
+                                            <th>Era Name</th>
+                                            <th>Span</th>
+                                            <th>Cost Per % (G/%)</th>
+                                            <th>Annual Cost (100%)</th>
+                                            <th>Gestation (Yrs)</th>
+                                            <th>Yield Bonus</th>
+                                            <th>Total Cost (100%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-expedition-pricing-tbody">
+                                        <tr><td colspan="8" class="loading-cell">Loading expedition pricing matrix...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="admin-control-bar" style="margin-top: 8px; justify-content: flex-end; gap: 10px;">
+                                <span id="admin-pricing-status-msg" style="color: #4ade80; font-size: 0.85rem; align-self: center;"></span>
+                                <button type="button" class="admin-btn-action" style="padding: 6px 14px;" onclick="saveAdminExpeditionPricing()">💾 Save Pricing Changes</button>
+                                <button type="button" class="admin-btn-action" style="padding: 6px 14px; background: #374151;" onclick="resetAdminExpeditionPricingDefaults()">↺ Reset to Defaults</button>
+                            </div>
+                        </div>
+
                         <!-- All Users & Assigned Territories / Resources Roster -->
                         <div class="admin-section">
                             <div class="admin-section-header">

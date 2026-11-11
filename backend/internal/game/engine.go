@@ -23,9 +23,10 @@ type GameState struct {
 	IsPaused    bool           `json:"is_paused"`
 	GameDate    time.Time      `json:"game_date"`
 	Timestamp   time.Time      `json:"timestamp"`
-	Countries   []CountryState `json:"countries"`
-	Players     []PlayerState  `json:"players"`
-	Actions     []ActionRecord `json:"actions"`
+	Countries         []CountryState     `json:"countries"`
+	Players           []PlayerState      `json:"players"`
+	Actions           []ActionRecord     `json:"actions"`
+	ExpeditionPricing []EraPricingConfig `json:"expedition_pricing,omitempty"`
 }
 
 type CountryState struct {
@@ -612,7 +613,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			if newProgress >= 100.0 {
 				newFleets++
 				newProgress = 0.0
-				yieldBonus := 0.05 * (effInvestmentRate / 100.0)
+				yieldBonus := GetColonialYieldBonus(simYear) * (effInvestmentRate / 100.0)
 				newYield += yieldBonus
 				newYield = math.Round(newYield*1000) / 1000
 				yieldPct := int(math.Round(newYield * 100.0))
@@ -821,9 +822,10 @@ func (g *GameEngine) BuildState() GameState {
 		IsPaused:    isPaused,
 		GameDate:    time.Now(),
 		Timestamp:   time.Now(),
-		Countries:   countryStates,
-		Players:     playerStates,
-		Actions:     actionRecords,
+		Countries:         countryStates,
+		Players:           playerStates,
+		Actions:           actionRecords,
+		ExpeditionPricing: GetExpeditionPricingTable(),
 	}
 }
 
