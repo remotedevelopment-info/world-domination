@@ -107,29 +107,45 @@ const (
 	inflationInvestment = 0.005
 )
 
-// laffer models tax drag on output: productivity is full at a 0% rate and
-// falls quadratically toward a floor as the rate approaches 100%. Combined
-// with revenue = output x rate, this puts the revenue-maximising rate near
-// 58%, giving the dial a genuine trade-off.
-func laffer(rate int64) float64 {
-	r := float64(rate) / 100.0
-	f := 1.0 - r*r
-	if f < 0.1 {
-		f = 0.1
+// TargetProductivityFactor models long-term investor decisions on capital and trade productivity:
+// - At or below a Fair Tax rate of 25%, there is NO negative effect on productivity (1.0 = 100%).
+// - Above 25%, investor decisions gradually reduce productivity along a hyperbolic curve,
+//   with the effect becoming progressively steeper as the rate climbs toward confiscatory levels.
+func TargetProductivityFactor(taxRate int64) float64 {
+	if taxRate <= 25 {
+		return 1.0
+	}
+	// Normalized excess tax above the 25% fair threshold (0.0 at 25%, 1.0 at 100%)
+	x := float64(taxRate-25) / 75.0
+	// Hyperbolic response curve: nearly flat near 25-30%, steepening progressively above 45-50%
+	f := 1.0 / (1.0 + 3.0*x*x)
+	if f < 0.15 {
+		f = 0.15
 	}
 	return f
+}
+
+// laffer returns the target productivity factor for a given tax rate.
+func laffer(rate int64) float64 {
+	return TargetProductivityFactor(rate)
 }
 
 // gdpValue computes gross domestic product per 90-second cycle.
 // Productive civilian workforce: troops in barracks and standing armies do not
 // produce civilian agricultural or commercial output, so expanding the military
 // directly reduces GDP and taxation revenue.
-func gdpValue(population, troops, taxRate, markets, infrastructure int64) float64 {
+func gdpValue(population, troops, taxRate, markets, infrastructure int64, productivityFactor float64) float64 {
 	workforce := population - troops
 	if workforce < 0 {
 		workforce = 0
 	}
-	return float64(workforce) * baseProductivity * laffer(taxRate) *
+	if productivityFactor <= 0 {
+		productivityFactor = TargetProductivityFactor(taxRate)
+	}
+	if productivityFactor > 1.0 {
+		productivityFactor = 1.0
+	}
+	return float64(workforce) * baseProductivity * productivityFactor *
 		(1 + marketBoost*float64(markets)) * (1 + infraBoost*float64(infrastructure))
 }
 
@@ -445,7 +461,11 @@ func ComputeMigration(population, taxRate, socialCosts, infrastructure int64) in
 
 // ComputeEconomy derives all dashboard and annual budget indicators from persisted state.
 func ComputeEconomy(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64) EconomyState {
-	return ComputeEconomyWithLayers(population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts, 0, troops, 0)
+	targetPride := TargetProductivityFactor(taxRate) * 100.0
+	return ComputeEconomyWithInternals(
+		population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts,
+		0, troops, 0, targetPride, 0, 1500.0,
+	)
 }
 
 // ComputeEconomyWithLayers derives all economic, budget, and military ledger indicators
@@ -454,9 +474,10 @@ func ComputeEconomyWithLayers(
 	population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64,
 	levy, regular, elite int64,
 ) EconomyState {
+	targetPride := TargetProductivityFactor(taxRate) * 100.0
 	return ComputeEconomyWithInternals(
 		population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts,
-		levy, regular, elite, 100.0, 0, 1500.0,
+		levy, regular, elite, targetPride, 0, 1500.0,
 	)
 }
 
@@ -496,17 +517,23 @@ func ComputeEconomyFull(
 
 	season := GetClimaticAndSeasonalState(simYear)
 
-	gdp := gdpValue(population, troops, taxRate, markets, infrastructure)
+	// In an economy, decisions take time: existing investments in markets and fleets do not vanish overnight.
+	// The effective productivity factor is driven by the dynamic investor confidence / commercial health factor (pride),
+	// which accumulates or decays over a 1-2 year horizon when taxes diverge from the 25% fair tax threshold.
+	productivityFactor := math.Max(0.15, math.Min(1.0, pride/100.0))
+
+	gdp := gdpValue(population, troops, taxRate, markets, infrastructure, productivityFactor)
 	// Completed colonial expedition yields compound GDP (delayed returns: building ships costs capex, profit only starts after voyages return)
 	gdp *= (1.0 + colonialYield) * season.HarvestYieldFactor
 	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
 
-	// Entrepreneurial Pride, Colonial Fleets Trade Yield & Seasonal Trade Velocity modulate market revenue
-	prideFactor := 0.40 + 0.60*(pride/100.0)
-	marketRev := int64(float64(markets*12) * prideFactor * (1.0 + colonialYield) * season.CommercialVelocity)
+	// Port & Market Trade Income directly reflects accumulated capital investments (markets + colonial fleets)
+	// scaled by dynamic investor confidence and seasonal trade velocity
+	marketBase := float64(markets * 12)
 	if markets == 0 && colonialYield > 0 {
-		marketRev = int64(colonialYield * 250.0 * season.CommercialVelocity)
+		marketBase = colonialYield * 250.0
 	}
+	marketRev := int64(marketBase * productivityFactor * (1.0 + colonialYield) * season.CommercialVelocity)
 	totalRev := revenue + marketRev
 	if totalRev < 0 {
 		totalRev = 0
@@ -686,7 +713,7 @@ func PopulationGrowth(population, taxRate, markets, infrastructure, investment, 
 	if population >= effectiveCapacity {
 		return 0
 	}
-	perCapita := gdpValue(population, 0, taxRate, markets, infrastructure) / float64(population)
+	perCapita := gdpValue(population, 0, taxRate, markets, infrastructure, TargetProductivityFactor(taxRate)) / float64(population)
 	growth := float64(population) * 0.005 * (perCapita / baseProductivity)
 	growth += float64(investment+socialCosts) * 0.0005
 

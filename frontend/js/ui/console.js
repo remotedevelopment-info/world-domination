@@ -1263,15 +1263,19 @@ export function performEconomyAction(direction) {
   setTaxRate(taxRate + (direction === "increase" ? 5 : -5));
 }
 
-// lafferJs models tax drag on economic output and civilian productivity:
-// Productivity is full (1.0 = 100%) at 0% tax, and falls quadratically
-// (1 - r^2) as the tax rate rises toward 100% (floor 0.10).
-// Combined with Tax Revenue = GDP * (rate / 100), tax collections peak near 58%,
-// while economic productivity is inversely correlated with the tax rate.
+// targetProductivityFactorJs models long-term investor decisions on capital and trade productivity:
+// - At or below a Fair Tax rate of 25%, there is NO negative effect on productivity (1.0 = 100%).
+// - Above 25%, investor decisions gradually reduce productivity along a hyperbolic curve,
+//   taking 1 to 2 years to accumulate full effect. Existing investments (ships, markets) do not disappear overnight.
+export function targetProductivityFactorJs(rate) {
+  if (rate <= 25) return 1.0;
+  const x = (Math.max(25, Math.min(100, rate)) - 25.0) / 75.0;
+  const f = 1.0 / (1.0 + 3.0 * x * x);
+  return Math.max(0.15, f);
+}
+
 export function lafferJs(rate) {
-  const r = Math.max(0, Math.min(100, rate)) / 100.0;
-  const f = 1.0 - r * r;
-  return f < 0.1 ? 0.1 : f;
+  return targetProductivityFactorJs(rate);
 }
 
 export function getActiveExpeditionPricing(simYear = 1500) {
@@ -1306,13 +1310,20 @@ export function updateEconomyHintsLive() {
   const colYield = commandCenterDetail?.colonial_yield ?? kingdom.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
   // Colonial investment dial funds shipbuilding (delayed capex); trade profit begins only after fleets complete voyages
   const tradeFleetBonus = 1.0 + colYield;
-  const laffer = lafferJs(taxRate);
+
+  const pride = commandCenterDetail?.entrepreneurial_pride ?? kingdom.entrepreneurial_pride ?? 100;
+  const currentProductivityFactor = Math.max(0.15, Math.min(1.0, pride / 100.0));
+  const targetProductivity = targetProductivityFactorJs(taxRate);
 
   // Mobilized troops reduce productive civilian workforce, directly reducing GDP and tax revenue
   const civilianWorkforce = Math.max(0, pop - tr);
-  const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * tradeFleetBonus * laffer;
+  // Current GDP reflects actual existing capital health (investor confidence with 1-2 year lag)
+  const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * tradeFleetBonus * currentProductivityFactor;
   const taxRevenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
-  const marketRevenue = Math.round(((marketsLevel || 0) * 4 + (marketsLevel === 0 && colYield > 0 ? colYield * 80 : 0)) * tradeFleetBonus);
+
+  // Trade figures directly reflect capital investments (markets + colonial fleets) scaled by dynamic investor health:
+  const marketBase = (marketsLevel || 0) * 12 + (marketsLevel === 0 && colYield > 0 ? colYield * 80 : 0);
+  const marketRevenue = Math.round(marketBase * tradeFleetBonus * currentProductivityFactor);
   const totalRevenue = taxRevenue + marketRevenue;
 
   const levy = commandCenterDetail?.troops_levy ?? 0;
@@ -1340,7 +1351,6 @@ export function updateEconomyHintsLive() {
   // Enforce Layer 1 Hard-Specie Fiscal Rules
   const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
   const popPressure = computeClientPopulationPressure(pop, tr, taxRate, socialCostsRate, infraLevel || 0);
-  const pride = commandCenterDetail?.entrepreneurial_pride ?? kingdom.entrepreneurial_pride ?? 100;
   const migInfo = computeClientMigration(pop, taxRate, socialCostsRate, infraLevel || 0, gdp, res, marketsLevel || 0, pride);
   const netMigration = migInfo.netMigration;
 
@@ -1352,18 +1362,18 @@ export function updateEconomyHintsLive() {
 
   const taxHint = document.getElementById("cc-tax-impact-hint");
   if (taxHint) {
-    if (migInfo.status === "WEALTH_FLIGHT") {
-      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (🚨 Wealth Flight: ${migInfo.wealthyMigration.toLocaleString()}/yr)`;
-      taxHint.style.color = "#ff6b6b";
-    } else if (migInfo.status === "CAPITAL_HAVEN") {
-      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (🏛️ Capital Haven: +${migInfo.wealthyMigration.toLocaleString()} magnates/yr)`;
-      taxHint.style.color = "#38bdf8";
-    } else if (migInfo.status === "FAIR_PROSPERITY") {
-      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (✨ Settlers: +${netMigration.toLocaleString()}/yr)`;
+    if (taxRate <= 25) {
+      taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (✨ Fair Tax: 100% Trade Yield · No Drag)`;
       taxHint.style.color = "#4ade80";
     } else {
-      taxHint.textContent = `Tax Revenue: +${taxRevenue.toLocaleString()}/yr`;
-      taxHint.style.color = "#4ecdc4";
+      const dropPct = Math.round((1.0 - targetProductivity) * 100);
+      if (migInfo.status === "WEALTH_FLIGHT") {
+        taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (🚨 Wealth Flight · -${dropPct}% Trade over 1-2 yrs)`;
+        taxHint.style.color = "#ff6b6b";
+      } else {
+        taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (⏳ High Tax: -${dropPct}% Trade output over 1-2 yrs)`;
+        taxHint.style.color = "#fbbf24";
+      }
     }
   }
 

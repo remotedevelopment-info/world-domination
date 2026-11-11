@@ -547,21 +547,20 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		}
 		newTroops = newLevy + newRegular + newElite
 
-		// 5. Dynamic Evolution of Hidden Internal States (Pride & Delayed Military Costs)
+		// 5. Dynamic Evolution of Investor Confidence & Trade Productivity (Pride):
+		// In an economy, decisions take time: existing investments (fleets, chartered markets) do not disappear overnight.
+		// - At or below 25% (Fair Tax), there is no tax drag, and investor confidence recovers toward 100%.
+		// - Above 25%, investor decisions gradually reduce productivity along a hyperbolic curve over 1-2 years.
 		newPride := c.EntrepreneurialPride
 		if newPride <= 0 {
-			newPride = 100.0 // default initialize
+			newPride = 100.0
 		}
-		if c.EconomyRate > 40 {
-			// High taxation erodes entrepreneurial pride & risk appetite
-			loss := float64(c.EconomyRate-40) * 0.40 * yearsPassed
-			newPride -= loss
-		} else if c.EconomyRate <= 35 && c.Resources > 0 {
-			// Fair taxation and solvent treasury gradually restores merchant confidence (+2.0/yr)
-			newPride += 2.0 * yearsPassed
-		}
-		if newPride < 5.0 {
-			newPride = 5.0
+		targetPride := TargetProductivityFactor(c.EconomyRate) * 100.0
+		tau := 2.0 // 2-year time constant for investor decisions to accumulate
+		deltaPride := ((targetPride - newPride) / tau) * yearsPassed
+		newPride += deltaPride
+		if newPride < 15.0 {
+			newPride = 15.0
 		}
 		if newPride > 100.0 {
 			newPride = 100.0

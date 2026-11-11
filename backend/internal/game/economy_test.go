@@ -555,3 +555,49 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	SetExpeditionPricingTable(table)
 }
 
+func TestFairTaxThresholdAndHyperbolicLag(t *testing.T) {
+	// 1. Fair Tax Threshold: Under 25%, zero effect on future productivity (target = 1.0)
+	for tax := int64(0); tax <= 25; tax += 5 {
+		if factor := TargetProductivityFactor(tax); factor != 1.0 {
+			t.Errorf("expected TargetProductivityFactor(%d) == 1.0 under fair tax, got %f", tax, factor)
+		}
+	}
+
+	// 2. Hyperbolic Curve Above 25%: Gradual drop-off becoming progressively steeper
+	f35 := TargetProductivityFactor(35)
+	f50 := TargetProductivityFactor(50)
+	f75 := TargetProductivityFactor(75)
+	f100 := TargetProductivityFactor(100)
+
+	if f35 < 0.94 || f35 > 0.98 {
+		t.Errorf("expected mild 2-6%% drag at 35%% tax, got %f", 1.0-f35)
+	}
+	if f50 >= f35 || f50 < 0.70 || f50 > 0.80 {
+		t.Errorf("expected moderate ~25%% drag at 50%% tax, got %f", 1.0-f50)
+	}
+	if f75 >= f50 || f75 < 0.40 || f75 > 0.50 {
+		t.Errorf("expected steep ~57%% drag at 75%% tax, got %f", 1.0-f75)
+	}
+	if f100 >= f75 || f100 != 0.25 {
+		t.Errorf("expected ~75%% drop at 100%% tax (floor 0.25), got %f", f100)
+	}
+
+	// 3. Capital Investments (Fleets + Markets) do not vanish overnight:
+	// Day 0 at 75% tax with high initial investor confidence (100.0 pride) retains full trade productivity
+	initialEcon := ComputeEconomyWithInternals(10000, 2000, 0, 75, 2, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.0)
+	// After 1 year at 75%, pride has only dropped partially towards 42.8%
+	tau := 2.0
+	targetPride := TargetProductivityFactor(75) * 100.0
+	prideYear1 := 100.0 + ((targetPride - 100.0) / tau) * 1.0 // ~71.4%
+	year1Econ := ComputeEconomyWithInternals(10000, 2000, 0, 75, 2, 0, 0, 0, 0, 0, 0, prideYear1, 0, 1501.0)
+
+	if year1Econ.MarketRevenue >= initialEcon.MarketRevenue {
+		t.Errorf("expected trade revenue after 1 yr to start dropping, got %d vs %d", year1Econ.MarketRevenue, initialEcon.MarketRevenue)
+	}
+	// Verify it only dropped ~25-30% rather than vanishing completely:
+	ratio := float64(year1Econ.MarketRevenue) / float64(initialEcon.MarketRevenue)
+	if ratio < 0.65 || ratio > 0.80 {
+		t.Errorf("expected ~70%% capital retention after 1 yr of high tax, got ratio %f", ratio)
+	}
+}
+
