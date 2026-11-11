@@ -1129,7 +1129,12 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts)
+	econ := game.ComputeEconomyFull(
+		detail.Population, detail.Resources, detail.Troops,
+		settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts,
+		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
+		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, detail.ColonialYield, simYear,
+	)
 	game.PopulateLastYearLedger(
 		&econ,
 		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
@@ -1149,6 +1154,9 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		"economy_rate":      settings.EconomyRate,
 		"investment":        settings.Investment,
 		"social_costs":      settings.SocialCosts,
+		"colonial_progress": detail.ColonialProgress,
+		"colonial_yield":    detail.ColonialYield,
+		"colonial_fleets":   detail.ColonialFleets,
 		"gdp":               detail.GDP,
 		"currency_value":    detail.CurrencyValue,
 		"inflation_rate":    detail.InflationRate,

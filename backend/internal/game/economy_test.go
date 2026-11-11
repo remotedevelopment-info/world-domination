@@ -515,5 +515,26 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	if !allowedModern {
 		t.Errorf("expected deficit allowed in Modern Age even with 0 reserves")
 	}
+
+	// 9. Zero tax rate with 60% expedition investment strictly produces a -90 gold/year exchequer deficit
+	zeroTaxExpEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0)
+	if zeroTaxExpEcon.TaxRevenue != 0 {
+		t.Errorf("expected 0 tax revenue under 0%% tax rate, got %d", zeroTaxExpEcon.TaxRevenue)
+	}
+	if zeroTaxExpEcon.InvestmentExpenditure != 90 {
+		t.Errorf("expected 60%% investment in Discovery to cost 90 gold/yr (60%% of 150), got %d", zeroTaxExpEcon.InvestmentExpenditure)
+	}
+	if zeroTaxExpEcon.BudgetBalance != -90 || zeroTaxExpEcon.EffectiveBalance != -90 {
+		t.Errorf("expected net budget balance of -90 gold/yr (reserves drain), got %d / %d",
+			zeroTaxExpEcon.BudgetBalance, zeroTaxExpEcon.EffectiveBalance)
+	}
+
+	// 10. Completed voyage grants permanent trade yield proportional to investment dial
+	baseYieldEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0)
+	completed60Econ := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.03, 1500.0)
+	if completed60Econ.GDP <= baseYieldEcon.GDP {
+		t.Errorf("expected +3%% trade yield from completed 60%% fleet to raise GDP (%d vs %d)",
+			completed60Econ.GDP, baseYieldEcon.GDP)
+	}
 }
 

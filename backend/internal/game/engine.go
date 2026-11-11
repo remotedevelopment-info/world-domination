@@ -445,15 +445,6 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			}
 		}
 
-		// Wealthy Capital Transfer: incoming wealthy inject specie, fleeing wealthy drain specie
-		if econ.CapitalFlightDrain != 0 && yearsPassed > 0 {
-			capDelta := int64(math.Round(float64(econ.CapitalFlightDrain) * yearsPassed))
-			newResources += capDelta
-			if newResources < 0 {
-				newResources = 0
-			}
-		}
-
 		// 4. Warfare, Multi-Layered Troops, Continuous Conscription & Demobilization
 		newTroops := c.Troops
 		newLevy := c.TroopsLevy
@@ -604,7 +595,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		}
 
 		if effInvestmentRate > 0 {
-			progressGain := yearsPassed * (effInvestmentRate / 100.0) * (100.0 / gestationPeriod)
+			progressGain := (yearsPassed / gestationPeriod) * 100.0
 			prevProgress := newProgress
 			newProgress += progressGain
 
@@ -612,7 +603,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			if (prevProgress == 0.0 && newProgress > 0.0) ||
 				(prevProgress < 50.0 && newProgress >= 50.0) ||
 				(prevProgress < 75.0 && newProgress >= 75.0) {
-				estYearsRemaining := math.Max(0.0, (100.0-newProgress)/(effInvestmentRate/gestationPeriod))
+				estYearsRemaining := math.Max(0.0, (100.0-newProgress)/100.0*gestationPeriod)
 				newsMsg := GenerateColonialMilestoneDispatch(eraKey, c.Name, portName, newProgress, estYearsRemaining)
 				_ = database.LogAction(ownerID, c.ID, "news", newsMsg, nil, "", "", "")
 			}
@@ -621,8 +612,9 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			if newProgress >= 100.0 {
 				newFleets++
 				newProgress = 0.0
-				newYield += 0.05
-				newYield = math.Round(newYield*100) / 100
+				yieldBonus := 0.05 * (effInvestmentRate / 100.0)
+				newYield += yieldBonus
+				newYield = math.Round(newYield*1000) / 1000
 				yieldPct := int(math.Round(newYield * 100.0))
 				newsMsg := GenerateColonialVoyageReturnDispatch(eraKey, c.Name, portName, yieldPct, newFleets)
 				_ = database.LogAction(ownerID, c.ID, "news", newsMsg, nil, "", "", "")

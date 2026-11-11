@@ -322,9 +322,9 @@ export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
   updateBorderGarrisonPods(borders);
   updateEconomyHintsLive();
 
-  const colProgress = kingdom.colonial_progress ?? detail?.colonial_progress ?? 0.0;
-  const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? 0.0;
-  const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? 0;
+  const colProgress = kingdom.colonial_progress ?? detail?.colonial_progress ?? state.myKingdom?.colonial_progress ?? 0.0;
+  const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
+  const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? state.myKingdom?.colonial_fleets ?? 0;
   updateColonialGestationUI(colProgress, colYield, colFleets);
 
   const minimap = document.getElementById("cc-minimap");
@@ -429,9 +429,9 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   updateBorderGarrisonPods(borders);
   updateEconomyHintsLive();
 
-  const colProgress = kingdom.colonial_progress ?? detail?.colonial_progress ?? 0.0;
-  const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? 0.0;
-  const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? 0;
+  const colProgress = kingdom.colonial_progress ?? detail?.colonial_progress ?? state.myKingdom?.colonial_progress ?? 0.0;
+  const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
+  const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? state.myKingdom?.colonial_fleets ?? 0;
   updateColonialGestationUI(colProgress, colYield, colFleets);
 
   const minimap = document.getElementById("cc-minimap");
@@ -814,7 +814,7 @@ export function updateColonialGestationUI(progress = 0, yieldBonus = 0, fleets =
   if (statusMsg && etaVal) {
     if (investmentRate > 0) {
       const remainingProgress = Math.max(0, 100.0 - clampedProgress);
-      const yearsRemaining = remainingProgress / (investmentRate / gestationPeriod);
+      const yearsRemaining = (remainingProgress / 100.0) * gestationPeriod;
       etaVal.textContent = `${yearsRemaining.toFixed(1)} yrs`;
       etaVal.style.color = "#38bdf8";
 
@@ -903,11 +903,17 @@ export function pushEconomySettings() {
           commandCenterDetail.economy_rate = finalTax;
           commandCenterDetail.investment = finalInv;
           commandCenterDetail.social_costs = finalSoc;
+          if (typeof data.colonial_progress === "number") commandCenterDetail.colonial_progress = data.colonial_progress;
+          if (typeof data.colonial_yield === "number") commandCenterDetail.colonial_yield = data.colonial_yield;
+          if (typeof data.colonial_fleets === "number") commandCenterDetail.colonial_fleets = data.colonial_fleets;
         }
         if (state.myKingdom) {
           state.myKingdom.economy_rate = finalTax;
           state.myKingdom.investment = finalInv;
           state.myKingdom.social_costs = finalSoc;
+          if (typeof data.colonial_progress === "number") state.myKingdom.colonial_progress = data.colonial_progress;
+          if (typeof data.colonial_yield === "number") state.myKingdom.colonial_yield = data.colonial_yield;
+          if (typeof data.colonial_fleets === "number") state.myKingdom.colonial_fleets = data.colonial_fleets;
         }
         const activeId = activeCommandCenterKingdom?.id || state.myKingdom?.country_id;
         if (activeId && state.territoryDetails && state.territoryDetails[activeId]) {
@@ -1202,9 +1208,10 @@ export function lafferJs(rate) {
 }
 
 export function updateEconomyHintsLive() {
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
   const kingdom =
     activeCommandCenterKingdom ||
-    (state.myKingdom && state.kingdoms.find((k) => k.id === state.myKingdom.country_id)) ||
+    (myCid && (state.kingdoms || []).find((k) => k.id === myCid)) ||
     state.myKingdom ||
     {};
   const pop = commandCenterDetail?.population ?? kingdom.population ?? 1000;
@@ -1214,7 +1221,7 @@ export function updateEconomyHintsLive() {
   const baseProductivity = 0.02;
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
   const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
-  const colYield = commandCenterDetail?.colonial_yield ?? kingdom.colonial_yield ?? 0.0;
+  const colYield = commandCenterDetail?.colonial_yield ?? kingdom.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
   // Colonial investment dial funds shipbuilding (delayed capex); trade profit begins only after fleets complete voyages
   const tradeFleetBonus = 1.0 + colYield;
   const laffer = lafferJs(taxRate);

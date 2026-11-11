@@ -127,8 +127,9 @@ onSocketStateChange((payload) => {
   if (isOverseerAnalyticsOpen) {
     refreshOverseerAnalytics();
   }
-  if (state.myKingdom && state.myKingdom.country_id) {
-    const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (state.myKingdom && myCid) {
+    const mk = state.kingdoms.find((k) => k.id === myCid);
     if (!mk || !mk.owner_id || !isCountryOwnedByCurrentUser(mk)) {
       checkMyKingdom();
     } else {
@@ -166,7 +167,8 @@ onEraChange((newEra, yearInt, prevEraId) => {
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
-  if (state.myKingdom && state.myKingdom.country_id) {
+  const eraCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (state.myKingdom && eraCid) {
     refreshKingdomCommandCenter();
   }
 
@@ -275,12 +277,13 @@ export async function loadKingdoms() {
 }
 
 export async function loadAllTroops() {
-  if (!state.myKingdom || !state.myKingdom.country_id) return;
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (!state.myKingdom || !myCid) return;
   try {
     const res = await apiGetTroops();
     if (!res.ok) return;
     const data = await res.json();
-    if (data && data.country_id === state.myKingdom.country_id) {
+    if (data && (data.country_id === myCid)) {
       state.troops[data.country_id] = {
         central: data.central || 0,
         borders: data.borders || { N: 0, S: 0, E: 0, W: 0 },
@@ -448,8 +451,9 @@ export async function claimKingdom() {
 }
 
 export function refreshMyKingdomStats() {
-  if (!state.myKingdom || !state.myKingdom.country_id) return;
-  const country = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (!state.myKingdom || !myCid) return;
+  const country = state.kingdoms.find((k) => k.id === myCid);
   if (!country) return;
   const nameEl = document.getElementById("my-kingdom-name");
   const popEl = document.getElementById("my-kingdom-pop");

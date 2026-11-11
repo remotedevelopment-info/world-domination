@@ -221,6 +221,8 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
     byCode.set(raw.code, {
       ...meta,
       ...raw,
+      id: raw.id,
+      country_id: raw.country_id || raw.id,
       base_population: raw.base_population ?? raw.population ?? meta.population ?? 1000000,
       base_resources: raw.base_resources ?? raw.resources ?? meta.resources ?? 500,
       isIsland: Boolean(raw.isIsland || raw.is_island || meta.is_island),
@@ -303,6 +305,9 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
       if (mk.social_costs !== undefined) state.myKingdom.social_costs = mk.social_costs;
       if (mk.markets !== undefined) state.myKingdom.markets = mk.markets;
       if (mk.infrastructure !== undefined) state.myKingdom.infrastructure = mk.infrastructure;
+      if (typeof mk.colonial_progress === "number") state.myKingdom.colonial_progress = mk.colonial_progress;
+      if (typeof mk.colonial_yield === "number") state.myKingdom.colonial_yield = mk.colonial_yield;
+      if (typeof mk.colonial_fleets === "number") state.myKingdom.colonial_fleets = mk.colonial_fleets;
     }
   }
 
@@ -497,7 +502,8 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
   if (state.myKingdom) {
     const updatedMy = active.find((k) => k.code === state.myKingdom.code);
     if (updatedMy) {
-      state.myKingdom = updatedMy;
+      const preservedCid = state.myKingdom.country_id || state.myKingdom.id || updatedMy.id;
+      state.myKingdom = { ...state.myKingdom, ...updatedMy, country_id: preservedCid };
     }
   }
 
