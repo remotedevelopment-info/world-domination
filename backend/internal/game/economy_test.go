@@ -464,5 +464,22 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 		t.Errorf("expected +15%% colonial yield to boost market revenue (%d vs %d)",
 			boostedColonialEcon.MarketRevenue, zeroColonialEcon.MarketRevenue)
 	}
+
+	// 6. Increasing investment dial alone while building ships DOES NOT immediately boost GDP or trade revenue
+	noInvestEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25)
+	highInvestBuildingEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 80, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25)
+
+	if highInvestBuildingEcon.GDP != noInvestEcon.GDP {
+		t.Errorf("expected GDP to remain unchanged while ships are under construction (delayed returns): got %d vs %d",
+			highInvestBuildingEcon.GDP, noInvestEcon.GDP)
+	}
+	if highInvestBuildingEcon.MarketRevenue != noInvestEcon.MarketRevenue {
+		t.Errorf("expected market revenue to remain unchanged while ships are under construction: got %d vs %d",
+			highInvestBuildingEcon.MarketRevenue, noInvestEcon.MarketRevenue)
+	}
+	if highInvestBuildingEcon.InvestmentExpenditure <= 0 {
+		t.Errorf("expected high investment expenditure during shipbuilding capex, got %d",
+			highInvestBuildingEcon.InvestmentExpenditure)
+	}
 }
 

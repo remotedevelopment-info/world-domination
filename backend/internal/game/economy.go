@@ -497,8 +497,8 @@ func ComputeEconomyFull(
 	season := GetClimaticAndSeasonalState(simYear)
 
 	gdp := gdpValue(population, troops, taxRate, markets, infrastructure)
-	// Investment and completed colonial expedition yields compound GDP; harvest factor modulates seasonal agricultural GDP output
-	gdp *= (1.0 + investmentBoost*float64(investment) + colonialYield) * season.HarvestYieldFactor
+	// Completed colonial expedition yields compound GDP (delayed returns: building ships costs capex, profit only starts after voyages return)
+	gdp *= (1.0 + colonialYield) * season.HarvestYieldFactor
 	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
 
 	// Entrepreneurial Pride, Colonial Fleets Trade Yield & Seasonal Trade Velocity modulate market revenue

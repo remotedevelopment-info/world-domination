@@ -1179,14 +1179,16 @@ export function updateEconomyHintsLive() {
   const baseProductivity = 0.02;
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
   const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
-  const invBonus = 1.0 + (investmentRate || 0) * 0.002;
+  const colYield = commandCenterDetail?.colonial_yield ?? kingdom.colonial_yield ?? 0.0;
+  // Colonial investment dial funds shipbuilding (delayed capex); trade profit begins only after fleets complete voyages
+  const tradeFleetBonus = 1.0 + colYield;
   const laffer = lafferJs(taxRate);
 
   // Mobilized troops reduce productive civilian workforce, directly reducing GDP and tax revenue
   const civilianWorkforce = Math.max(0, pop - tr);
-  const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * invBonus * laffer;
+  const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * tradeFleetBonus * laffer;
   const taxRevenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
-  const marketRevenue = (marketsLevel || 0) * 4;
+  const marketRevenue = Math.round(((marketsLevel || 0) * 4 + (marketsLevel === 0 && colYield > 0 ? colYield * 80 : 0)) * tradeFleetBonus);
   const totalRevenue = taxRevenue + marketRevenue;
 
   const levy = commandCenterDetail?.troops_levy ?? 0;
@@ -1231,8 +1233,10 @@ export function updateEconomyHintsLive() {
 
   const invHint = document.getElementById("cc-investment-hint");
   if (invHint) {
-    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` (-${cappedBudget.effInv} ducats/yr)`;
-    invHint.textContent = `Colonial Ventures: ${capNote}`;
+    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` -${cappedBudget.effInv} ducats/yr`;
+    const yieldBonus = Math.round(colYield * 100);
+    const returnNote = yieldBonus > 0 ? ` · +${yieldBonus}% Yield Active` : ` · Capex (Profit Delayed)`;
+    invHint.textContent = `Fleet Outfitting:${capNote}${returnNote}`;
   }
 
   const socHint = document.getElementById("cc-social-hint");

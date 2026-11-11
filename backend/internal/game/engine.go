@@ -383,10 +383,15 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
 		)
 
-		// 1. Markets: Income and Risk
+		// 1. Markets: Income and Risk (compounded by completed colonial fleet trade yield)
 		var baseMarket, riskSwing float64
 		if c.Markets > 0 {
 			baseMarket, riskSwing = MarketIncomeAndRisk(c.Markets, simYear, c.ID)
+			if c.ColonialYield > 0 {
+				baseMarket *= (1.0 + c.ColonialYield)
+			}
+		} else if c.ColonialYield > 0 {
+			baseMarket = c.ColonialYield * 250.0
 		}
 		annualMarketActual := int64(math.Round(baseMarket + riskSwing))
 		if annualMarketActual < 0 {
