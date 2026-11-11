@@ -204,3 +204,65 @@ func GetColonialGestationYears(simYear float64) float64 {
 	}
 }
 
+// GetEraExpeditionAnnualCost returns the annual gold expenditure required at 100% investment for the historical era.
+// Age of Discovery: 150 gold/year. Later eras: greater annual expenditure over a shorter gestation duration.
+func GetEraExpeditionAnnualCost(simYear float64) float64 {
+	switch {
+	case simYear < 1750:
+		return 150.0 // Age of Discovery: 150 gold/yr for 5.0 yrs (Total: 750 gold)
+	case simYear < 1860:
+		return 360.0 // Age of Revolt: 360 gold/yr for 2.5 yrs (Total: 900 gold)
+	case simYear < 1920:
+		return 800.0 // Age of Independence: 800 gold/yr for 1.25 yrs (Total: 1,000 gold)
+	case simYear < 1989:
+		return 2400.0 // Age of Decolonisation: 2,400 gold/yr for 0.5 yrs (Total: 1,200 gold)
+	default:
+		return 4500.0 // The Modern Age: 4,500 gold/yr for 0.35 yrs (Total: 1,575 gold)
+	}
+}
+
+// GetEraExpeditionTotalCost returns the total gold commitment required to complete an expedition at 100% investment.
+func GetEraExpeditionTotalCost(simYear float64) float64 {
+	return GetEraExpeditionAnnualCost(simYear) * GetColonialGestationYears(simYear)
+}
+
+// IsDeficitAllowed returns true if the historical era permits sovereign deficit financing (Modern Age: 1989+).
+func IsDeficitAllowed(simYear float64) bool {
+	return simYear >= 1989.0
+}
+
+// CheckExpeditionAffordability checks whether a kingdom's treasury reserves can support the declared expedition spending.
+// In the Modern Era (1989+), deficit financing and sovereign debt are permitted, so all investments are allowed.
+// In pre-modern eras (1500-1988), gold reserves must be adequate to support the multi-year production commitment.
+func CheckExpeditionAffordability(resources int64, investment int64, simYear float64) (allowed bool, maxAffordable int64, requiredGold int64, errReason string) {
+	if investment <= 0 || IsDeficitAllowed(simYear) {
+		return true, 100, 0, ""
+	}
+
+	totalCost100 := GetEraExpeditionTotalCost(simYear)
+	if totalCost100 <= 0 {
+		return true, 100, 0, ""
+	}
+
+	maxAffordable = int64(math.Floor((float64(resources) / totalCost100) * 100.0))
+	if maxAffordable > 100 {
+		maxAffordable = 100
+	}
+	if maxAffordable < 0 {
+		maxAffordable = 0
+	}
+
+	requiredGold = int64(math.Ceil(totalCost100 * (float64(investment) / 100.0)))
+
+	if resources < requiredGold {
+		annualCost := int64(math.Round(GetEraExpeditionAnnualCost(simYear) * (float64(investment) / 100.0)))
+		gestation := GetColonialGestationYears(simYear)
+		reason := fmt.Sprintf("Treasury gold reserves (%d ducats) are inadequate to support %d%% expedition spending (%d gold/yr × %.1f yrs = %d gold required). Maximum affordable: %d%%.",
+			resources, investment, annualCost, gestation, requiredGold, maxAffordable)
+		return false, maxAffordable, requiredGold, reason
+	}
+
+	return true, maxAffordable, requiredGold, ""
+}
+
+

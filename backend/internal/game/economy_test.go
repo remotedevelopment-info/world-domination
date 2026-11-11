@@ -481,5 +481,39 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 		t.Errorf("expected high investment expenditure during shipbuilding capex, got %d",
 			highInvestBuildingEcon.InvestmentExpenditure)
 	}
+
+	// 7. Era-specific annual expenditure and total multi-year project commitment costs
+	if GetEraExpeditionAnnualCost(1500) != 150.0 || GetEraExpeditionTotalCost(1500) != 750.0 {
+		t.Errorf("expected Discovery: 150 gold/yr for 5 yrs (total 750), got annual=%f, total=%f",
+			GetEraExpeditionAnnualCost(1500), GetEraExpeditionTotalCost(1500))
+	}
+	if GetEraExpeditionAnnualCost(1760) != 360.0 || GetEraExpeditionTotalCost(1760) != 900.0 {
+		t.Errorf("expected Revolt: 360 gold/yr for 2.5 yrs (total 900), got annual=%f, total=%f",
+			GetEraExpeditionAnnualCost(1760), GetEraExpeditionTotalCost(1760))
+	}
+	if GetEraExpeditionAnnualCost(1880) != 800.0 || GetEraExpeditionTotalCost(1880) != 1000.0 {
+		t.Errorf("expected Independence: 800 gold/yr for 1.25 yrs (total 1000), got annual=%f, total=%f",
+			GetEraExpeditionAnnualCost(1880), GetEraExpeditionTotalCost(1880))
+	}
+
+	// 8. Solvency check: pre-modern realms must have adequate reserves to support expedition spending
+	// In Discovery with 600 gold: 100% requires 750 gold -> rejected, max affordable is 80% (600 gold)
+	allowed100, maxAff100, req100, _ := CheckExpeditionAffordability(600, 100, 1500)
+	if allowed100 || maxAff100 != 80 || req100 != 750 {
+		t.Errorf("expected 100%% investment rejected with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
+			allowed100, maxAff100, req100)
+	}
+
+	allowed80, maxAff80, req80, _ := CheckExpeditionAffordability(600, 80, 1500)
+	if !allowed80 || maxAff80 != 80 || req80 != 600 {
+		t.Errorf("expected 80%% investment allowed with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
+			allowed80, maxAff80, req80)
+	}
+
+	// Modern Era (1989+): Deficits permitted, so investments are allowed even with 0 reserves
+	allowedModern, _, _, _ := CheckExpeditionAffordability(0, 100, 2000)
+	if !allowedModern {
+		t.Errorf("expected deficit allowed in Modern Age even with 0 reserves")
+	}
 }
 

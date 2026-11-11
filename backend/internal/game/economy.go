@@ -533,8 +533,11 @@ func ComputeEconomyFull(
 
 	// Cathedral tithes, civic administration, and court justice (scaled up to 30% of GDP at 100% dial):
 	socialSpend := int64(math.Round(float64(socialCosts)*2.0 + float64(gdp)*(float64(socialCosts)/100.0)*0.30))
-	// Colonial expeditions, trading ventures, and capital investment (scaled up to 35% of GDP at 100% dial + base capex):
-	investmentSpend := int64(math.Round(float64(investment)*3.0 + float64(gdp)*(float64(investment)/100.0)*0.35))
+	// Colonial expeditions, trading ventures, and capital investment:
+	// In the Age of Discovery, 100% investment costs 150 gold/year for 5.0 years (750 total).
+	// In later eras, annual cost is greater over a shorter gestation duration.
+	baseAnnualCost := GetEraExpeditionAnnualCost(simYear)
+	investmentSpend := int64(math.Round(baseAnnualCost * float64(investment) / 100.0))
 	expenditure := milUpkeep + socialSpend + investmentSpend
 	balance := totalRev - expenditure
 

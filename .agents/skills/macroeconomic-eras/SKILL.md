@@ -222,12 +222,19 @@ flowchart LR
 - **The Sunk-Cost & Abandonment Decay Penalty**:
   - If a player abruptly slashes or zeroes the investment dial mid-project, unfinished ships rot in drydocks, dockworkers disperse, and supply chains spoil.
   - **Decay Rate**: If funding drops to zero, uncompleted gestation progress degrades at $-25\%$ per simulation year. If not re-funded within 1–2 years, all invested capital is forfeited with zero trade return.
-- **Era Latency Acceleration Curve**:
-  As shipbuilding, propulsion, navigation, and telecommunications advance, the required gestation delay shrinks dramatically:
-  - **Age of Discovery (1500–1749)**: $T_{\text{gestation}} \approx 4.0\text{–}5.0\text{ years}$ (Wooden caravels, wind-dependent circumnavigation).
-  - **Age of Revolt (1750–1859)**: $T_{\text{gestation}} \approx 2.0\text{–}3.0\text{ years}$ (Galleons, charted trade corridors, naval shipyards).
-  - **Age of Independence (1860–1919)**: $T_{\text{gestation}} \approx 1.0\text{–}1.5\text{ years}$ (Steam clippers, telegraph-coordinated shipping, Suez Canal).
-  - **Age of Decolonisation & Modern (1920+)**: $T_{\text{gestation}} \le 0.5\text{ years}$ (Containerization, bulk freighters, globalized air freight).
+- **Era Production & Capital Expenditure Cost Matrix**:
+  As shipbuilding, propulsion, navigation, and telecommunications advance, the required gestation delay shrinks, while annual capital expenditure increases (greater spending concentrated over a shorter production time):
+  - **Age of Discovery (1500–1749)**: $T_{\text{gestation}} = 5.0\text{ years}$ · $150\text{ gold/year}$ at $100\%$ ($750\text{ gold}$ total). Wooden caravels, hand-hewn oak, wind circumnavigation.
+  - **Age of Revolt (1750–1859)**: $T_{\text{gestation}} = 2.5\text{ years}$ · $360\text{ gold/year}$ at $100\%$ ($900\text{ gold}$ total). Armed Indiamen, copper sheathing, cannon foundries.
+  - **Age of Independence (1860–1919)**: $T_{\text{gestation}} = 1.25\text{ years}$ · $800\text{ gold/year}$ at $100\%$ ($1,000\text{ gold}$ total). Steam clippers, boiler plates, telegraph cables.
+  - **Age of Decolonisation (1920–1988)**: $T_{\text{gestation}} = 0.5\text{ years}$ · $2,400\text{ gold/year}$ at $100\%$ ($1,200\text{ gold}$ total). Diesel bulk freighters, specialized tankers.
+  - **The Modern Age (1989+)**: $T_{\text{gestation}} = 0.35\text{ years}$ · $4,500\text{ gold/year}$ at $100\%$ ($1,575\text{ gold}$ total). Automated modular container vessels, satellite navigation.
+- **Treasury Reserve Adequacy Check & Solvency Enforcement**:
+  - In pre-modern eras (1500–1988), deficit financing is strictly disallowed under the hard-specie and sovereign balanced budget rules.
+  - When declaring an investment rate $I\%$, the kingdom's treasury reserves must be adequate to support the full multi-year production commitment:
+    $$\text{RequiredGold}(I) = \text{BaseAnnualCost} \times T_{\text{gestation}} \times \left(\frac{I}{100.0}\right)$$
+  - If $\text{resources} < \text{RequiredGold}(I)$, the exchequer cannot support the expedition spending and the game **does not allow it**, capping the maximum affordable investment rate to $I_{\max} = \lfloor (\text{resources} / \text{TotalCost}_{100}) \times 100 \rfloor$.
+  - In **The Modern Age (1989+)**, sovereign deficit financing is unlocked: nations may run budget deficits and fund projects through debt even with depleted reserves.
 - **Conquest & Territory Re-allocation**:
   - Conquering coastal provinces grants access to captured shipyards and overseas colonial trade lanes, accelerating the investor's cumulative trade productivity ceiling.
 

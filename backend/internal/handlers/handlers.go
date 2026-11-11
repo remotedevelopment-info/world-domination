@@ -1085,26 +1085,31 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// When declaring expenditure for colonial expeditions (raising investment dial),
-	// immediate capital outfitting capex is disbursed from gold reserves to lay down keels, buy timber, and contract shipwrights.
-	newResources := detail.Resources
+	simYear := game.GetEngine().GetSimYear()
+
+	// Solvency validation: Check whether gold reserves are adequate to support the declared expedition spending
+	// In the Modern Age (1989+), deficit financing and sovereign debt are permitted.
+	// In pre-modern eras (1500-1988), gold reserves must support the multi-year production commitment.
+	allowed, maxAffordable, requiredGold, reason := game.CheckExpeditionAffordability(detail.Resources, req.Investment, simYear)
+	if !allowed {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":                     reason,
+			"required_gold":             requiredGold,
+			"current_resources":         detail.Resources,
+			"max_affordable_investment": maxAffordable,
+		})
+		return
+	}
+
+	// Announce commitment when raising investment dial
 	if errSettings == nil && req.Investment > oldSettings.Investment {
-		deltaInv := req.Investment - oldSettings.Investment
-		outlay := deltaInv * 3 // 3 ducats per 1% investment declared
-		if outlay > newResources {
-			outlay = newResources
-		}
-		if outlay > 0 {
-			newResources -= outlay
-			if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
-				log.Printf("Error updating country resources on expedition declaration: %v", err)
-			} else {
-				detail.Resources = newResources
-				portName := game.RealmPort(detail.Code, detail.Name)
-				msg := fmt.Sprintf("⚓ Royal Exchequer disburses %d gold ducats from reserves to outfit expedition slipways and contract shipwrights in %s.", outlay, portName)
-				_ = database.LogAction(user.UserID, pc.CountryID, "news", msg, nil, "", "", "")
-			}
-		}
+		annualCost := int64(math.Round(game.GetEraExpeditionAnnualCost(simYear) * float64(req.Investment) / 100.0))
+		gestation := game.GetColonialGestationYears(simYear)
+		portName := game.RealmPort(detail.Code, detail.Name)
+		msg := fmt.Sprintf("⚓ Royal Exchequer commits %d gold ducats per annum over %.1f years to outfit overseas expeditions in %s.", annualCost, gestation, portName)
+		_ = database.LogAction(user.UserID, pc.CountryID, "news", msg, nil, "", "", "")
 	}
 
 	err = database.SetEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
@@ -1140,7 +1145,7 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		"country_id":        detail.CountryID,
 		"name":              detail.Name,
 		"code":              detail.Code,
-		"resources":         newResources,
+		"resources":         detail.Resources,
 		"economy_rate":      settings.EconomyRate,
 		"investment":        settings.Investment,
 		"social_costs":      settings.SocialCosts,

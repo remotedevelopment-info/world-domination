@@ -712,7 +712,27 @@ export function setTaxRate(value, push = true) {
 }
 
 export function setInvestmentRate(value, push = true) {
-  investmentRate = Math.round(Math.min(100, Math.max(0, value)));
+  const simYear = (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
+  const isModern = simYear >= 1989;
+  let baseAnnualExpCost = 150.0;
+  let gestationYears = 5.0;
+  if (simYear >= 1989) { baseAnnualExpCost = 4500.0; gestationYears = 0.35; }
+  else if (simYear >= 1920) { baseAnnualExpCost = 2400.0; gestationYears = 0.5; }
+  else if (simYear >= 1860) { baseAnnualExpCost = 800.0; gestationYears = 1.25; }
+  else if (simYear >= 1750) { baseAnnualExpCost = 360.0; gestationYears = 2.5; }
+
+  const totalProjectCost100 = baseAnnualExpCost * gestationYears;
+  const res = commandCenterDetail?.resources ?? state.myKingdom?.resources ?? 500;
+  const maxAffordableInv = isModern ? 100 : Math.min(100, Math.max(0, Math.floor((res / totalProjectCost100) * 100)));
+
+  let clampedValue = Math.round(Math.min(100, Math.max(0, value)));
+  if (!isModern && clampedValue > maxAffordableInv) {
+    const reqGold = Math.round(totalProjectCost100 * (value / 100.0));
+    clampedValue = maxAffordableInv;
+    showToast(`⚠️ Insufficient Gold Reserves: ${reqGold} gold required for ${value}% expedition spending over ${gestationYears} yrs (Reserves: ${res} G). Max affordable: ${maxAffordableInv}%.`, "error");
+  }
+
+  investmentRate = clampedValue;
   const dial = document.getElementById("cc-investment-dial");
   if (dial) {
     const pointer = dial.querySelector(".dial-pointer");
@@ -858,8 +878,16 @@ export function pushEconomySettings() {
   lastEconomyUserActionTime = Date.now();
 
   apiSetEconomySettings(pushedTax, pushedInv, pushedSoc)
-    .then((res) => {
-      if (!res.ok) throw new Error("Failed to persist economy settings");
+    .then(async (res) => {
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        const errMsg = errJson.error || "Failed to persist economy settings";
+        showToast(`⚠️ ${errMsg}`, "error");
+        if (typeof errJson.max_affordable_investment === "number") {
+          setInvestmentRate(errJson.max_affordable_investment, false);
+        }
+        throw new Error(errMsg);
+      }
       return res.json();
     })
     .then((data) => {
@@ -1206,7 +1234,21 @@ export function updateEconomyHintsLive() {
     : Math.round(tr * 4.0);
 
   const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.30);
-  const invExp = Math.round(investmentRate * 3.0 + gdp * (investmentRate / 100.0) * 0.35);
+
+  const simYear = (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
+  let baseAnnualExpCost = 150.0;
+  let gestationYears = 5.0;
+  if (simYear >= 1989) { baseAnnualExpCost = 4500.0; gestationYears = 0.35; }
+  else if (simYear >= 1920) { baseAnnualExpCost = 2400.0; gestationYears = 0.5; }
+  else if (simYear >= 1860) { baseAnnualExpCost = 800.0; gestationYears = 1.25; }
+  else if (simYear >= 1750) { baseAnnualExpCost = 360.0; gestationYears = 2.5; }
+
+  const totalProjectCost100 = baseAnnualExpCost * gestationYears;
+  const invExp = Math.round(baseAnnualExpCost * (investmentRate / 100.0));
+  const totalCommitment = Math.round(totalProjectCost100 * (investmentRate / 100.0));
+  const isModern = simYear >= 1989;
+  const maxAffordableInv = isModern ? 100 : Math.min(100, Math.max(0, Math.floor((res / totalProjectCost100) * 100)));
+  const canAfford = isModern || investmentRate <= maxAffordableInv;
 
   // Enforce Layer 1 Hard-Specie Fiscal Rules
   const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
@@ -1240,19 +1282,16 @@ export function updateEconomyHintsLive() {
 
   const invHint = document.getElementById("cc-investment-hint");
   if (invHint) {
-    const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` -${cappedBudget.effInv} ducats/yr`;
-    const yieldBonus = Math.round(colYield * 100);
-    const lastInv = commandCenterDetail?.investment ?? 0;
-    const delta = investmentRate - lastInv;
-    let capexNote = "";
-    if (delta > 0) {
-      capexNote = ` · -${delta * 3} gold upfront`;
-    } else if (yieldBonus > 0) {
-      capexNote = ` · +${yieldBonus}% Yield Active`;
+    if (!canAfford) {
+      invHint.textContent = `⚠️ Need ${totalCommitment} G for ${gestationYears} yrs (Max: ${maxAffordableInv}%)`;
+      invHint.style.color = "#ff6b6b";
     } else {
-      capexNote = ` · Profit Delayed`;
+      const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` -${cappedBudget.effInv} G/yr`;
+      const yieldBonus = Math.round(colYield * 100);
+      const yieldNote = yieldBonus > 0 ? ` · +${yieldBonus}% Yield Active` : ` · ${gestationYears} yrs production`;
+      invHint.textContent = `Expeditions:${capNote} (${totalCommitment} G total${yieldNote})`;
+      invHint.style.color = "#38bdf8";
     }
-    invHint.textContent = `Fleet Outfitting:${capNote}${capexNote}`;
   }
 
   const socHint = document.getElementById("cc-social-hint");
