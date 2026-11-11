@@ -1,7 +1,7 @@
 // clock.js - Steampunk Map Legend Year Chronometer & Development Time Scale Engine
 
 import { TICK_INTERVAL_S } from "../config.js";
-import { state, clearAllMilitaryVariables } from "../state.js";
+import { state, clearAllMilitaryVariables, resetAllUserVariablesToDiscovery } from "../state.js";
 import {
   apiGetTimeline,
   apiJumpTimeline,
@@ -513,7 +513,10 @@ export function jumpToYear(targetYear) {
   serverReceivedWallTime = Date.now();
   hasReceivedServerTimeline = true;
   if (parsed <= 1500.01) {
-    clearAllMilitaryVariables();
+    resetAllUserVariablesToDiscovery();
+    if (typeof window.resetCommandCenterStateToDiscovery === "function") {
+      window.resetCommandCenterStateToDiscovery();
+    }
   }
   tickClock();
 

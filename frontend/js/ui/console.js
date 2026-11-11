@@ -566,6 +566,76 @@ export function resetCommandCenterMilitaryState() {
   updateFortifyButtonLabel();
 }
 
+export function resetCommandCenterStateToDiscovery() {
+  resetCommandCenterMilitaryState();
+
+  taxRate = 50;
+  investmentRate = 0;
+  socialCostsRate = 0;
+  marketsLevel = 0;
+  infraLevel = 0;
+
+  if (commandCenterDetail) {
+    commandCenterDetail.economy_rate = 50;
+    commandCenterDetail.investment = 0;
+    commandCenterDetail.social_costs = 0;
+    commandCenterDetail.markets = 0;
+    commandCenterDetail.infrastructure = 0;
+    commandCenterDetail.colonial_progress = 0.0;
+    commandCenterDetail.colonial_yield = 0.0;
+    commandCenterDetail.colonial_fleets = 0;
+    commandCenterDetail.entrepreneurial_pride = 100.0;
+    commandCenterDetail.last_tax_revenue = 0;
+    commandCenterDetail.last_market_income = 0;
+    commandCenterDetail.last_military_exp = 0;
+    commandCenterDetail.last_social_exp = 0;
+    commandCenterDetail.last_investment_exp = 0;
+    commandCenterDetail.last_total_exp = 0;
+    commandCenterDetail.last_budget_balance = 0;
+    commandCenterDetail.last_migration = 0;
+    if (commandCenterDetail.base_resources) {
+      commandCenterDetail.resources = commandCenterDetail.base_resources;
+    }
+  }
+
+  // Update UI dial pointers & arcs
+  const econDial = document.getElementById("cc-economy-dial");
+  if (econDial) {
+    const pointer = econDial.querySelector(".dial-pointer");
+    if (pointer) pointer.style.transform = `rotate(${DIAL_BASE_DEG + 50 * DIAL_DEG_PER_UNIT}deg)`;
+    const arc = econDial.querySelector(".dial-arc");
+    if (arc) arc.style.setProperty("--dial-arc-deg", `${50 * DIAL_DEG_PER_UNIT}deg`);
+  }
+  const invDial = document.getElementById("cc-investment-dial");
+  if (invDial) {
+    const pointer = invDial.querySelector(".dial-pointer");
+    if (pointer) pointer.style.transform = `rotate(${DIAL_BASE_DEG}deg)`;
+    const arc = invDial.querySelector(".dial-arc");
+    if (arc) arc.style.setProperty("--dial-arc-deg", `0deg`);
+  }
+  const socDial = document.getElementById("cc-social-dial");
+  if (socDial) {
+    const pointer = socDial.querySelector(".dial-pointer");
+    if (pointer) pointer.style.transform = `rotate(${DIAL_BASE_DEG}deg)`;
+    const arc = socDial.querySelector(".dial-arc");
+    if (arc) arc.style.setProperty("--dial-arc-deg", `0deg`);
+  }
+
+  const taxReadout = document.getElementById("cc-economy-dial-value");
+  if (taxReadout) taxReadout.textContent = "50";
+  const invReadout = document.getElementById("cc-investment-dial-value");
+  if (invReadout) invReadout.textContent = "0";
+  const socReadout = document.getElementById("cc-social-dial-value");
+  if (socReadout) socReadout.textContent = "0";
+
+  updateColonialGestationUI(0.0, 0.0, 0);
+  updateStepperDisplay();
+  updateBorderGarrisonPods({ N: 0, S: 0, E: 0, W: 0 });
+  updateEconomyHintsLive();
+  syncLocalEconomyCache();
+}
+window.resetCommandCenterStateToDiscovery = resetCommandCenterStateToDiscovery;
+
 export function dialValueFromPoint(dialEl, clientX, clientY) {
   const rect = dialEl.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
@@ -714,14 +784,10 @@ export function setTaxRate(value, push = true) {
 export function setInvestmentRate(value, push = true) {
   const simYear = (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
   const isModern = simYear >= 1989;
-  let baseAnnualExpCost = 150.0;
-  let gestationYears = 5.0;
-  if (simYear >= 1989) { baseAnnualExpCost = 4500.0; gestationYears = 0.35; }
-  else if (simYear >= 1920) { baseAnnualExpCost = 2400.0; gestationYears = 0.5; }
-  else if (simYear >= 1860) { baseAnnualExpCost = 800.0; gestationYears = 1.25; }
-  else if (simYear >= 1750) { baseAnnualExpCost = 360.0; gestationYears = 2.5; }
-
-  const totalProjectCost100 = baseAnnualExpCost * gestationYears;
+  const pricing = getActiveExpeditionPricing(simYear);
+  const costPerPct = pricing.cost_per_pct || 12.0;
+  const gestationYears = pricing.gestation_years || 2.0;
+  const totalProjectCost100 = costPerPct * 100.0 * gestationYears;
   const res = commandCenterDetail?.resources ?? state.myKingdom?.resources ?? 500;
   const maxAffordableInv = isModern ? 100 : Math.min(100, Math.max(0, Math.floor((res / totalProjectCost100) * 100)));
 

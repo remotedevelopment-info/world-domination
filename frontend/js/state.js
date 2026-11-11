@@ -116,19 +116,62 @@ export function setTroops(troops) {
   state.troops = troops;
 }
 
-export function clearAllMilitaryVariables() {
+export function resetAllUserVariablesToDiscovery() {
   state.troops = {};
-  if (state.myKingdom) {
-    state.myKingdom.troops = 0;
-    state.myKingdom.troops_levy = 0;
-    state.myKingdom.troops_regular = 0;
-    state.myKingdom.troops_elite = 0;
-    state.myKingdom.fort_n = 0;
-    state.myKingdom.fort_s = 0;
-    state.myKingdom.fort_e = 0;
-    state.myKingdom.fort_w = 0;
-    state.myKingdom.military_delayed_costs = 0;
+  state.territoryDetails = {};
+  state.lastEconomy = null;
+
+  const resetVitals = (k) => {
+    if (!k) return;
+    // Military variables
+    k.troops = 0;
+    k.troops_levy = 0;
+    k.troops_regular = 0;
+    k.troops_elite = 0;
+    k.central_troops = 0;
+    k.border_troops = { N: 0, S: 0, E: 0, W: 0 };
+    k.fort_n = 0;
+    k.fort_s = 0;
+    k.fort_e = 0;
+    k.fort_w = 0;
+    k.military_delayed_costs = 0;
+    k.last_military_exp = 0;
+
+    // Trade & Economic variables
+    k.colonial_progress = 0.0;
+    k.colonial_yield = 0.0;
+    k.colonial_fleets = 0;
+    k.markets = 0;
+    k.infrastructure = 0;
+    k.investment = 0;
+    k.social_costs = 0;
+    k.economy_rate = 50;
+    k.entrepreneurial_pride = 100.0;
+    k.last_tax_revenue = 0;
+    k.last_market_income = 0;
+    k.last_social_exp = 0;
+    k.last_investment_exp = 0;
+    k.last_total_exp = 0;
+    k.last_budget_balance = 0;
+    k.last_migration = 0;
+
+    // Baseline resources & population if available
+    if (k.base_resources) k.resources = k.base_resources;
+    if (k.base_population) k.population = k.base_population;
+  };
+
+  resetVitals(state.myKingdom);
+  if (Array.isArray(state.kingdoms)) {
+    state.kingdoms.forEach(resetVitals);
   }
+  if (Array.isArray(state.allKingdoms)) {
+    state.allKingdoms.forEach(resetVitals);
+  }
+  // NOTE: state.expeditionPricing (the Capex matrix) is explicitly PRESERVED!
+}
+
+export function clearAllMilitaryVariables() {
+  resetAllUserVariablesToDiscovery();
 }
 
 export function setMapResolutionState(resolution) {
@@ -299,16 +342,26 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
         state.myKingdom.fort_e = 0;
         state.myKingdom.fort_w = 0;
         state.myKingdom.military_delayed_costs = 0;
+        state.myKingdom.last_military_exp = 0;
+        state.myKingdom.colonial_progress = 0.0;
+        state.myKingdom.colonial_yield = 0.0;
+        state.myKingdom.colonial_fleets = 0;
+        state.myKingdom.markets = 0;
+        state.myKingdom.infrastructure = 0;
+        state.myKingdom.investment = 0;
+        state.myKingdom.social_costs = 0;
+        state.myKingdom.economy_rate = 50;
+      } else {
+        if (mk.economy) state.myKingdom.economy = mk.economy;
+        if (mk.economy_rate !== undefined) state.myKingdom.economy_rate = mk.economy_rate;
+        if (mk.investment !== undefined) state.myKingdom.investment = mk.investment;
+        if (mk.social_costs !== undefined) state.myKingdom.social_costs = mk.social_costs;
+        if (mk.markets !== undefined) state.myKingdom.markets = mk.markets;
+        if (mk.infrastructure !== undefined) state.myKingdom.infrastructure = mk.infrastructure;
+        if (typeof mk.colonial_progress === "number") state.myKingdom.colonial_progress = mk.colonial_progress;
+        if (typeof mk.colonial_yield === "number") state.myKingdom.colonial_yield = mk.colonial_yield;
+        if (typeof mk.colonial_fleets === "number") state.myKingdom.colonial_fleets = mk.colonial_fleets;
       }
-      if (mk.economy) state.myKingdom.economy = mk.economy;
-      if (mk.economy_rate !== undefined) state.myKingdom.economy_rate = mk.economy_rate;
-      if (mk.investment !== undefined) state.myKingdom.investment = mk.investment;
-      if (mk.social_costs !== undefined) state.myKingdom.social_costs = mk.social_costs;
-      if (mk.markets !== undefined) state.myKingdom.markets = mk.markets;
-      if (mk.infrastructure !== undefined) state.myKingdom.infrastructure = mk.infrastructure;
-      if (typeof mk.colonial_progress === "number") state.myKingdom.colonial_progress = mk.colonial_progress;
-      if (typeof mk.colonial_yield === "number") state.myKingdom.colonial_yield = mk.colonial_yield;
-      if (typeof mk.colonial_fleets === "number") state.myKingdom.colonial_fleets = mk.colonial_fleets;
     }
   }
 

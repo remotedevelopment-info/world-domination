@@ -1,6 +1,6 @@
 // main.js - Application bootstrap & orchestrator for Kingdom Conquest
 
-import { state, clearSession, syncKingdomsForYear, clearAllMilitaryVariables } from "./state.js";
+import { state, clearSession, syncKingdomsForYear, clearAllMilitaryVariables, resetAllUserVariablesToDiscovery } from "./state.js";
 
 // Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
 const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
@@ -100,6 +100,7 @@ import {
   triggerAutoBalanceBudget,
   updateGazetteHeadline,
   updateEconomyHintsLive,
+  resetCommandCenterStateToDiscovery,
 } from "./ui/console.js";
 import {
   initAdminCharts,
@@ -162,8 +163,8 @@ onSocketStateChange((payload) => {
 // React to Historical Era transitions (adding new unowned countries to the map in each Age)
 onEraChange((newEra, yearInt, prevEraId) => {
   if (newEra.id === "discovery" || yearInt <= 1500) {
-    clearAllMilitaryVariables();
-    resetCommandCenterMilitaryState();
+    resetAllUserVariablesToDiscovery();
+    resetCommandCenterStateToDiscovery();
   }
   syncKingdomsForYear(state.allKingdoms, yearInt);
   resizeCanvas();
@@ -1397,6 +1398,10 @@ export async function resetAdminExpeditionPricingDefaults() {
 
 export function adminJumpEra(year) {
   jumpToYear(year);
+  if (parseFloat(year) <= 1500.01) {
+    resetAllUserVariablesToDiscovery();
+    resetCommandCenterStateToDiscovery();
+  }
   setTimeout(refreshAdminDashboard, 200);
 }
 
@@ -1510,8 +1515,8 @@ export async function adminResetStage3Execute() {
     const data = await res.json();
     showToast("🔥 " + (data.message || "World reset to Year 1500!"), "success");
     logMessage("CRITICAL: Master World Reset to Year 1500 executed by Imperial Admin.");
-    clearAllMilitaryVariables();
-    resetCommandCenterMilitaryState();
+    resetAllUserVariablesToDiscovery();
+    resetCommandCenterStateToDiscovery();
     adminResetSetStage(1);
     const input = document.getElementById("admin-reset-confirm-input");
     if (input) input.value = "";

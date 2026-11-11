@@ -229,6 +229,31 @@ func TestTimelineHandlers(t *testing.T) {
 		t.Fatalf("JumpTimelineHandler admin@sfsw.net status = %d, expected 200", rr.Code)
 	}
 
+	// 12b. Set custom capex pricing, jump to 1500 (Discovery Era), and verify capex matrix is PRESERVED
+	pricingTbl := game.GetExpeditionPricingTable()
+	pricingTbl[0].CostPerPct = 25.0
+	game.SetExpeditionPricingTable(pricingTbl)
+
+	jumpDiscPayload, _ := json.Marshal(map[string]interface{}{"year": 1500})
+	req = httptest.NewRequest(http.MethodPost, "/api/timeline/jump", bytes.NewReader(jumpDiscPayload))
+	req = req.WithContext(context.WithValue(req.Context(), "user", newAdminToken))
+	rr = httptest.NewRecorder()
+	JumpTimelineHandler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("JumpTimelineHandler jump to 1500 status = %d, expected 200", rr.Code)
+	}
+	var jumpDiscRes map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &jumpDiscRes)
+	if jumpDiscRes["era_id"] != "discovery" {
+		t.Errorf("Expected era_id discovery, got %v", jumpDiscRes["era_id"])
+	}
+	if game.GetEraExpeditionCostPerPct(1500) != 25.0 {
+		t.Errorf("Expected capex pricing matrix to NOT be reset when clicking discovery, got %f", game.GetEraExpeditionCostPerPct(1500))
+	}
+	// Restore default 12.0
+	pricingTbl[0].CostPerPct = 12.0
+	game.SetExpeditionPricingTable(pricingTbl)
+
 	// 13. POST /api/admin/reset-game without auth -> 401
 	resetPayload, _ := json.Marshal(map[string]interface{}{"confirmation": "RESET WORLD 1500"})
 	req = httptest.NewRequest(http.MethodPost, "/api/admin/reset-game", bytes.NewReader(resetPayload))
