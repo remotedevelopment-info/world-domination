@@ -1078,13 +1078,42 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		econRate = *req.TaxRate
 	}
 
+	oldSettings, errSettings := database.GetEconomySettings(pc.CountryID)
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil || detail == nil {
+		http.Error(w, "Error fetching kingdom detail", http.StatusInternalServerError)
+		return
+	}
+
+	// When declaring expenditure for colonial expeditions (raising investment dial),
+	// immediate capital outfitting capex is disbursed from gold reserves to lay down keels, buy timber, and contract shipwrights.
+	newResources := detail.Resources
+	if errSettings == nil && req.Investment > oldSettings.Investment {
+		deltaInv := req.Investment - oldSettings.Investment
+		outlay := deltaInv * 3 // 3 ducats per 1% investment declared
+		if outlay > newResources {
+			outlay = newResources
+		}
+		if outlay > 0 {
+			newResources -= outlay
+			if err := database.UpdateCountryResources(pc.CountryID, newResources); err != nil {
+				log.Printf("Error updating country resources on expedition declaration: %v", err)
+			} else {
+				detail.Resources = newResources
+				portName := game.RealmPort(detail.Code, detail.Name)
+				msg := fmt.Sprintf("⚓ Royal Exchequer disburses %d gold ducats from reserves to outfit expedition slipways and contract shipwrights in %s.", outlay, portName)
+				_ = database.LogAction(user.UserID, pc.CountryID, "news", msg, nil, "", "", "")
+			}
+		}
+	}
+
 	err = database.SetEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
 	if err != nil {
 		http.Error(w, "Error setting economy settings", http.StatusInternalServerError)
 		return
 	}
 
-	// Broadcast immediately so the computed inflation, currency value, and GDP
+	// Broadcast immediately so the computed inflation, currency value, GDP, and updated gold reserves
 	// reflect the new settings.
 	game.GetEngine().Advance()
 
@@ -1092,12 +1121,6 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 	settings, err := database.GetEconomySettings(pc.CountryID)
 	if err != nil {
 		http.Error(w, "Error fetching updated settings", http.StatusInternalServerError)
-		return
-	}
-
-	detail, err := database.GetKingdomDetail(pc.CountryID)
-	if err != nil {
-		http.Error(w, "Error fetching updated detail", http.StatusInternalServerError)
 		return
 	}
 
@@ -1117,6 +1140,7 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		"country_id":        detail.CountryID,
 		"name":              detail.Name,
 		"code":              detail.Code,
+		"resources":         newResources,
 		"economy_rate":      settings.EconomyRate,
 		"investment":        settings.Investment,
 		"social_costs":      settings.SocialCosts,

@@ -888,6 +888,13 @@ export function pushEconomySettings() {
           state.territoryDetails[activeId].social_costs = finalSoc;
         }
 
+        if (typeof data.resources === "number") {
+          if (commandCenterDetail) commandCenterDetail.resources = data.resources;
+          if (state.myKingdom) state.myKingdom.resources = data.resources;
+          const resVal = document.getElementById("cc-meter-res-val");
+          if (resVal) syncGoldMileometerAnchor(data.resources, true);
+        }
+
         updateDerivedEconomyUI(
           data.gdp ?? econObj.gdp,
           data.currency_value ?? econObj.currency_value,
@@ -1199,7 +1206,7 @@ export function updateEconomyHintsLive() {
     : Math.round(tr * 4.0);
 
   const socExp = Math.round(socialCostsRate * 2.0 + gdp * (socialCostsRate / 100.0) * 0.30);
-  const invExp = Math.round(investmentRate * 2.0 + gdp * (investmentRate / 100.0) * 0.30);
+  const invExp = Math.round(investmentRate * 3.0 + gdp * (investmentRate / 100.0) * 0.35);
 
   // Enforce Layer 1 Hard-Specie Fiscal Rules
   const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
@@ -1235,8 +1242,17 @@ export function updateEconomyHintsLive() {
   if (invHint) {
     const capNote = cappedBudget.effInv < invExp ? ` (Capped: -${cappedBudget.effInv})` : ` -${cappedBudget.effInv} ducats/yr`;
     const yieldBonus = Math.round(colYield * 100);
-    const returnNote = yieldBonus > 0 ? ` · +${yieldBonus}% Yield Active` : ` · Capex (Profit Delayed)`;
-    invHint.textContent = `Fleet Outfitting:${capNote}${returnNote}`;
+    const lastInv = commandCenterDetail?.investment ?? 0;
+    const delta = investmentRate - lastInv;
+    let capexNote = "";
+    if (delta > 0) {
+      capexNote = ` · -${delta * 3} gold upfront`;
+    } else if (yieldBonus > 0) {
+      capexNote = ` · +${yieldBonus}% Yield Active`;
+    } else {
+      capexNote = ` · Profit Delayed`;
+    }
+    invHint.textContent = `Fleet Outfitting:${capNote}${capexNote}`;
   }
 
   const socHint = document.getElementById("cc-social-hint");

@@ -533,8 +533,8 @@ func ComputeEconomyFull(
 
 	// Cathedral tithes, civic administration, and court justice (scaled up to 30% of GDP at 100% dial):
 	socialSpend := int64(math.Round(float64(socialCosts)*2.0 + float64(gdp)*(float64(socialCosts)/100.0)*0.30))
-	// Colonial expeditions, trading ventures, and capital investment (scaled up to 30% of GDP at 100% dial):
-	investmentSpend := int64(math.Round(float64(investment)*2.0 + float64(gdp)*(float64(investment)/100.0)*0.30))
+	// Colonial expeditions, trading ventures, and capital investment (scaled up to 35% of GDP at 100% dial + base capex):
+	investmentSpend := int64(math.Round(float64(investment)*3.0 + float64(gdp)*(float64(investment)/100.0)*0.35))
 	expenditure := milUpkeep + socialSpend + investmentSpend
 	balance := totalRev - expenditure
 
