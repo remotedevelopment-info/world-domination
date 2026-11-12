@@ -60,6 +60,7 @@ type Country struct {
 	FiscalArchetype      string  `json:"fiscal_archetype"`      // 'maritime', 'bullion_monopoly', 'merchant_republic', 'agrarian_bureaucracy', etc.
 	TaxMod               float64 `json:"tax_mod"`               // Agrarian extraction modifier (0.15 to 1.30)
 	TradeMod             float64 `json:"trade_mod"`             // Maritime trade & tariff yield modifier (0.60 to 2.50)
+	TaxDroughtUntil      float64 `json:"tax_drought_until"`     // Simulation year until which normal tax collection is frozen (13-month drought)
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`

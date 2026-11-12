@@ -327,6 +327,7 @@ export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
   const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
   const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? state.myKingdom?.colonial_fleets ?? 0;
   updateColonialGestationUI(colProgress, colYield, colFleets);
+  updateEmergencyAdvanceUI(detail || kingdom, (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500);
 
   const minimap = document.getElementById("cc-minimap");
   if (minimap) {
@@ -445,6 +446,7 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   const colYield = kingdom.colonial_yield ?? detail?.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
   const colFleets = kingdom.colonial_fleets ?? detail?.colonial_fleets ?? state.myKingdom?.colonial_fleets ?? 0;
   updateColonialGestationUI(colProgress, colYield, colFleets);
+  updateEmergencyAdvanceUI(detail || kingdom, (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500);
 
   const minimap = document.getElementById("cc-minimap");
   if (minimap) {
@@ -1371,6 +1373,13 @@ export function updateEconomyHintsLive() {
   const maxAffordableInv = isModern ? 100 : Math.min(100, Math.max(0, Math.floor((res / totalProjectCost100) * 100)));
   const canAfford = isModern || investmentRate <= maxAffordableInv;
 
+  const droughtUntil = commandCenterDetail?.tax_drought_until ?? 0.0;
+  const inDrought = simYear < droughtUntil;
+  if (inDrought) {
+    taxRevenue = 0;
+    totalRevenue = marketRevenue;
+  }
+
   // Enforce Layer 1 Hard-Specie Fiscal Rules
   const cappedBudget = enforceClientBalancedBudget(res, totalRevenue, milUpkeep, socExp, invExp);
   const popPressure = computeClientPopulationPressure(pop, tr, taxRate, socialCostsRate, infraLevel || 0);
@@ -1385,7 +1394,11 @@ export function updateEconomyHintsLive() {
 
   const taxHint = document.getElementById("cc-tax-impact-hint");
   if (taxHint) {
-    if (taxRate <= 25) {
+    if (inDrought) {
+      const mosRemain = Math.max(0.1, (droughtUntil - simYear) * 12.0).toFixed(1);
+      taxHint.textContent = `Tax: 0 G/yr (⏳ 13-Mo Tax Drought Active: ${mosRemain} mos remain)`;
+      taxHint.style.color = "#ff6b6b";
+    } else if (taxRate <= 25) {
       taxHint.textContent = `Rev: +${taxRevenue.toLocaleString()}/yr (✨ Fair Tax: 100% Trade Yield · No Drag)`;
       taxHint.style.color = "#4ade80";
     } else {
@@ -1415,7 +1428,6 @@ export function updateEconomyHintsLive() {
   }
 
   const socHint = document.getElementById("cc-social-hint");
-  const civilianWorkforce = Math.max(0, pop - tr);
   let omegaEra = 0.000010;
   if (simYear >= 1989) omegaEra = 0.000120;
   else if (simYear >= 1920) omegaEra = 0.000060;
@@ -1715,6 +1727,7 @@ export function updateEconomyHintsLive() {
   }
 
   updateDerivedEconomyUI(Math.round(marketRevenue), value, inflation, cappedBudget.effBalance);
+  updateEmergencyAdvanceUI(commandCenterDetail, simYear);
 }
 
 let currentSankeyMode = "current"; // 'current' | 'next'
@@ -2534,7 +2547,52 @@ export async function performActionDirect(actionType, description, extraParams =
   }
 }
 
+export function updateEmergencyAdvanceUI(detail, simYear) {
+  const droughtUntil = detail?.tax_drought_until ?? commandCenterDetail?.tax_drought_until ?? 0.0;
+  const curSimYear = simYear || (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
+  const inDrought = curSimYear < droughtUntil;
+
+  const leverBtn = document.getElementById("cc-lever-collect-taxes");
+  const statusBadge = document.getElementById("cc-lever-advance-status");
+  const captionEl = document.getElementById("cc-lever-advance-caption");
+  const subEl = document.getElementById("cc-lever-advance-sub");
+
+  if (inDrought) {
+    const mosRemain = Math.max(0.1, (droughtUntil - curSimYear) * 12.0).toFixed(1);
+    if (leverBtn) {
+      leverBtn.disabled = true;
+      leverBtn.classList.add("locked");
+    }
+    if (statusBadge) {
+      statusBadge.className = "lever-status-badge drought";
+      statusBadge.textContent = `⏳ 13-Mo Drought Active (${mosRemain} mos remain)`;
+    }
+    if (captionEl) captionEl.textContent = "🔒 DROUGHT LOCKED";
+    if (subEl) subEl.textContent = `Taxes harvested in advance. Treasury receives zero tax revenues until Anno Domini ${droughtUntil.toFixed(2)}.`;
+  } else {
+    if (leverBtn) {
+      leverBtn.disabled = false;
+      leverBtn.classList.remove("locked");
+    }
+    if (statusBadge) {
+      statusBadge.className = "lever-status-badge ready";
+      statusBadge.textContent = "⚡ Ready for Emergency Advance";
+    }
+    if (captionEl) captionEl.textContent = "DEMAND EARLY TITHE";
+    if (subEl) subEl.textContent = "Immediate tax cashflow, but freezes taxes for 13 months & sparks +25% Unrest.";
+  }
+}
+window.updateEmergencyAdvanceUI = updateEmergencyAdvanceUI;
+
 export function triggerCollectTaxes() {
+  const droughtUntil = commandCenterDetail?.tax_drought_until ?? 0.0;
+  const curSimYear = (typeof getCurrentGameYear === "function" ? getCurrentGameYear() : state.simYear) || 1500;
+  if (curSimYear < droughtUntil) {
+    const mosRemain = Math.max(0.1, (droughtUntil - curSimYear) * 12.0).toFixed(1);
+    showToast(`Crown Advance is locked! 13-month tax drought active (${mosRemain} months remain).`, "warning");
+    return;
+  }
+
   const lever = document.getElementById("cc-lever-collect-taxes");
   if (lever) {
     lever.classList.add("pulled");
@@ -2542,7 +2600,7 @@ export function triggerCollectTaxes() {
       lever.classList.remove("pulled");
     }, 350);
   }
-  performActionDirect("economy", "Collect Taxes");
+  performActionDirect("economy", "Emergency Crown Advance");
 }
 
 export function triggerUpgradeMarket() {

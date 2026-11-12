@@ -283,6 +283,23 @@ func GenerateCivicOrderRestoredDispatch(era, realm, port string) string {
 	}
 }
 
+// GenerateExtraordinaryLevyDispatch produces news wording when a sovereign demands an early tax advance,
+// triggering an immediate cash injection but initiating a 13-month tax drought and popular unrest shock.
+func GenerateExtraordinaryLevyDispatch(era, realm, port string, gold int64) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("🚨 EXTRAORDINARY BENEVOLENCE: The Crown demands an early forced tithe across %s (+%d gold reserves)! Shires grumble bitterly (+25%% Unrest) as bailiffs seize grain ahead of winter; no further tax may be collected for 13 months!", realm, gold)
+	case "revolt":
+		return fmt.Sprintf("🚨 FORCED LOAN DECREE: The King's ministers extract extraordinary war taxes across %s (+%d gold reserves)! Disaffected burghers protest extortion (+25%% Unrest); next year's exchequer stands bare!", port, gold)
+	case "independence":
+		return fmt.Sprintf("🚨 EMERGENCY WAR LEVY: Parliament enacts an emergency advance assessment across %s (+%d gold)! Factory owners withhold capital investment and labor strikes loom (+25%% Unrest)!", realm, gold)
+	case "decolonisation":
+		return fmt.Sprintf("🚨 SPECIAL POWERS EMERGENCY TAX: The regime imposes mandatory payroll withholding ahead of schedule across %s (+%d gold)! Trade unions declare national outrage (+25%% Unrest)!", realm, gold)
+	default: // modern
+		return fmt.Sprintf("🚨 EMERGENCY FISCAL CLAWBACK: Treasury imposes sudden advance tax levies across %s (+%d liquid reserves)! Consumer confidence shatters and credit markets freeze (+25%% Unrest)!", realm, gold)
+	}
+}
+
 // GetEraKey returns the macroeconomic era key for a given simulation year.
 func GetEraKey(simYear float64) string {
 	switch {

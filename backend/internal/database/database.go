@@ -167,6 +167,7 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fiscal_archetype VARCHAR(50) DEFAULT 'balanced';
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS tax_mod DOUBLE PRECISION DEFAULT 1.0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS trade_mod DOUBLE PRECISION DEFAULT 1.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS tax_drought_until DOUBLE PRECISION DEFAULT 0.0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS planned_economy_rate INTEGER DEFAULT 50;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS planned_investment INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS planned_social_costs INTEGER DEFAULT 0;
@@ -780,6 +781,7 @@ func ResetGameToYear1500(clearClaims bool) error {
 		    colonial_progress = 0.0,
 		    colonial_yield = 0.0,
 		    colonial_fleets = 0,
+		    tax_drought_until = 0.0,
 		    updated_at = CURRENT_TIMESTAMP
 	`
 	if _, err := tx.Exec(blanketReset); err != nil {
@@ -1009,6 +1011,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
 		COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
 		COALESCE(c.fiscal_archetype, 'balanced'), COALESCE(c.tax_mod, 1.0), COALESCE(c.trade_mod, 1.0),
+		COALESCE(c.tax_drought_until, 0.0),
 		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
@@ -1035,6 +1038,7 @@ func GetCountries(era string) ([]models.Country, error) {
 			&c.EntrepreneurialPride, &c.MilitaryDelayedCosts,
 			&c.ColonialProgress, &c.ColonialYield, &c.ColonialFleets,
 			&c.FiscalArchetype, &c.TaxMod, &c.TradeMod,
+			&c.TaxDroughtUntil,
 			&c.TerritoryType, &c.Borders, &c.IsIsland,
 		); err != nil {
 			return nil, err
@@ -1456,6 +1460,25 @@ func UpdateCountryMarkets(countryID, markets int64) error {
 		SET markets = $1, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $2`,
 		markets, countryID)
+	return err
+}
+
+// ApplyEmergencyCrownAdvance executes an Emergency Crown Advance:
+// - Deposits the collected tax advance into treasury gold reserves.
+// - Sets tax_drought_until to currentYear + 13 months (1.0833 years).
+// - Reduces commercial confidence / entrepreneurial pride by 20%.
+func ApplyEmergencyCrownAdvance(countryID int64, gain int64, droughtUntil float64, pride float64) error {
+	if DB == nil {
+		return nil
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET resources = resources + $1,
+		    tax_drought_until = $2,
+		    entrepreneurial_pride = $3,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4`,
+		gain, droughtUntil, pride, countryID)
 	return err
 }
 

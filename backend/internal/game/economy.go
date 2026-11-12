@@ -73,6 +73,11 @@ type EconomyState struct {
 	RebellionRisk       string  `json:"rebellion_risk"`
 	ActiveRebellion     bool    `json:"active_rebellion"`
 
+	// Emergency Crown Advance & 13-Month Tax Drought
+	TaxDroughtUntil     float64 `json:"tax_drought_until"`
+	InTaxDrought        bool    `json:"in_tax_drought"`
+	TaxDroughtMonths    float64 `json:"tax_drought_months"`
+
 	// Feature/Internals: User State & Environmental Telemetry
 	EntrepreneurialPride    float64 `json:"entrepreneurial_pride"`
 	MilitaryDelayedCosts    int64   `json:"military_delayed_costs"`
@@ -839,6 +844,38 @@ func ComputeEconomyFull(
 		Season:                  season.Season,
 		SeasonName:              season.SeasonName,
 		LittleIceAgePhase:       season.LittleIceAgePhase,
+	}
+}
+
+// ApplyTaxDrought zeroes out current tax revenue and applies the +25% emergency levy unrest shock
+// if the kingdom is currently enduring a 13-month tax drought from an Emergency Crown Advance.
+func ApplyTaxDrought(econ *EconomyState, simYear, taxDroughtUntil float64) {
+	if econ == nil {
+		return
+	}
+	econ.TaxDroughtUntil = taxDroughtUntil
+	if simYear >= taxDroughtUntil {
+		econ.InTaxDrought = false
+		econ.TaxDroughtMonths = 0.0
+		return
+	}
+
+	econ.InTaxDrought = true
+	econ.TaxDroughtMonths = math.Round((taxDroughtUntil-simYear)*12.0*10) / 10
+	econ.TaxRevenue = 0
+	econ.TotalRevenue = econ.MarketRevenue
+	econ.BudgetBalance = econ.TotalRevenue - (econ.MilitaryUpkeep + econ.SocialExpenditure + econ.InvestmentExpenditure)
+	econ.EffectiveBalance = econ.TotalRevenue - econ.EffectiveTotalExp
+
+	// Extraordinary early extraction inflicts +25% unrest shock on the populace
+	econ.UnrestIndex = math.Min(100.0, math.Round((econ.UnrestIndex+25.0)*10)/10)
+	if econ.UnrestIndex >= 85.0 {
+		econ.RebellionRisk = "rebellion"
+		econ.ActiveRebellion = true
+	} else if econ.UnrestIndex >= 60.0 {
+		econ.RebellionRisk = "tumult"
+	} else if econ.UnrestIndex >= 30.0 {
+		econ.RebellionRisk = "grievance"
 	}
 }
 

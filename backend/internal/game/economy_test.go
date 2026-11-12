@@ -782,4 +782,57 @@ func TestCivicWelfareSqualorMortalityAndRevoltTaxonomy(t *testing.T) {
 	}
 }
 
+func TestEmergencyCrownAdvanceAnd13MonthTaxDrought(t *testing.T) {
+	simYear := 1500.5
+	englandPop := int64(4500000)
+
+	econ := ComputeEconomyFull(englandPop, 500, 0, 50, 2, 1, 0, 0, 0, 0, 0, 100.0, 0, 0.0, simYear, 1.0, 1.0)
+	if econ.TaxRevenue <= 0 {
+		t.Fatalf("expected positive baseline tax revenue, got %d", econ.TaxRevenue)
+	}
+
+	// 1. Demand Advance: 13-month drought until 1500.5 + 1.0833 = 1501.5833
+	droughtUntil := simYear + (13.0 / 12.0)
+	baselineUnrest := econ.UnrestIndex
+
+	// Apply during drought (simYear 1500.5 < droughtUntil)
+	droughtEcon := econ
+	ApplyTaxDrought(&droughtEcon, simYear, droughtUntil)
+
+	if !droughtEcon.InTaxDrought {
+		t.Errorf("expected InTaxDrought == true during 13-month window")
+	}
+	if droughtEcon.TaxRevenue != 0 {
+		t.Errorf("expected TaxRevenue == 0 during tax drought, got %d", droughtEcon.TaxRevenue)
+	}
+	if droughtEcon.UnrestIndex != baselineUnrest+25.0 {
+		t.Errorf("expected unrest shock +25%% (from %f to %f), got %f",
+			baselineUnrest, baselineUnrest+25.0, droughtEcon.UnrestIndex)
+	}
+
+	// 2. After 13 months expire (simYear 1501.60 >= droughtUntil)
+	expiredEcon := econ
+	ApplyTaxDrought(&expiredEcon, 1501.60, droughtUntil)
+
+	if expiredEcon.InTaxDrought {
+		t.Errorf("expected InTaxDrought == false after drought expiration")
+	}
+	if expiredEcon.TaxRevenue <= 0 {
+		t.Errorf("expected TaxRevenue to be restored after drought expiration, got %d", expiredEcon.TaxRevenue)
+	}
+
+	// 3. Gazette Dispatches for Emergency Advance across eras
+	eras := []string{"discovery", "revolt", "independence", "decolonisation", "modern"}
+	for _, era := range eras {
+		dispatch := GenerateExtraordinaryLevyDispatch(era, "England", "Portsmouth", 250)
+		if !strings.Contains(dispatch, "250") {
+			t.Errorf("extraordinary levy dispatch missing gold amount for %s: %s", era, dispatch)
+		}
+		if !strings.Contains(dispatch, "+25% Unrest") {
+			t.Errorf("extraordinary levy dispatch missing +25%% Unrest warning for %s: %s", era, dispatch)
+		}
+	}
+}
+
+
 

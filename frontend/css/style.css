@@ -1179,6 +1179,51 @@ body {
     box-shadow: 0 0 6px #ffd700;
 }
 
+.mechanical-lever-btn.locked,
+.mechanical-lever-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    border-color: #64748b;
+    color: #94a3b8;
+    background: #1e293b;
+    box-shadow: none;
+    transform: none;
+}
+
+.mechanical-lever-btn.locked .lever-arm,
+.mechanical-lever-btn:disabled .lever-arm {
+    background: #475569;
+}
+
+.mechanical-lever-btn.locked .lever-knob,
+.mechanical-lever-btn:disabled .lever-knob {
+    background: #94a3b8;
+    box-shadow: none;
+}
+
+.lever-status-badge {
+    font-size: 0.72rem;
+    font-family: monospace;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 5px;
+    display: inline-block;
+}
+
+.lever-status-badge.ready {
+    background: rgba(234, 179, 8, 0.15);
+    border: 1px solid rgba(234, 179, 8, 0.5);
+    color: #facc15;
+}
+
+.lever-status-badge.drought {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.7);
+    color: #f87171;
+    animation: pulse-rebellion 1.8s infinite ease-in-out;
+}
+
 .stepper-actuator-btn {
     background: linear-gradient(180deg, #323245 0%, #1b1b26 100%);
     border: 1px solid rgba(255, 215, 0, 0.4);

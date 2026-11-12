@@ -1297,18 +1297,19 @@
 
                                 <!-- Economic Telemetry & Action Levers -->
                                 <div class="fiscal-levers-panel">
-                                    <!-- Treasury Harvest Lever -->
-                                    <div class="tactical-lever-card">
+                                    <!-- Emergency Crown Advance Lever -->
+                                    <div class="tactical-lever-card" id="cc-tactical-advance-card">
                                         <div class="lever-info">
-                                            <div class="lever-title">HARVEST CROWN TITHE</div>
-                                            <div class="lever-sub">Collect immediate tax cycle into gold reserve</div>
+                                            <div class="lever-title">EMERGENCY CROWN ADVANCE</div>
+                                            <div class="lever-sub" id="cc-lever-advance-sub">Immediate tax cashflow, but freezes taxes for 13 months &amp; sparks +25% Unrest</div>
+                                            <div class="lever-status-badge ready" id="cc-lever-advance-status">⚡ Ready for Advance</div>
                                         </div>
                                         <button id="cc-lever-collect-taxes" class="mechanical-lever-btn lever-gold"
-                                            onclick="triggerCollectTaxes()">
+                                            onclick="triggerCollectTaxes()" title="Demand emergency tax harvest (imposes 13-month tax drought &amp; +25% Unrest)">
                                             <div class="lever-arm">
                                                 <div class="lever-knob"></div>
                                             </div>
-                                            <span class="lever-caption">PULL TO COLLECT</span>
+                                            <span class="lever-caption" id="cc-lever-advance-caption">DEMAND EARLY TITHE</span>
                                         </button>
                                     </div>
 

@@ -66,6 +66,7 @@ type CountryState struct {
 	FiscalArchetype      string  `json:"fiscal_archetype"`
 	TaxMod               float64 `json:"tax_mod"`
 	TradeMod             float64 `json:"trade_mod"`
+	TaxDroughtUntil      float64 `json:"tax_drought_until"`
 	Economy        EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
@@ -394,6 +395,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
 			c.TaxMod, c.TradeMod,
 		)
+		ApplyTaxDrought(&econ, simYear, c.TaxDroughtUntil)
 
 		// 1. Markets: Income and Risk (compounded by completed colonial fleet trade yield)
 		var baseMarket, riskSwing float64
@@ -809,6 +811,7 @@ func (g *GameEngine) BuildState() GameState {
 			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
 			c.TaxMod, c.TradeMod,
 		)
+		ApplyTaxDrought(&econ, simYear, c.TaxDroughtUntil)
 		PopulateLastYearLedger(
 			&econ,
 			c.LastTaxRevenue, c.LastMarketIncome, c.LastMilitaryExp,
@@ -854,6 +857,7 @@ func (g *GameEngine) BuildState() GameState {
 			FiscalArchetype:      c.FiscalArchetype,
 			TaxMod:               c.TaxMod,
 			TradeMod:             c.TradeMod,
+			TaxDroughtUntil:      c.TaxDroughtUntil,
 			Economy:              econ,
 		}
 		if c.OwnerID != nil {

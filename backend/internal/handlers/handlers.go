@@ -531,16 +531,39 @@ func handleEconomy(userID int64, description string, req ActionRequest) error {
 	// or the kingdom's development levels; all are visible in the broadcast
 	// that follows the action.
 	switch description {
-	case "Collect Taxes":
-		// One cycle of rate-aware tax revenue, straight into the treasury.
-		econ := game.ComputeEconomy(self.Population, self.Resources, self.Troops, self.EconomyRate, self.Markets, self.Infrastructure, self.Investment, self.SocialCosts)
+	case "Collect Taxes", "Emergency Crown Advance":
+		simYear := game.GetEngine().GetSimYear()
+		if simYear < self.TaxDroughtUntil {
+			monthsRemaining := (self.TaxDroughtUntil - simYear) * 12.0
+			return fmt.Errorf("Crown Advance is locked! An extraordinary levy was already collected. Tax exchequer is under a 13-month drought until Anno Domini %.2f (%.1f months remain)", self.TaxDroughtUntil, monthsRemaining)
+		}
+
+		econ := game.ComputeEconomyFull(
+			self.Population, self.Resources, self.Troops,
+			self.EconomyRate, self.Markets, self.Infrastructure, self.Investment, self.SocialCosts,
+			self.TroopsLevy, self.TroopsRegular, self.TroopsElite,
+			self.EntrepreneurialPride, self.MilitaryDelayedCosts, self.ColonialYield, simYear,
+			self.TaxMod, self.TradeMod,
+		)
 		gain := econ.TaxRevenue
 		if gain < 1 {
 			gain = 1
 		}
-		if err := database.UpdateCountryResources(self.ID, self.Resources+gain); err != nil {
+
+		// 13-month lockout and tax drought: 13 / 12 = 1.08333 years
+		droughtUntil := simYear + (13.0 / 12.0)
+		newPride := math.Max(15.0, self.EntrepreneurialPride-20.0)
+
+		if err := database.ApplyEmergencyCrownAdvance(self.ID, gain, droughtUntil, newPride); err != nil {
 			return err
 		}
+
+		eraKey := game.GetEraKey(simYear)
+		portName := game.RealmPort(self.Code, self.Name)
+		newsMsg := game.GenerateExtraordinaryLevyDispatch(eraKey, self.Name, portName, gain)
+		_ = database.LogAction(userID, pc.CountryID, "news", newsMsg, nil, "", "", "")
+
+		game.GetEngine().Advance()
 	case "Trade Resources":
 		if req.TargetCountryID == nil || *req.TargetCountryID == 0 {
 			return errors.New("target country required for Trade Resources")

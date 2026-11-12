@@ -934,6 +934,32 @@ Inside the Command Center console, the ruler is provided real-time social feedba
 3. **Imperial Gazette Dispatches**:
    - Live banner updating with the labelled chronicle events as policies take effect or crises erupt.
 
+---
+
+### I. The Sovereign's Double-Edged Sword: The Emergency Crown Advance (Extraordinary Tithe)
+
+Historically, monarchs facing sudden invasion, troop mutiny, or total treasury exhaustion had no access to instant modern deficit printing. Instead, they occasionally demanded an **Emergency Advance Tithe or Forced Loan** (*Benevolences* under the Tudors, *Ship Money* under the Stuarts, or *Tailles Extraordinaires* in France).
+
+Kingdom Conquest models this not as an arcade "clicker cheat", but as a **high-stakes, double-edged crisis lever**:
+
+```mermaid
+flowchart TD
+    A["👑 Pull Lever: Emergency Crown Advance"] --> B["⚡ Immediate Specie Injection\n(Current Year's Tax Revenue Collected Now)"]
+    A --> C["⏳ 13-Month Tax Drought\n(Provincial Tax Collection = 0 G for 13+ Months)"]
+    A --> D["🚨 +25% Immediate Unrest Shock\n(Risks Immediate Peasant Jacquerie if U >= 85%)"]
+    A --> E["📉 -20% Commercial Confidence Drop\n(Triggers Wealth Flight & Tariff Erosion)"]
+```
+
+#### The Four Immutable Rules of the Crown Advance:
+1. **Cashflow Shift, Not Free Wealth**: The exchequer receives the current year's taxes today, but the next collection is deferred for **13 full months** (1 year plus the balance of the current cycle). During those 13 months, provincial tax revenues are **strictly zero** (`econ.TaxRevenue = 0`).
+2. **The 13-Month Lockout**: The lever locks mechanically and cannot be pulled again until at least 13 simulation months have elapsed (`simYear >= tax_drought_until`).
+3. **The Unrest Shock (+25% Unrest)**: Extracting tithes ahead of season provokes furious resistance from landowners and peasants alike, instantly adding **$+25\%$ to the Unrest Index**. If a kingdom was already experiencing simmering tumult, demanding an advance will immediately ignite an **Armed Rebellion Outbreak ($U \ge 85\%$)**.
+4. **Commercial Confidence Erosion**: Merchant guilds view the seizure as an assault on property rights, dropping Entrepreneurial Pride by **$-20\%$** and increasing the risk of wealthy merchant capital flight.
+
+> [!CAUTION]
+> **The Impatient Player's Trap**: Impatient players who pull the lever for quick gold find themselves trapped in a 13-month tax drought with zero income while army upkeep drains their gold to zero, unrest surges into rebellion, and their trading markets are sacked! However, for a master strategist facing an invading armada with an empty treasury, it can provide the exact emergency bounty needed to hire defending garrisons.
+
+
 
 
 
