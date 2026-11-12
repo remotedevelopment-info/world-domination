@@ -607,5 +607,333 @@ flowchart LR
    - The global reserve hegemon enjoys the **"Exorbitant Privilege"**: can run persistent structural budget and trade deficits without immediate currency collapse, exporting inflation to the rest of the world.
    - Other nations must maintain **Foreign Exchange Reserves (FX)** in USD to protect their domestic currencies against speculative runs and balance-of-payments crises.
 
+---
+
+## 12. Civic Social Infrastructure, Multi-Era Human Capital & Revolt Prevention Mechanics
+
+### A. The Core Philosophy: The Interdependent Sovereign Balance (Beyond Ideology)
+
+Kingdom Conquest does not seek to champion capitalism, communism, or any contemporary ideological doctrine. Instead, the macroeconomic engine models the **historical interdependence of four vital sovereign pillars**:
+
+```mermaid
+flowchart TD
+    subgraph Pillars ["The Four Interdependent Sovereign Pillars"]
+        P1["💰 Fiscal & Tax Extraction\n(Agrarian Land, Customs, Income)"]
+        P2["⚓ Trade & Transport Velocity\n(Caravels, Railways, Freight Corridors)"]
+        P3["🏛️ Civic & Social Infrastructure\n(Schools, Housing, Ministries, Health)"]
+        P4["⚔️ Military Defense & Order\n(Standing Armadas, Frontier Forts, Police)"]
+    end
+
+    P1 -->|"Funds State Action"| P3 & P4
+    P2 -->|"Multiplies Tax Base"| P1
+    P3 -->|"Builds Human Capital & Stability"| P1 & P2
+    P4 -->|"Secures Trade & Enforces Law"| P2 & P3
+    P3 -.->|"If Starved: Squalor & Revolt"| P1 & P4
+```
+
+1. **Strategic Interdependence**:
+   - A ruler cannot run a colossal military without a vibrant trade network to pay salaries in gold.
+   - A ruler cannot sustain trade and factories without an educated, healthy, and housed citizenry.
+   - A ruler cannot tax an impoverished, starving population without provoking violent rebellions that destroy the very capital they sought to hoard.
+2. **The Purpose of the Civic Appropriation Dial ($S\%$)**:
+   - The Civic Dial ($S\%$) represents **Government Investment in the Social Infrastructure of Society**:
+     - Primary and technical education systems.
+     - Public civil ministries, municipal councils, and legal courts.
+     - Famine granaries, clean water sanitation, and public health systems.
+     - Public housing when the private sector fails to build adequate shelter for burgeoning urban populations.
+
+---
+
+### B. The Three Temporal Horizons of Social Infrastructure (Cumulative Capital Stocks)
+
+Social infrastructure is not an instantaneous operational expense; it is a **cumulative capital stock (human and institutional capital)** operating across three distinct, overlapping temporal horizons:
+
+```mermaid
+flowchart LR
+    subgraph Horizon1 ["Short-Term (3–15 Years)\nCivil Works & Famine Buffers"]
+        H1A["Municipal roads & turnpikes"]
+        H1B["Granary reserves & clean water"]
+        H1C["Pestilence quarantine & drainage"]
+    end
+
+    subgraph Horizon2 ["Mid-Term (15–25 Years)\nHuman Capital & Education"]
+        H2A["Primary literacy & guild apprentices"]
+        H2B["Technical colleges & vocational skills"]
+        H2C["Generational workforce productivity"]
+    end
+
+    subgraph Horizon3 ["Long-Term (25–50 Years)\nInstitutions & Civic Governance"]
+        H3A["Ministries, civil service & councils"]
+        H3B["Independent judiciary & property rights"]
+        H3C["Public health systems & social trust"]
+    end
+
+    H1A & H1B & H1C -->|"Immediate Relief"| H2A
+    H2A & H2B & H2C -->|"One Generation Later"| H3A
+```
+
+#### 1. Short-Term Horizon (3 to 15 Years — Physical Civil Works & Relief Buffers)
+* **Capital Form**: Municipal roads, canal locks, parish granaries, clean water drainage, quarantine cordons.
+* **Economic Payoff**:
+  * Immediately suppresses famine mortality and plague outbreaks.
+  * Accelerates internal trade velocity ($+3\%\text{–}+8\%$).
+* **Neglect Consequence**: Squalor factor $Q$ spikes within 2–4 years; epidemic outbreaks decimate the civilian workforce.
+
+#### 2. Mid-Term Horizon (15 to 25 Years — Generational Human Capital & Education)
+* **Capital Form**: Parish literacy schools, craft apprenticeship charters, industrial mechanics' institutes, modern research universities.
+* **The Generational Lag Curve**:
+  * Educating children today does not generate immediate tax revenue tomorrow; its payoff is **intergenerational (15–25 years)**.
+  * As educated cohorts mature into adult artisans, engineers, administrators, and factory managers, workforce productivity factor increases:
+    $$\Phi_{\text{human}}(t) = \Phi_{\text{base}} \times \left(1.0 + \int_{t-25}^{t-15} S(\tau) \, d\tau \times \kappa_{\text{edu}}\right)$$
+* **Neglect Consequence**: Brain drain, technological backwardness, inability to adopt advanced industrial capex, workforce deskilling.
+
+#### 3. Long-Term Horizon (25 to 50 Years — Enduring Institutions, Governance & Housing)
+* **Capital Form**: Professional civil service ministries, municipal councils, land registry offices, independent courts, public housing authorities.
+* **The Multi-Decadal Foundation**:
+  * Creates high institutional trust, unshakeable property rights, lower borrowing risk premiums, and societal resilience against crises.
+  * Ensures that when the private market fails to build housing for expanding populations, public councils step in to prevent slums and homelessness.
+* **Neglect Consequence**: Institutional corruption, administrative paralysis, collapse of the rule of law. Once ruined, rebuilding institutional competence requires 25 to 50 years of patient reinvestment.
+
+---
+
+### C. The Asymmetry: Compounding Growth vs. Rapid Cliff Decay (Hysteresis)
+
+A central reality of human and institutional development is **asymmetric decay**:
+
+$$\text{Time to Build Human & Institutional Capital}: 20 \text{ to } 50 \text{ Years}$$
+$$\text{Time to Destroy via Budget Neglect}: 3 \text{ to } 5 \text{ Years}$$
+
+```mermaid
+flowchart LR
+    A["Patient Investment (25–50 Yrs)\nSteady S% Appropriation"] -->|"Generational Compounding"| B["High Institutional Trust\n& Educated Workforce"]
+    B -->|"Sudden Austerity / 0% Welfare\n(3–5 Years)"| C["Rapid Slum Decay, Brain Drain\n& Civil Collapse"]
+```
+
+* **The Compounding Virtuous Cycle**:
+  * Consistent funding ($S\% \approx 20\%\text{–}30\%$) allows each generation to stand upon the shoulders of the previous one.
+  * Population carrying capacity expands, life expectancy rises, and per-capita GDP compounds.
+* **The Precipitous Cliff**:
+  * If a sovereign abruptly zeroes the civic dial to finance a war or hoard specie, roads fall into disrepair within 3 years, granaries run dry in 2 seasons of bad harvest, and civil servants defect or turn to bribery within 4 years.
+  * Social capital drains at $3\times$ the velocity of its accumulation.
+
+---
+
+### D. Multi-Era Evolution of the Taxpayer Base & Social Contract
+
+To ensure historical depth and prevent anachronisms, the macroeconomic model recognizes that **who pays taxes, who benefits from civic spending, and who revolts** fundamentally transforms across each of the 5 historical eras:
+
+```
++---------------------------------------------------------------------------------------------------------------------------+
+|                                    HISTORICAL TAXPAYER & SOCIAL CONTRACT TAXONOMY                                         |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+| ERA               | PRIMARY TAXPAYER BASE      | CIVIC / SOCIAL SPENDING ($S\%$)     | CRISIS & REBELLION NATURE          |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+| 1. Discovery      | Agrarian land rents,       | Cathedral & Parish Relief:          | Peasant Jacqueries & Famines:      |
+|    (1500–1749)    | customs tariffs, Crown     | Emergency grain reserves, plague    | Famine from crop failure; mobs     |
+|                   | domains, trade monopolies. | cordons, guild apprenticeships,     | burn manors and granaries. Noble   |
+|                   | Peasants pay dues in kind. | church alms, town watchmen.         | revolts defend ancient privileges. |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+| 2. Revolt         | Commercial merchants,      | Municipal Works & Enlightenment:    | Urban Bread Riots & Revolutions:   |
+|    (1750–1859)    | manufactory owners,        | Paved turnpikes, clean water canals,| Squalor & cholera in rising cities;|
+|                   | customs, excises, land     | municipal academies, town councils, | burghers and urban mobs demand     |
+|                   | taxes on gentry estates.   | sanitation drainage.                | bread and representation (1789).   |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+| 3. Independence   | Corporate profits, rail    | Mass Literacy & Public Health:      | Industrial Strikes & Union Unrest: |
+|    (1860–1919)    | freight tariffs, emerging  | Primary school boards, public       | Factory walkouts, rail stoppages;  |
+|                   | income tax on elites, coal | hospitals, factory health acts,     | strikes paralyze export ports and  |
+|                   | and steel excises.         | working-class tram corridors.       | industrial production.             |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+| 4. Decolonisation | Broad-based personal       | The Developmental State:            | General Strikes & Insurgencies:    |
+|    (1920–1988)    | income tax, payroll taxes, | Public housing estates, national    | Mass proletariat walkouts, civil   |
+|                   | state-owned enterprises,   | health clinics, secondary schools,  | disobedience, student uprisings,   |
+|                   | corporate tax.             | developmental ministries.           | anti-colonial liberation fronts.   |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+| 5. Modern         | Massive global workforce   | Knowledge Economy & Demographics:   | Demographic Winter & Brain Drain:  |
+|    (1989+)        | (post-1975 pop doubling),  | Universities, R&D labs, digital     | Birth rates collapse if housing    |
+|                   | VAT/sales, tech profits,   | transit, affordable housing,        | is unaffordable; skilled youth     |
+|                   | financial services.        | healthcare for aging populations.   | emigrate; pension funds collapse.  |
++-------------------+----------------------------+-------------------------------------+------------------------------------+
+```
+
+#### 1. Age of Discovery (1500–1749): Feudal Extraction & Parish Granaries
+* **Who Pays**: The peasantry produces grain, wool, and timber, but pays rent and tithes to the local lord or abbey rather than direct income tax to the King. The Crown lives on domain rents, customs tariffs (*Tonnage & Poundage*), and feudal subsidies approved by Parliament or Estates.
+* **What $S\%$ Funds**: Cathedral emergency grain reserves (stored in parish tithe barns), quarantine cordons during bubonic plague outbreaks, guild craft apprenticeships, and monastic/parish poor relief.
+* **Nature of Revolt**: **Peasant Jacqueries & Food Riots**. If grain reserves are empty during harvest failures, desperate peasants march with pitchforks, burning estate rolls and sacking local grain warehouses. Aristocratic rebellions (e.g. *The Fronde*, *Pilgrimage of Grace*) arise over Crown overreach and noble privileges, not peasant welfare.
+
+#### 2. Age of Revolt (1750–1859): Urban Migration, Guild Friction & Bourgeois Revolutions
+* **Who Pays**: Merchant cartels, colonial trading houses, domestic manufactories, and landed gentry via excise taxes and port customs.
+* **What $S\%$ Funds**: Municipal water supply, paved coaching turnpikes, early municipal academies, and town councils.
+* **Nature of Revolt**: **Urban Bread Riots & Political Insurrection**. Dense urban populations in capital cities riot when bread prices spike beyond the daily wage. Disaffected burghers, artisans, and philosophers form revolutionary clubs demanding constitutional representation (e.g. Paris 1789, Europe 1848).
+
+#### 3. Age of Independence (1860–1919): Industrial Proletariat & Compulsory Literacy
+* **Who Pays**: Heavy industrial trusts, rail corporations, mining concessions, and wealthy capitalists via nascent graduated income taxes.
+* **What $S\%$ Funds**: Public education boards (establishing universal primary literacy for factory work), public health acts (eradicating urban cholera/typhus), and municipal sanitation.
+* **Nature of Revolt**: **Industrial Union Strikes & Transport Paralyzation**. A tax strike is still uncommon, but organized labor walkouts paralyze coal basins, railways, and shipyards, halting national GDP until factory acts and health protections are enacted.
+
+#### 4. Age of Decolonisation (1920–1988): Broad-Based Income Taxes & The Developmental State
+* **Who Pays**: **The Broad Proletariat**. For the first time in world history, direct personal income taxes (PAYE) are deducted from every citizen's weekly pay packet. The state budget is powered by the masses.
+* **What $S\%$ Funds**: Public housing projects (slum clearance), national health systems, secondary and technical education, and ministries of development.
+* **Nature of Revolt**: **General Strikes & Tax Resistance**. Now, tax strikes, mass civil disobedience, and anti-colonial revolutionary movements can directly bankrupt the exchequer by withholding tax revenues and paralyzing state machinery.
+
+#### 5. Modern Era (1989+): The Knowledge Economy & The Post-1975 Demographic Explosion
+* **Who Pays**: A massive, highly educated workforce. As the global population doubled between 1975 and the modern day, economies shifted from manual brawn to high-skilled human capital, service technology, and corporate value-added taxes (VAT).
+* **What $S\%$ Funds**: Advanced research universities, broadband digital infrastructure, affordable public housing programs (countering private market speculation), and medical care for an aging demographic.
+* **Nature of Crisis**: **Demographic Winter, Brain Drain & Systemic Collapse**:
+  * If the state fails to ensure affordable housing and childcare, educated young adults cannot afford families, causing the birth rate to plummet below replacement ($< 1.3$).
+  * The educated tax base shrinks permanently, leaving a massive elderly population unsupported.
+  * Disaffected knowledge workers emigrate (*Brain Drain*), gutting corporate profits and sovereign income tax takes.
+
+---
+
+### E. Mathematical Formulations for Engine Simulation
+
+#### 1. Baseline Demographic Need ($W_{\text{need}}$)
+Every kingdom requires an era-scaled baseline civic appropriation to maintain social order and public health:
+
+$$W_{\text{need}} = \text{CivilianWorkforce} \times \omega_{\text{era}} \times \left(1.0 + 0.08 \times \text{Markets}\right)$$
+
+where:
+* $\omega_{\text{disc}} = 0.000010 \text{ G/citizen}$ (England pop 4.5M: $W_{\text{need}} \approx 45\text{–}50\text{ G/yr}$, or $\sim 20\%$ of Crown land tax).
+* $\omega_{\text{revolt}} = 0.000018 \text{ G/citizen}$
+* $\omega_{\text{indep}} = 0.000030 \text{ G/citizen}$
+* $\omega_{\text{decol}} = 0.000060 \text{ G/citizen}$
+* $\omega_{\text{mod}} = 0.000120 \text{ G/citizen}$
+
+#### 2. Welfare Adequacy Ratio ($\Omega$) & Squalor Factor ($Q$)
+Given actual annual civic spending $E_{\text{soc}}$:
+
+$$\Omega = \frac{E_{\text{soc}}}{\max(1, W_{\text{need}})}$$
+
+$$\text{Squalor Factor } Q = \max(0.0, (1.0 - \Omega) \times 100.0) \quad (Q \in [0, 100])$$
+
+* When $\Omega \ge 1.0$: $Q = 0$. The kingdom enjoys **Guild & Civic Contentment** ($+5\%\text{–}+10\%$ trade velocity bonus).
+* When $\Omega < 1.0$: Squalor mounts. Granaries deplete, parish relief collapses, municipal slums fester.
+
+#### 3. Excess Mortality Dynamics (Citizens Dying in Large Numbers)
+When social funding is neglected ($\Omega < 0.50$):
+
+$$\Delta \text{Pop}_{\text{mortality}} = -\text{CivilianWorkforce} \times \mu_{\text{era}} \times \left(\frac{Q}{100.0}\right)^2$$
+
+where $\mu_{\text{era}} \approx 0.015\text{–}0.025$ ($1.5\%\text{–}2.5\%$ per annum).
+* In 1500 England ($4.5\text{M}$ pop), zero civic funding produces **over $80,000$ excess deaths per year**, permanently destroying future taxpayers and military recruits.
+
+#### 4. The Imperial Unrest Index ($U \in [0, 100\%]$)
+
+$$U = U_{\text{tax}} + U_{\text{squalor}} + U_{\text{conscription}} - U_{\text{pacification}}$$
+
+* **Tax Extraction Pressure ($U_{\text{tax}}$)**:
+  $$U_{\text{tax}} = \left(\frac{\max(0, \tau - 25)}{75.0}\right)^{1.5} \times 50.0$$
+  *(Reflects that tax above 25% creates compounding popular grievance).*
+* **Squalor & Famine Pressure ($U_{\text{squalor}}$)**:
+  $$U_{\text{squalor}} = \left(\frac{Q}{100.0}\right) \times 50.0$$
+* **Conscription Pressure ($U_{\text{conscription}}$)**:
+  $$U_{\text{conscription}} = \min\left(25.0, \frac{\text{Troops}}{\text{Population}} \times 120.0\right)$$
+* **Pacification Buffers ($U_{\text{pacification}}$)**:
+  $$U_{\text{pacification}} = \text{InfraLevel} \times 3.0 + \sum \text{Forts} \times 2.0 + \min\left(20.0, \frac{\text{RegularTroops}}{\text{Population}} \times 1000.0\right)$$
+
+---
+
+### F. The Anatomy & Catastrophic Cost of Rebellion ($U \ge 85\%$)
+
+When the Unrest Index reaches $U \ge 85\%$, the realm enters the **Open Rebellion State**. An armed revolt is designed to be **catastrophically more expensive than paying for civic infrastructure**:
+
+```
++---------------------------------------------------------------------------------------------------+
+|                                 THE ANATOMY OF A REVOLT OUTBREAK                                  |
++------------------------------------+--------------------------------------------------------------+
+| ECONOMIC & CIVIC DAMAGE            | FISCAL PENALTY TO THE CROWN                                  |
++------------------------------------+--------------------------------------------------------------+
+| 1. Sacking of Trading Wharves      | Markets Level downgraded by -1 Tier (Costs 200 G to rebuild). |
+| 2. Tax Extraction Paralyzation     | Provincial tax revenues cut by -50% to -75% for 1–2 years.   |
+| 3. Treasury Vault Plundering       | Rebellious mobs loot 10%–20% of current gold reserves.       |
+| 4. Armed Peasant Insurgency        | Hostile Rebel Levies spawn; garrisons suffer combat deaths.  |
+| 5. Lingering Military Costs        | +50 to +100 G added to Military Delayed Costs (pensions).    |
++------------------------------------+--------------------------------------------------------------+
+```
+
+> [!CAUTION]
+> **The Sovereign's False Economy**: Saving $45\text{ G/yr}$ by cutting civic welfare produces an armed insurrection costing $> 450\text{ G}$ in sacked markets, lost taxes, plundered gold, and troop casualties—alongside the permanent death of over $100,000$ taxpayers. Timely social investment is the cheapest defense in the realm!
+
+---
+
+### G. Labelled Player Action & Sovereign Consequence News Taxonomy
+
+To provide immediate, immersive feedback to the player, every major shift in sovereign policy generates **labelled historical news dispatches** via the Imperial Gazette ticker. The simulation monitors player actions across four primary triggers:
+
+```
++--------------------------------------------------------------------------------------------------------------------+
+|                                    LABELLED PLAYER ACTION & CHRONICLE TAXONOMY                                      |
++--------------------------+------------------------------+---------------------------+------------------------------+
+| TRIGGER EVENT            | PLAYER ACTION / POLICY       | DISPATCH LABEL            | GAMEPLAY IMPACT              |
++--------------------------+------------------------------+---------------------------+------------------------------+
+| 1. Famine / Need Buffer  | S% appropriates >= 100% need | [CIVIC_SAFETY_BUFFER]     | Zero squalor; +5% trade flow |
+| 2. Severe Austerity      | S% slashed to < 50% need     | [SQUALOR_MORTALITY_ALERT] | Excess citizen deaths/year   |
+| 3. Generational Growth   | S% >= 100% for 5+ years      | [HUMAN_CAPITAL_SURGE]     | +10% tech / workforce growth |
+| 4. Protracted Neglect    | S% < 50% for 5+ years        | [INSTITUTIONAL_DECAY]     | Brain drain / demographic loss|
+| 5. Armed Insurrection    | Unrest Index U >= 85%        | [REBELLION_OUTBREAK]      | Market lost, tax halved, loot |
+| 6. Restoration of Order  | Unrest drops below 60%       | [CIVIC_ORDER_RESTORED]    | Taxes resume, stability restored|
++--------------------------+------------------------------+---------------------------+------------------------------+
+```
+
+#### Era-Specific Dispatch Templates
+
+##### 1. Age of Discovery (1500–1749)
+* **`[CIVIC_SAFETY_BUFFER]`**: *"🌾 Cathedral tithe granaries in {Port} open emergency famine stores; winter hunger averted as parish relief feeds 120,000 peasants."*
+* **`[SQUALOR_MORTALITY_ALERT]`**: *"☠️ Granaries stand bare across {Realm}! Cold, famine, and pestilence claim {Deaths} peasants as monastic alms houses collapse."*
+* **`[HUMAN_CAPITAL_SURGE]`**: *"📜 Craft guilds charter {Count} master carpenters and shipwrights in {Port}; shipyard output and guild prestige surge!"*
+* **`[INSTITUTIONAL_DECAY]`**: *"📉 Village parish schools and guild workshops decay; rural artisans abandon trades as crown neglected infrastructure crumbles."*
+* **`[REBELLION_OUTBREAK]`**: *"🚨 PEASANT JACQUERIE: Pitchfork-bearing mobs rise in revolt across {Realm}! A trading market tier is sacked (-200 G value), 15% treasury looted, and taxes halted!"*
+* **`[CIVIC_ORDER_RESTORED]`**: *"🕊️ Crown marshals and parish elders restore order across {Realm}; peasant mobs disperse back to the fields under renewed royal charters."*
+
+##### 2. Age of Revolt (1750–1859)
+* **`[CIVIC_SAFETY_BUFFER]`**: *"🍞 Municipal grain commissioners in {Port} fix loaf prices; urban bakers supplied and bread riots quelled in the city faubourgs."*
+* **`[SQUALOR_MORTALITY_ALERT]`**: *"☠️ Stagnant canals and overflowing tenements in {Port} spawn cholera; {Deaths} citizens perish in miserable squalor."*
+* **`[HUMAN_CAPITAL_SURGE]`**: *"🎓 Royal Academy of Sciences and municipal polytechnics founded in {Port}; engineering advances accelerate commercial manufactories!"*
+* **`[INSTITUTIONAL_DECAY]`**: *"📉 Municipal turnpikes rutted and city schools shut down; burghers protest fiscal abandonment across {Realm}."*
+* **`[REBELLION_OUTBREAK]`**: *"🚨 STORMING OF THE GATES: Armed urban crowds and radical burghers erect street barricades across {Port}! Wharves set ablaze and tax collectors routed!"*
+* **`[CIVIC_ORDER_RESTORED]`**: *"🕊️ City militias clear the barricades; municipal magistrates re-open trade courts and restore public tranquility."*
+
+##### 3. Age of Independence (1860–1919)
+* **`[CIVIC_SAFETY_BUFFER]`**: *"🏥 Public health boards and clean water aqueducts expand in {Port}; typhus eradicated and industrial neighborhoods stabilized."*
+* **`[SQUALOR_MORTALITY_ALERT]`**: *"☠️ Unsanitary slums and lack of clean hospital wards claim {Deaths} factory laborers; child mortality spikes across industrial boroughs."*
+* **`[HUMAN_CAPITAL_SURGE]`**: *"📚 Compulsory Education Act enacted: factory literacy reaches 85% in {Realm}; machine productivity and rail efficiency surge!"*
+* **`[INSTITUTIONAL_DECAY]`**: *"📉 Public school budgets slashed; factory child labor increases as working-class communities descend into Dickensian squalor."*
+* **`[REBELLION_OUTBREAK]`**: *"🚨 INDUSTRIAL GENERAL STRIKE: Rail corridors blocked, coal pits shut down, and factory pickets paralyze {Port}! Export trade halted!"*
+* **`[CIVIC_ORDER_RESTORED]`**: *"🕊️ Conciliation board ratifies social compromise; factory steam sirens sound as workers return peacefully to the mills."*
+
+##### 4. Age of Decolonisation (1920–1988)
+* **`[CIVIC_SAFETY_BUFFER]`**: *"🏘️ Ministry of Works completes 40,000 public housing flats in {Port}; slum clearance delivers health and dignity to working families."*
+* **`[SQUALOR_MORTALITY_ALERT]`**: *"☠️ Healthcare clinic closures and severe nutritional deficits claim {Deaths} lives; infant mortality climbs across provincial districts."*
+* **`[HUMAN_CAPITAL_SURGE]`**: *"🔬 Technical universities and public healthcare expand across {Realm}; skilled labor productivity climbs +15%!"*
+* **`[INSTITUTIONAL_DECAY]`**: *"📉 Slum expansion and teacher shortages cripple provincial towns; public infrastructure falls into severe disrepair."*
+* **`[REBELLION_OUTBREAK]`**: *"🚨 MASS CIVIL DISOBEDIENCE: Nationwide general strike and PAYE tax boycott declared! Government ministries occupied and trade frozen!"*
+* **`[CIVIC_ORDER_RESTORED]`**: *"🕊️ Civic accord signed between labor unions and the state; tax revenues resume and municipal transport restarts."*
+
+##### 5. Modern Era (1989+)
+* **`[CIVIC_SAFETY_BUFFER]`**: *"🛡️ Affordable housing subsidies and child benefit expansions stabilize family budgets; birth rates and consumer sentiment rebound."*
+* **`[SQUALOR_MORTALITY_ALERT]`**: *"☠️ Emergency room closures and social care deficits cause {Deaths} preventable deaths; healthcare system reaches crisis breaking point."*
+* **`[HUMAN_CAPITAL_SURGE]`**: *"💡 High-tech research parks and universal broadband deployment attract premier global engineering talent to {Realm}!"*
+* **`[INSTITUTIONAL_DECAY]`**: *"📉 Housing unaffordability causes birth rates to collapse; top researchers and software engineers emigrate in devastating brain drain."*
+* **`[REBELLION_OUTBREAK]`**: *"🚨 SYSTEMIC CIVIC COLLAPSE: Widespread urban protests and tax boycotts paralyze commerce across {Port}! Sovereign credit rating downgraded!"*
+* **`[CIVIC_ORDER_RESTORED]`**: *"🕊️ Emergency civic infrastructure package enacted; municipal order and automated trade networks resume normal operations."*
+
+---
+
+### H. Command Center UI Telemetry & Controls
+
+Inside the Command Center console, the ruler is provided real-time social feedback:
+1. **Unrest & Social Stability Indicator (Bay 1 / Bay 3)**:
+   - Dynamic badge showing realm tier:
+     - `🕊️ Civic Peace (Unrest: 12%)`
+     - `⏳ Simmering Grievance (Unrest: 45%)`
+     - `⚠️ Civil Tumult (Unrest: 72%)`
+     - `🚨 MOB REBELLION (Unrest: 88%)`
+2. **Dynamic Dial Readout Hints under the Social Dial**:
+   - When adequate: *"Welfare: 48 G/yr (Need: 45 G) · Squalor: 0% · Stable Contentment"*
+   - When deficient: *"⚠️ Underfunded! Need 45 G. Squalor: 65% · Pestilence Deaths: -18,200/yr · Revolt Risk: HIGH"*
+3. **Imperial Gazette Dispatches**:
+   - Live banner updating with the labelled chronicle events as policies take effect or crises erupt.
+
+
 
 

@@ -316,6 +316,7 @@ export function applyLiveCommandCenterUpdate(kingdom, forceReset = false) {
       kingdom.economy.inflation_rate,
       kingdom.economy.effective_balance ?? kingdom.economy.budget_balance
     );
+    updateSocialStabilityUI(kingdom.economy);
   }
 
   updateStepperDisplay();
@@ -1414,10 +1415,58 @@ export function updateEconomyHintsLive() {
   }
 
   const socHint = document.getElementById("cc-social-hint");
-  if (socHint) {
-    const capNote = cappedBudget.effSoc < socExp ? ` (Capped: -${cappedBudget.effSoc})` : `-${cappedBudget.effSoc} ducats/yr`;
-    socHint.textContent = `Cathedrals & Guilds: ${capNote}`;
+  const civilianWorkforce = Math.max(0, pop - tr);
+  let omegaEra = 0.000010;
+  if (simYear >= 1989) omegaEra = 0.000120;
+  else if (simYear >= 1920) omegaEra = 0.000060;
+  else if (simYear >= 1860) omegaEra = 0.000030;
+  else if (simYear >= 1750) omegaEra = 0.000018;
+
+  const welfareNeed = Math.max(1, Math.round(civilianWorkforce * omegaEra * (1.0 + 0.08 * (marketsLevel || 0))));
+  const effSoc = cappedBudget.effSoc;
+  const adequacy = welfareNeed > 0 ? (effSoc / welfareNeed) : 1.0;
+  const squalor = Math.max(0, Math.min(100, Math.round((1.0 - Math.min(1.0, adequacy)) * 100)));
+  let excessMortality = 0;
+  if (adequacy < 0.50 && civilianWorkforce > 0) {
+    const sqRatio = squalor / 100.0;
+    excessMortality = Math.round(civilianWorkforce * 0.020 * sqRatio * sqRatio);
   }
+
+  // Client-side unrest estimation
+  let uTax = 0;
+  if (taxRate > 25) {
+    uTax = Math.pow((taxRate - 25) / 75.0, 1.5) * 50.0;
+  }
+  const uSqualor = (squalor / 100.0) * 50.0;
+  const uConscription = pop > 0 ? Math.min(25.0, (tr / pop) * 120.0) : 0;
+  const garrisonRatio = pop > 0 ? (regular / pop) : 0;
+  const garrisonBonus = pop > 50000 ? Math.min(20.0, garrisonRatio * 1000.0) : Math.min(15.0, regular * 0.20);
+  const uPacification = (infraLevel || 0) * 3.0 + garrisonBonus;
+  const unrest = Math.max(0, Math.min(100, Math.round(uTax + uSqualor + uConscription - uPacification)));
+
+  if (socHint) {
+    const capNote = cappedBudget.effSoc < socExp ? ` (Capped: -${cappedBudget.effSoc})` : `-${cappedBudget.effSoc} G/yr`;
+    if (adequacy >= 1.0) {
+      socHint.textContent = `Guild Welfare:${capNote} (Need: ${welfareNeed.toLocaleString()} G · Squalor: 0% · Stable Contentment)`;
+      socHint.style.color = "#4ade80";
+    } else if (adequacy >= 0.50) {
+      socHint.textContent = `Guild Welfare:${capNote} (⚠️ Need: ${welfareNeed.toLocaleString()} G · Squalor: ${squalor}% · Unrest: ${unrest}%)`;
+      socHint.style.color = "#facc15";
+    } else {
+      socHint.textContent = `Guild Welfare:${capNote} (🚨 Underfunded! Squalor: ${squalor}% · Deaths: -${excessMortality.toLocaleString()}/yr · Unrest: ${unrest}%)`;
+      socHint.style.color = "#ff6b6b";
+    }
+  }
+
+  // Update the dedicated Social Stability & Unrest Card live
+  updateSocialStabilityUI({
+    welfare_need: welfareNeed,
+    social_spend: effSoc,
+    squalor_factor: squalor,
+    excess_mortality: excessMortality,
+    unrest_index: unrest,
+    active_rebellion: (unrest >= 85 || Boolean(commandCenterDetail?.economy?.active_rebellion)),
+  });
 
   const popGrowthEl = document.getElementById("cc-pop-growth");
   if (popGrowthEl) {
@@ -2018,6 +2067,74 @@ export function updateDerivedEconomyUI(tradeFigure, currencyVal, inflationRate, 
     }
   }
 }
+
+export function updateSocialStabilityUI(data) {
+  if (!data) return;
+
+  const needVal = document.getElementById("cc-welfare-need-val");
+  const spentVal = document.getElementById("cc-welfare-spent-val");
+  const squalorVal = document.getElementById("cc-squalor-val");
+  const mortalityVal = document.getElementById("cc-mortality-val");
+  const badge = document.getElementById("cc-unrest-tier-badge");
+  const gaugeFill = document.getElementById("cc-unrest-gauge-fill");
+  const msgEl = document.getElementById("cc-social-status-msg");
+
+  const need = Math.round(data.welfare_need ?? 0);
+  const spent = Math.round(data.social_spend ?? data.effective_social_exp ?? data.social_expenditure ?? 0);
+  const squalor = Math.round(data.squalor_factor ?? 0);
+  const mortality = Math.round(data.excess_mortality ?? 0);
+  const unrest = Math.round(data.unrest_index ?? 0);
+  const activeRebellion = Boolean(data.active_rebellion || unrest >= 85);
+
+  if (needVal) needVal.textContent = `${need.toLocaleString()} G`;
+  if (spentVal) spentVal.textContent = `${spent.toLocaleString()} G`;
+  if (squalorVal) {
+    squalorVal.textContent = `${squalor}%`;
+    squalorVal.style.color = squalor > 50 ? "#ff6b6b" : squalor > 0 ? "#facc15" : "#4ade80";
+  }
+  if (mortalityVal) {
+    mortalityVal.textContent = mortality > 0 ? `-${mortality.toLocaleString()} / yr` : "0 / yr";
+    mortalityVal.style.color = mortality > 0 ? "#ff6b6b" : "#4ade80";
+  }
+
+  if (gaugeFill) {
+    gaugeFill.style.width = `${Math.min(100, Math.max(0, unrest))}%`;
+  }
+
+  if (badge) {
+    badge.className = "unrest-tier-badge";
+    if (activeRebellion) {
+      badge.classList.add("rebellion");
+      badge.textContent = `🚨 MOB REBELLION (Unrest: ${unrest}%)`;
+    } else if (unrest >= 60) {
+      badge.classList.add("tumult");
+      badge.textContent = `⚠️ Civil Tumult (Unrest: ${unrest}%)`;
+    } else if (unrest >= 30) {
+      badge.classList.add("grievance");
+      badge.textContent = `⏳ Simmering Grievance (Unrest: ${unrest}%)`;
+    } else {
+      badge.classList.add("peace");
+      badge.textContent = `🕊️ Civic Peace (Unrest: ${unrest}%)`;
+    }
+  }
+
+  if (msgEl) {
+    if (activeRebellion) {
+      msgEl.textContent = `🚨 ARMED REVOLT: Sacking of markets, tax extraction disrupted, and rebel militias in the field! Increase social spending or deploy heavy garrisons to restore peace!`;
+      msgEl.style.color = "#ff6b6b";
+    } else if (unrest >= 60) {
+      msgEl.textContent = `⚠️ Serious civil unrest! Squalor and tax burdens are provoking protests. Outbreak of armed insurrection is imminent if unaddressed.`;
+      msgEl.style.color = "#fb923c";
+    } else if (unrest >= 30) {
+      msgEl.textContent = `⏳ Simmering grievances: parish alms are constrained and citizens complain of fiscal neglect.`;
+      msgEl.style.color = "#facc15";
+    } else {
+      msgEl.textContent = `🕊️ Cathedral granaries and guild relief are adequately funded. Civic order and public contentment prevail across the realm.`;
+      msgEl.style.color = "#4ade80";
+    }
+  }
+}
+window.updateSocialStabilityUI = updateSocialStabilityUI;
 
 export function updateStepperDisplay() {
   const mktLabel = document.getElementById("cc-market-level-label");

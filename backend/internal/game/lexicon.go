@@ -187,6 +187,102 @@ func GenerateWealthyMigrationDispatch(era string, realm string, goldDelta int64,
 	}
 }
 
+// GenerateCivicSafetyDispatch produces dispatches when civic social funds protect the population from famine/pestilence.
+func GenerateCivicSafetyDispatch(era, realm, port string) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("🌾 Cathedral tithe granaries in %s open emergency famine stores; winter hunger averted as parish relief sustains peasants across %s.", port, realm)
+	case "revolt":
+		return fmt.Sprintf("🍞 Municipal grain commissioners in %s fix loaf prices; urban bakers supplied and bread riots quelled in the city faubourgs.", port)
+	case "independence":
+		return fmt.Sprintf("🏥 Public health boards and clean water aqueducts expand in %s; typhus eradicated and industrial neighborhoods stabilized across %s.", port, realm)
+	case "decolonisation":
+		return fmt.Sprintf("🏘️ Ministry of Works completes public housing flats in %s; slum clearance delivers health and dignity to working families across %s.", port, realm)
+	default: // modern
+		return fmt.Sprintf("🛡️ Affordable housing subsidies and child benefit expansions stabilize family budgets; social stability secured across %s.", realm)
+	}
+}
+
+// GenerateSqualorMortalityDispatch produces dispatches when starvation/pestilence claims citizens due to civic neglect.
+func GenerateSqualorMortalityDispatch(era, realm, port string, deaths int64) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("☠️ Granaries stand bare across %s! Cold, famine, and pestilence claim %d peasants as monastic alms houses collapse.", realm, deaths)
+	case "revolt":
+		return fmt.Sprintf("☠️ Stagnant canals and overflowing tenements in %s spawn cholera; %d citizens perish in miserable squalor across %s.", port, deaths, realm)
+	case "independence":
+		return fmt.Sprintf("☠️ Unsanitary slums and lack of clean hospital wards claim %d factory laborers; child mortality spikes across %s.", deaths, realm)
+	case "decolonisation":
+		return fmt.Sprintf("☠️ Healthcare clinic closures and severe nutritional deficits claim %d lives; infant mortality climbs across %s.", deaths, realm)
+	default: // modern
+		return fmt.Sprintf("☠️ Emergency room closures and social care deficits cause %d preventable deaths; healthcare system reaches crisis breaking point in %s.", deaths, realm)
+	}
+}
+
+// GenerateHumanCapitalDispatch produces dispatches when sustained social investment yields human capital growth.
+func GenerateHumanCapitalDispatch(era, realm, port string, count int64) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("📜 Craft guilds charter %d master carpenters and shipwrights in %s; shipyard output and guild prestige surge across %s!", count, port, realm)
+	case "revolt":
+		return fmt.Sprintf("🎓 Royal Academy of Sciences and municipal polytechnics founded in %s; engineering advances accelerate commercial manufactories!", port)
+	case "independence":
+		return fmt.Sprintf("📚 Compulsory Education Act enacted: factory literacy reaches 85%% in %s; machine productivity and rail efficiency surge!", realm)
+	case "decolonisation":
+		return fmt.Sprintf("🔬 Technical universities and public healthcare expand across %s; skilled labor productivity climbs!", realm)
+	default: // modern
+		return fmt.Sprintf("💡 High-tech research parks and universal broadband deployment attract premier global engineering talent to %s!", realm)
+	}
+}
+
+// GenerateInstitutionalDecayDispatch produces dispatches when prolonged civic neglect destroys institutions.
+func GenerateInstitutionalDecayDispatch(era, realm, port string) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("📉 Village parish schools and guild workshops decay; rural artisans abandon trades as crown neglected infrastructure crumbles across %s.", realm)
+	case "revolt":
+		return fmt.Sprintf("📉 Municipal turnpikes rutted and city schools shut down; burghers protest fiscal abandonment across %s.", realm)
+	case "independence":
+		return fmt.Sprintf("📉 Public school budgets slashed; factory child labor increases as working-class communities descend into Dickensian squalor in %s.", realm)
+	case "decolonisation":
+		return fmt.Sprintf("📉 Slum expansion and teacher shortages cripple provincial towns; public infrastructure falls into severe disrepair across %s.", realm)
+	default: // modern
+		return fmt.Sprintf("📉 Housing unaffordability causes birth rates to collapse; top researchers and software engineers emigrate in devastating brain drain from %s.", realm)
+	}
+}
+
+// GenerateRebellionDispatch produces alarming dispatches when the Unrest Index hits rebellion threshold (U >= 85%).
+func GenerateRebellionDispatch(era, realm, port string) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("🚨 PEASANT JACQUERIE: Pitchfork-bearing mobs rise in revolt across %s! A trading market tier is sacked (-200 G value), 15%% treasury looted, and taxes halted!", realm)
+	case "revolt":
+		return fmt.Sprintf("🚨 STORMING OF THE GATES: Armed urban crowds and radical burghers erect street barricades across %s! Wharves set ablaze and tax collectors routed in %s!", port, realm)
+	case "independence":
+		return fmt.Sprintf("🚨 INDUSTRIAL GENERAL STRIKE: Rail corridors blocked, coal pits shut down, and factory pickets paralyze %s! Export trade halted in %s!", port, realm)
+	case "decolonisation":
+		return fmt.Sprintf("🚨 MASS CIVIL DISOBEDIENCE: Nationwide general strike and PAYE tax boycott declared! Government ministries occupied and trade frozen across %s!", realm)
+	default: // modern
+		return fmt.Sprintf("🚨 SYSTEMIC CIVIC COLLAPSE: Widespread urban protests and tax boycotts paralyze commerce across %s! Sovereign credit rating downgraded in %s!", port, realm)
+	}
+}
+
+// GenerateCivicOrderRestoredDispatch produces reassuring dispatches when unrest subsides below 60% after a revolt.
+func GenerateCivicOrderRestoredDispatch(era, realm, port string) string {
+	switch era {
+	case "discovery":
+		return fmt.Sprintf("🕊️ Crown marshals and parish elders restore order across %s; peasant mobs disperse back to the fields under renewed royal charters.", realm)
+	case "revolt":
+		return fmt.Sprintf("🕊️ City militias clear the barricades in %s; municipal magistrates re-open trade courts and restore public tranquility across %s.", port, realm)
+	case "independence":
+		return fmt.Sprintf("🕊️ Conciliation board ratifies social compromise; factory steam sirens sound as workers return peacefully to the mills in %s.", realm)
+	case "decolonisation":
+		return fmt.Sprintf("🕊️ Civic accord signed between labor unions and the state; tax revenues resume and municipal transport restarts across %s.", realm)
+	default: // modern
+		return fmt.Sprintf("🕊️ Emergency civic infrastructure package enacted; municipal order and automated trade networks resume normal operations in %s.", realm)
+	}
+}
+
 // GetEraKey returns the macroeconomic era key for a given simulation year.
 func GetEraKey(simYear float64) string {
 	switch {

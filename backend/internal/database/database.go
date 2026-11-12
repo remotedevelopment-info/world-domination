@@ -1443,6 +1443,22 @@ func AddMilitaryDelayedCost(countryID int64, additionalCost int64) error {
 	return err
 }
 
+// UpdateCountryMarkets updates the market tier for a country (e.g. following sacking in rebellion).
+func UpdateCountryMarkets(countryID, markets int64) error {
+	if DB == nil {
+		return nil
+	}
+	if markets < 0 {
+		markets = 0
+	}
+	_, err := DB.Exec(`
+		UPDATE countries
+		SET markets = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2`,
+		markets, countryID)
+	return err
+}
+
 // IsCountryOwnedByUser checks whether the given country is owned by the specified user.
 func IsCountryOwnedByUser(countryID, userID int64) (bool, error) {
 	var count int

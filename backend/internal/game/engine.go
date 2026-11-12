@@ -94,6 +94,7 @@ type GameEngine struct {
 	lastTimelineUpdate time.Time
 	lastInactiveCheck  time.Time
 	econDebtYears      float64
+	activeRebellions   map[int64]bool
 }
 
 var engine *GameEngine
@@ -108,6 +109,7 @@ func GetEngine() *GameEngine {
 			isPaused:           false,
 			lastTimelineUpdate: time.Now(),
 			lastInactiveCheck:  time.Now(),
+			activeRebellions:   make(map[int64]bool),
 		}
 	})
 	return engine
@@ -227,6 +229,7 @@ func (g *GameEngine) ResetToYear1500(clearClaims bool) (GameState, error) {
 	g.chronoScale = "1d"
 	g.isPaused = false
 	g.econDebtYears = 0
+	g.activeRebellions = make(map[int64]bool)
 	g.lastTimelineUpdate = time.Now()
 	g.currentTick++
 	g.mu.Unlock()
@@ -440,11 +443,17 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			newResources = 0
 		}
 
-		// 3. Population Growth & Tax-Driven Migration
+		// 3. Population Growth, Tax-Driven Migration & Squalor Excess Mortality
 		newPopulation := c.Population
 		popGrowth := int64(math.Round(float64(PopulationGrowth(c.Population, c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts)) * yearsPassed))
 		migrationDelta := int64(math.Round(float64(econ.NetMigration) * yearsPassed))
 		newPopulation += popGrowth + migrationDelta
+
+		// Underfunding Guild & Civic Welfare (adequacy < 50%) inflicts famine, squalor, and pestilence mortality
+		if econ.ExcessMortality > 0 && yearsPassed > 0 {
+			mortalityDelta := int64(math.Round(float64(econ.ExcessMortality) * yearsPassed))
+			newPopulation -= mortalityDelta
+		}
 
 		// Frontier land abundance attractor: severely depopulated realms draw homesteaders to vacant arable land
 		if newPopulation < 100000 && yearsPassed > 0 {
@@ -642,6 +651,53 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		}
 		newProgress = math.Round(newProgress*10) / 10
 
+		// 7. Civic Stability & Armed Rebellion Outbreak (U >= 85%)
+		g.mu.Lock()
+		if g.activeRebellions == nil {
+			g.activeRebellions = make(map[int64]bool)
+		}
+		wasInRebellion := g.activeRebellions[c.ID]
+		g.mu.Unlock()
+
+		if econ.UnrestIndex >= 85.0 {
+			if !wasInRebellion {
+				// Outbreak of armed insurrection!
+				g.mu.Lock()
+				g.activeRebellions[c.ID] = true
+				g.mu.Unlock()
+
+				// 1. Sacking of Trading Wharves (downgrade markets by -1)
+				if c.Markets > 0 {
+					c.Markets--
+					_ = database.UpdateCountryMarkets(c.ID, c.Markets)
+				}
+
+				// 2. Plundering of Treasury Vaults (rebel mobs loot 15% of specie)
+				if newResources > 0 {
+					plunder := int64(math.Round(float64(newResources) * 0.15))
+					newResources -= plunder
+					if newResources < 0 {
+						newResources = 0
+					}
+				}
+
+				// 3. Lingering military mobilization costs
+				newDelayedCosts += 60
+
+				// 4. Gazette dispatch
+				rebellionMsg := GenerateRebellionDispatch(eraKey, c.Name, portName)
+				_ = database.LogAction(ownerID, c.ID, "news", rebellionMsg, nil, "", "", "")
+			}
+		} else if wasInRebellion && econ.UnrestIndex < 60.0 {
+			// Rebellion quelled / civil order restored
+			g.mu.Lock()
+			g.activeRebellions[c.ID] = false
+			g.mu.Unlock()
+
+			restoredMsg := GenerateCivicOrderRestoredDispatch(eraKey, c.Name, portName)
+			_ = database.LogAction(ownerID, c.ID, "news", restoredMsg, nil, "", "", "")
+		}
+
 		// Wealthy Merchant Capital Migration News Dispatch on Year Rollover
 		if yearRolledOver && econ.CapitalFlightDrain != 0 {
 			if math.Abs(float64(econ.CapitalFlightDrain)) >= 100 {
@@ -649,6 +705,12 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 				msg := GenerateWealthyMigrationDispatch(eraKey, c.Name, econ.CapitalFlightDrain, isArrival)
 				_ = database.LogAction(ownerID, c.ID, "news", msg, nil, "", "", "")
 			}
+		}
+
+		// Squalor & Famine Mortality News Dispatch on Year Rollover
+		if yearRolledOver && econ.ExcessMortality >= 1000 {
+			squalorMsg := GenerateSqualorMortalityDispatch(eraKey, c.Name, portName, econ.ExcessMortality)
+			_ = database.LogAction(ownerID, c.ID, "news", squalorMsg, nil, "", "", "")
 		}
 
 		if yearRolledOver {
@@ -753,6 +815,11 @@ func (g *GameEngine) BuildState() GameState {
 			c.LastSocialExp, c.LastInvestmentExp, c.LastTotalExp,
 			c.LastBudgetBalance, c.LastMigration,
 		)
+		g.mu.RLock()
+		if g.activeRebellions != nil && g.activeRebellions[c.ID] {
+			econ.ActiveRebellion = true
+		}
+		g.mu.RUnlock()
 		cs := CountryState{
 			ID:                   c.ID,
 			Name:                 c.Name,

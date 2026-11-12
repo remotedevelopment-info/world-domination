@@ -708,3 +708,78 @@ func TestNextPeriodBudgetAppropriationAndLandlockedArchetypes(t *testing.T) {
 	}
 }
 
+func TestCivicWelfareSqualorMortalityAndRevoltTaxonomy(t *testing.T) {
+	// 1. Demographic Baseline Welfare Need Across All 5 Eras
+	englandPop := int64(4500000)
+	markets := int64(2)
+
+	need1500 := ComputeWelfareNeed(englandPop, markets, 1500.0) // Discovery
+	need1750 := ComputeWelfareNeed(englandPop, markets, 1750.0) // Revolt
+	need1860 := ComputeWelfareNeed(englandPop, markets, 1860.0) // Independence
+	need1920 := ComputeWelfareNeed(englandPop, markets, 1920.0) // Decolonisation
+	need1989 := ComputeWelfareNeed(englandPop, markets, 1989.0) // Modern
+
+	if need1500 < 50 || need1500 > 60 {
+		t.Errorf("expected Era 1 welfare need ~52-53 G, got %d", need1500)
+	}
+	if need1750 <= need1500 || need1860 <= need1750 || need1920 <= need1860 || need1989 <= need1920 {
+		t.Errorf("expected welfare need to increase across eras: %d < %d < %d < %d < %d",
+			need1500, need1750, need1860, need1920, need1989)
+	}
+
+	// 2. Squalor & Excess Mortality Dynamics
+	// Zero social spend: Q = 100%, Excess mortality > 80,000 / year
+	squalorZero, deathsZero := ComputeSqualorAndMortality(englandPop, 0, need1500, 1500.0)
+	if squalorZero != 100.0 {
+		t.Errorf("expected 100%% squalor when social spending is 0, got %f", squalorZero)
+	}
+	if deathsZero < 80000 || deathsZero > 100000 {
+		t.Errorf("expected ~90,000 excess deaths per year under complete squalor, got %d", deathsZero)
+	}
+
+	// Adequate social spend: Q = 0%, Excess mortality = 0
+	squalorAdequate, deathsAdequate := ComputeSqualorAndMortality(englandPop, need1500+20, need1500, 1500.0)
+	if squalorAdequate != 0.0 || deathsAdequate != 0 {
+		t.Errorf("expected 0 squalor and 0 excess deaths with adequate spend, got %f squalor, %d deaths",
+			squalorAdequate, deathsAdequate)
+	}
+
+	// 3. Imperial Unrest Index & Rebellion Trigger (U >= 85%)
+	// Low tax (20%) + High Welfare + Fortifications -> Peaceful realm (U < 30%)
+	unrestPeace, riskPeace := ComputeUnrestIndex(20, 0.0, englandPop, 1000, 1000, 2, 2, 1500.0)
+	if unrestPeace >= 30.0 || riskPeace != "peace" {
+		t.Errorf("expected low unrest in peace realm, got %f (%s)", unrestPeace, riskPeace)
+	}
+
+	// Confiscatory Tax (95%) + Squalor (100%) -> Rebellion Zone (U >= 85%)
+	unrestRebel, riskRebel := ComputeUnrestIndex(95, 100.0, englandPop, 500, 200, 0, 0, 1500.0)
+	if unrestRebel < 85.0 || riskRebel != "rebellion" {
+		t.Errorf("expected armed rebellion outbreak (U >= 85%%), got %f (%s)", unrestRebel, riskRebel)
+	}
+
+	// 4. Verify Labelled News Lexicon Dispatches across All 5 Eras
+	eras := []string{"discovery", "revolt", "independence", "decolonisation", "modern"}
+	for _, era := range eras {
+		safeMsg := GenerateCivicSafetyDispatch(era, "England", "Portsmouth")
+		if !strings.Contains(safeMsg, "Portsmouth") && !strings.Contains(safeMsg, "England") {
+			t.Errorf("civic safety dispatch missing realm/port for era %s: %s", era, safeMsg)
+		}
+
+		squalorMsg := GenerateSqualorMortalityDispatch(era, "England", "Portsmouth", 50000)
+		if !strings.Contains(squalorMsg, "50000") && !strings.Contains(squalorMsg, "England") {
+			t.Errorf("squalor mortality dispatch missing deaths for era %s: %s", era, squalorMsg)
+		}
+
+		rebelMsg := GenerateRebellionDispatch(era, "England", "Portsmouth")
+		if !strings.Contains(rebelMsg, "🚨") {
+			t.Errorf("rebellion dispatch missing alert icon for era %s: %s", era, rebelMsg)
+		}
+
+		restoredMsg := GenerateCivicOrderRestoredDispatch(era, "England", "Portsmouth")
+		if !strings.Contains(restoredMsg, "🕊️") {
+			t.Errorf("restored dispatch missing peace icon for era %s: %s", era, restoredMsg)
+		}
+	}
+}
+
+

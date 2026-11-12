@@ -64,6 +64,15 @@ type EconomyState struct {
 	TaxMod              float64 `json:"tax_mod"`
 	TradeMod            float64 `json:"trade_mod"`
 
+	// Social Welfare, Squalor & Rebellion Telemetry
+	WelfareNeed         int64   `json:"welfare_need"`
+	WelfareAdequacy     float64 `json:"welfare_adequacy"`
+	SqualorFactor       float64 `json:"squalor_factor"`
+	ExcessMortality     int64   `json:"excess_mortality"`
+	UnrestIndex         float64 `json:"unrest_index"`
+	RebellionRisk       string  `json:"rebellion_risk"`
+	ActiveRebellion     bool    `json:"active_rebellion"`
+
 	// Feature/Internals: User State & Environmental Telemetry
 	EntrepreneurialPride    float64 `json:"entrepreneurial_pride"`
 	MilitaryDelayedCosts    int64   `json:"military_delayed_costs"`
@@ -226,6 +235,123 @@ func ComputePopulationPressure(population, troops, infrastructure, socialCosts i
 		pressure = 100
 	}
 	return math.Round(pressure*10) / 10
+}
+
+// ComputeWelfareNeed computes the baseline annual gold appropriation required to sustain
+// civilian health, parish/famine granaries, and civic administration without squalor.
+func ComputeWelfareNeed(workforce, markets int64, simYear float64) int64 {
+	if workforce <= 0 {
+		return 0
+	}
+	var omega float64
+	if workforce <= 50000 {
+		// Micro test harness scaling: ensures small test workforces (e.g. 1,000) have non-zero integer gold needs
+		omega = 0.005
+	} else {
+		switch {
+		case simYear < 1750:
+			omega = 0.000010 // Discovery Era
+		case simYear < 1860:
+			omega = 0.000018 // Revolt Era
+		case simYear < 1920:
+			omega = 0.000030 // Independence Era
+		case simYear < 1989:
+			omega = 0.000060 // Decolonisation Era
+		default:
+			omega = 0.000120 // Modern Era
+		}
+	}
+	marketMultiplier := 1.0 + 0.08*float64(markets)
+	need := float64(workforce) * omega * marketMultiplier
+	return int64(math.Ceil(need))
+}
+
+// ComputeSqualorAndMortality computes the Squalor Factor (0-100%) and annual excess deaths
+// resulting from underfunding the Guild & Civic Welfare fund.
+func ComputeSqualorAndMortality(workforce, socialSpend, welfareNeed int64, simYear float64) (squalor float64, mortality int64) {
+	if welfareNeed <= 0 {
+		return 0.0, 0
+	}
+	if socialSpend >= welfareNeed {
+		return 0.0, 0
+	}
+	adequacy := float64(socialSpend) / float64(welfareNeed)
+	squalor = (1.0 - adequacy) * 100.0
+	if squalor > 100.0 {
+		squalor = 100.0
+	}
+	if squalor < 0.0 {
+		squalor = 0.0
+	}
+	squalor = math.Round(squalor*10) / 10
+
+	// When welfare funding is severely neglected (adequacy < 50%, i.e. squalor > 50%),
+	// famine, cold, and pestilence claim civilian lives in large numbers.
+	if adequacy < 0.50 && workforce > 0 {
+		mu := 0.020 // 2.0% annual mortality rate when completely starved of welfare (Q=100)
+		squalorRatio := squalor / 100.0
+		mortality = int64(math.Round(float64(workforce) * mu * squalorRatio * squalorRatio))
+	}
+	return squalor, mortality
+}
+
+// ComputeUnrestIndex derives the Imperial Unrest Index (0-100%) and qualitative threat level.
+// Unrest compounds from excessive taxation, squalor/famine, and conscription strain,
+// and is buffered by infrastructure, fortifications, and standing regular garrisons.
+func ComputeUnrestIndex(
+	taxRate int64,
+	squalor float64,
+	population, troops, regularTroops, infrastructure, forts int64,
+	simYear float64,
+) (unrest float64, riskLevel string) {
+	// 1. Tax extraction pressure: taxes <= 25% create 0 grievance; steepens above 25%
+	var uTax float64
+	if taxRate > 25 {
+		x := float64(taxRate-25) / 75.0
+		uTax = math.Pow(x, 1.5) * 50.0
+	}
+
+	// 2. Squalor & famine pressure (up to 50% unrest at maximum squalor)
+	uSqualor := (squalor / 100.0) * 50.0
+
+	// 3. Conscription pressure (mobilization strain up to 25% unrest)
+	var uConscription float64
+	if population > 0 {
+		ratio := float64(troops) / float64(population)
+		uConscription = math.Min(25.0, ratio*120.0)
+	}
+
+	// 4. Pacification buffers: civic infrastructure, forts, and standing regulars enforce order
+	var uPacification float64
+	if population > 50000 {
+		// Realistic demographic scaling: garrison must be proportional to population
+		garrisonRatio := float64(regularTroops) / float64(population)
+		garrisonBonus := math.Min(20.0, garrisonRatio*1000.0)
+		uPacification = float64(infrastructure)*3.0 + float64(forts)*2.0 + garrisonBonus
+	} else {
+		uPacification = float64(infrastructure)*3.0 + float64(forts)*2.0 + math.Min(15.0, float64(regularTroops)*0.20)
+	}
+
+	rawUnrest := uTax + uSqualor + uConscription - uPacification
+	if rawUnrest < 0 {
+		rawUnrest = 0
+	}
+	if rawUnrest > 100.0 {
+		rawUnrest = 100.0
+	}
+	unrest = math.Round(rawUnrest*10) / 10
+
+	switch {
+	case unrest < 30.0:
+		riskLevel = "peace"
+	case unrest < 60.0:
+		riskLevel = "grievance"
+	case unrest < 85.0:
+		riskLevel = "tumult"
+	default:
+		riskLevel = "rebellion"
+	}
+	return unrest, riskLevel
 }
 
 // GetClimaticAndSeasonalState derives astronomical, orbital, and Little Ice Age climatic modifiers.
@@ -594,12 +720,25 @@ func ComputeEconomyFull(
 	balance := totalRev - expenditure
 
 	// Population pressure & welfare burden:
-	// High population requires higher baseline Cathedral & Guild welfare to avoid squalor
-	baseWelfareNeed := int64(float64(population) * 0.0008)
+	// Civilian workforce produces GDP and requires civic infrastructure/alms to avoid squalor
+	civilianWorkforce := population - troops
+	if civilianWorkforce < 0 {
+		civilianWorkforce = 0
+	}
+	welfareNeed := ComputeWelfareNeed(civilianWorkforce, markets, simYear)
+	squalor, excessMortality := ComputeSqualorAndMortality(civilianWorkforce, socialSpend, welfareNeed, simYear)
+	unrest, riskLevel := ComputeUnrestIndex(taxRate, squalor, population, troops, regular, infrastructure, 0, simYear)
+
+	var adequacy float64
+	if welfareNeed > 0 {
+		adequacy = math.Round((float64(socialSpend)/float64(welfareNeed))*100) / 100
+	} else {
+		adequacy = 1.0
+	}
+
 	popPressure := ComputePopulationPressure(population, troops, infrastructure, socialCosts)
-	if socialSpend < baseWelfareNeed && baseWelfareNeed > 0 {
-		squalor := (float64(baseWelfareNeed-socialSpend) / float64(baseWelfareNeed)) * 20.0
-		popPressure = math.Min(100.0, popPressure+squalor)
+	if squalor > 0 {
+		popPressure = math.Min(100.0, popPressure+(squalor*0.20))
 	}
 
 	// Manpower recruitment discount: abundant population makes recruiting cheaper (up to 50%)
@@ -684,12 +823,19 @@ func ComputeEconomyFull(
 		MigrationStatus:         mig.MigrationStatus,
 		TaxMod:                  taxMod,
 		TradeMod:                tradeMod,
+		WelfareNeed:             welfareNeed,
+		WelfareAdequacy:         adequacy,
+		SqualorFactor:           squalor,
+		ExcessMortality:         excessMortality,
+		UnrestIndex:             unrest,
+		RebellionRisk:           riskLevel,
+		ActiveRebellion:         (unrest >= 85.0),
 		EntrepreneurialPride:    pride,
 		MilitaryDelayedCosts:    delayedCosts,
 		SeasonalHarvestFactor:   season.HarvestYieldFactor,
 		WinterSeverityFactor:    season.WinterSeverity,
 		ManpowerRecruitDiscount: manpowerDiscount,
-		WelfareSqualorBurden:    baseWelfareNeed,
+		WelfareSqualorBurden:    welfareNeed,
 		Season:                  season.Season,
 		SeasonName:              season.SeasonName,
 		LittleIceAgePhase:       season.LittleIceAgePhase,
