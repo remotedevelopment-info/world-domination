@@ -39,6 +39,9 @@ type Country struct {
 	EconomyRate   int64     `json:"economy_rate"`  // Tax rate 0-100 set by the owning player
 	Investment    int64     `json:"investment"`    // Future GDP multiplier (0-100 slider)
 	SocialCosts   int64     `json:"social_costs"`  // Growth/wealth vs currency strength (0-100 slider)
+	PlannedEconomyRate int64 `json:"planned_economy_rate"` // Next-year target tax rate
+	PlannedInvestment  int64 `json:"planned_investment"`  // Next-year target capex slider
+	PlannedSocialCosts int64 `json:"planned_social_costs"` // Next-year target social slider
 	Markets       int64     `json:"markets"`       // Build level: boosts trade output
 	Infrastructure int64    `json:"infrastructure"` // Build level: boosts productivity & growth
 	LastTaxRevenue    int64 `json:"last_tax_revenue"`

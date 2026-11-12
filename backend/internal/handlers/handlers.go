@@ -1105,23 +1105,28 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Announce commitment when raising investment dial
-	if errSettings == nil && req.Investment > oldSettings.Investment {
+	// Announce commitment when raising planned investment dial
+	if errSettings == nil && req.Investment > oldSettings.PlannedInvestment {
 		annualCost := int64(math.Round(game.GetEraExpeditionCostPerPct(simYear) * float64(req.Investment)))
 		gestation := game.GetColonialGestationYears(simYear)
 		portName := game.RealmPort(detail.Code, detail.Name)
-		msg := fmt.Sprintf("⚓ Royal Exchequer commits %d gold ducats per annum over %.1f years to outfit overseas expeditions in %s.", annualCost, gestation, portName)
+		isLandlocked := database.IsLandlockedRealm(detail.Code)
+		var msg string
+		if isLandlocked {
+			msg = fmt.Sprintf("🚂 Royal Exchequer appropriates %d gold ducats per annum over %.1f years for overland transport corridors in %s.", annualCost, gestation, portName)
+		} else {
+			msg = fmt.Sprintf("⚓ Royal Exchequer appropriates %d gold ducats per annum over %.1f years to outfit overseas expeditions in %s.", annualCost, gestation, portName)
+		}
 		_ = database.LogAction(user.UserID, pc.CountryID, "news", msg, nil, "", "", "")
 	}
 
-	err = database.SetEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
+	err = database.SetPlannedEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
 	if err != nil {
-		http.Error(w, "Error setting economy settings", http.StatusInternalServerError)
+		http.Error(w, "Error setting planned economy appropriations", http.StatusInternalServerError)
 		return
 	}
 
-	// Broadcast immediately so the computed inflation, currency value, GDP, and updated gold reserves
-	// reflect the new settings.
+	// Broadcast immediately so connected clients observe the updated planned settings
 	game.GetEngine().Advance()
 
 	// Return the updated settings and derived economy
@@ -1150,22 +1155,25 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"country_id":        detail.CountryID,
-		"name":              detail.Name,
-		"code":              detail.Code,
-		"resources":         detail.Resources,
-		"economy_rate":      settings.EconomyRate,
-		"investment":        settings.Investment,
-		"social_costs":      settings.SocialCosts,
-		"colonial_progress": detail.ColonialProgress,
-		"colonial_yield":    detail.ColonialYield,
-		"colonial_fleets":   detail.ColonialFleets,
-		"gdp":               detail.GDP,
-		"currency_value":    detail.CurrencyValue,
-		"inflation_rate":    detail.InflationRate,
-		"budget_balance":    econ.BudgetBalance,
-		"effective_balance": econ.EffectiveBalance,
-		"economy":           econ,
+		"country_id":           detail.CountryID,
+		"name":                 detail.Name,
+		"code":                 detail.Code,
+		"resources":            detail.Resources,
+		"economy_rate":         settings.EconomyRate,
+		"investment":           settings.Investment,
+		"social_costs":         settings.SocialCosts,
+		"planned_economy_rate": settings.PlannedEconomyRate,
+		"planned_investment":   settings.PlannedInvestment,
+		"planned_social_costs": settings.PlannedSocialCosts,
+		"colonial_progress":    detail.ColonialProgress,
+		"colonial_yield":       detail.ColonialYield,
+		"colonial_fleets":      detail.ColonialFleets,
+		"gdp":                  detail.GDP,
+		"currency_value":       detail.CurrencyValue,
+		"inflation_rate":       detail.InflationRate,
+		"budget_balance":       econ.BudgetBalance,
+		"effective_balance":    econ.EffectiveBalance,
+		"economy":              econ,
 	})
 }
 

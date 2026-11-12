@@ -3975,9 +3975,162 @@ body {
 
 .budget-comparison-table th:nth-child(2),
 .budget-comparison-table th:nth-child(3),
+.budget-comparison-table th:nth-child(4),
 .budget-comparison-table td:nth-child(2),
-.budget-comparison-table td:nth-child(3) {
+.budget-comparison-table td:nth-child(3),
+.budget-comparison-table td:nth-child(4) {
     text-align: right;
+}
+
+.budget-comparison-table td.val-delta-pos {
+    color: #4ade80;
+    font-weight: 600;
+}
+
+.budget-comparison-table td.val-delta-neg {
+    color: #f87171;
+    font-weight: 600;
+}
+
+.budget-comparison-table td.val-delta-flat {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+/* Appropriation Status Bar */
+.appropriation-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    border-radius: 5px;
+    padding: 6px 12px;
+    margin: 8px 0 12px 0;
+    font-size: 0.72rem;
+    color: #e2e8f0;
+    font-family: monospace;
+}
+
+.appropriation-status-bar .status-icon {
+    font-size: 1rem;
+}
+
+.appropriation-status-bar strong {
+    color: #ffd700;
+}
+
+/* Interactive Steampunk Sankey Flow Diagram */
+.budget-sankey-card {
+    background: rgba(10, 16, 24, 0.92);
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 14px 0;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.sankey-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px dashed rgba(212, 175, 55, 0.25);
+    padding-bottom: 8px;
+}
+
+.sankey-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sankey-crest {
+    font-size: 1.1rem;
+}
+
+.sankey-title {
+    color: #ffd700;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.sankey-subtext {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    font-family: monospace;
+}
+
+.sankey-toggle-group {
+    display: flex;
+    gap: 4px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.sankey-mode-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-family: monospace;
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sankey-mode-btn:hover {
+    color: #ffd700;
+    background: rgba(212, 175, 55, 0.1);
+}
+
+.sankey-mode-btn.active {
+    background: linear-gradient(180deg, #453214 0%, #20170a 100%);
+    border: 1px solid #d4af37;
+    color: #ffd700;
+    font-weight: 700;
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.3);
+}
+
+.sankey-canvas-wrap {
+    position: relative;
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 4px;
+    background: radial-gradient(circle at 50% 50%, #0d1522 0%, #070b12 100%);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+#cc-budget-sankey {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 280px;
+    cursor: crosshair;
+}
+
+.sankey-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #d4af37;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: #f8fafc;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 8px rgba(212, 175, 55, 0.3);
+    white-space: nowrap;
+    transform: translate(-50%, -120%);
+    transition: opacity 0.1s ease;
 }
 
 .budget-comparison-table td {

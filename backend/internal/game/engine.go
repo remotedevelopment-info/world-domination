@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -49,6 +50,9 @@ type CountryState struct {
 	EconomyRate    int64        `json:"economy_rate"`
 	Investment     int64        `json:"investment"`
 	SocialCosts    int64        `json:"social_costs"`
+	PlannedEconomyRate int64    `json:"planned_economy_rate"`
+	PlannedInvestment  int64    `json:"planned_investment"`
+	PlannedSocialCosts int64    `json:"planned_social_costs"`
 	Markets        int64        `json:"markets"`
 	Infrastructure int64        `json:"infrastructure"`
 	TerritoryType  string       `json:"territory_type"`
@@ -648,8 +652,13 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 		}
 
 		if yearRolledOver {
-			// A calendar year has officially turned over: commit the completed year's actuals
-			// into the historical Last Year ledger, rolling over previous actuals.
+			// A calendar year has officially turned over:
+			// 1. Ratify planned appropriations into active running budget
+			c.EconomyRate = c.PlannedEconomyRate
+			c.Investment = c.PlannedInvestment
+			c.SocialCosts = c.PlannedSocialCosts
+
+			// 2. Commit the completed year's actuals into the historical Last Year ledger, rolling over previous actuals.
 			if err := database.UpdateCountryVitalsBudgetAndTroopLayers(
 				c.ID, newPopulation, newResources, newTroops, newLevy, newRegular, newElite,
 				econ.TaxRevenue, annualMarketActual, effMilAnnual, effSocAnnual, effInvAnnual,
@@ -666,6 +675,11 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			c.ColonialProgress = newProgress
 			c.ColonialYield = newYield
 			c.ColonialFleets = newFleets
+
+			curYearInt := int64(math.Floor(simYear))
+			ratifyMsg := fmt.Sprintf("📜 ROYAL EXCHEQUER: The Budget of Anno Domini %d has been ratified into law (Tax: %d%% · Capex: %d%% · Social: %d%%).",
+				curYearInt, c.EconomyRate, c.Investment, c.SocialCosts)
+			_ = database.LogAction(ownerID, c.ID, "news", ratifyMsg, nil, "", "", "")
 		} else if newResources != c.Resources || newPopulation != c.Population || newTroops != c.Troops ||
 			newLevy != c.TroopsLevy || newRegular != c.TroopsRegular || newElite != c.TroopsElite ||
 			newPride != c.EntrepreneurialPride || newDelayedCosts != c.MilitaryDelayedCosts ||
@@ -757,6 +771,9 @@ func (g *GameEngine) BuildState() GameState {
 			EconomyRate:          c.EconomyRate,
 			Investment:           c.Investment,
 			SocialCosts:          c.SocialCosts,
+			PlannedEconomyRate:   c.PlannedEconomyRate,
+			PlannedInvestment:    c.PlannedInvestment,
+			PlannedSocialCosts:   c.PlannedSocialCosts,
 			Markets:              c.Markets,
 			Infrastructure:       c.Infrastructure,
 			TerritoryType:        c.TerritoryType,

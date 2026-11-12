@@ -22,6 +22,20 @@ func RealmPort(code, name string) string {
 		return "Barcelona"
 	case "HAB", "AUT":
 		return "Trieste"
+	case "SWI", "CHE":
+		return "Basel Rhine Terminus"
+	case "CZE", "BOH":
+		return "Prague Vltava Rail Yard"
+	case "HUN":
+		return "Budapest Danube Quay"
+	case "BOL":
+		return "La Paz Rail Depot"
+	case "PRY", "PAR":
+		return "Asunción River Port"
+	case "SRB":
+		return "Belgrade Danube Terminal"
+	case "LUX":
+		return "Luxembourg Rail Crossway"
 	case "OTT", "TUR":
 		return "Constantinople"
 	case "RUS", "USSR":

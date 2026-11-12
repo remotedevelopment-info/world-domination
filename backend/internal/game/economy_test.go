@@ -3,6 +3,8 @@ package game
 import (
 	"strings"
 	"testing"
+
+	"kingdom-conquest/backend/internal/database"
 )
 
 func TestComputeEconomyDirections(t *testing.T) {
@@ -647,6 +649,62 @@ func TestCountryFiscalProfileAndMaritimeCashflow(t *testing.T) {
 	venFleet1 := ComputeEconomyFull(1800000, 700, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.05, 1500.0, 0.15, 2.50)
 	if venFleet1.MarketRevenue < 180 {
 		t.Errorf("expected Venice to earn supreme maritime tariffs (~197 gold/yr), got %d", venFleet1.MarketRevenue)
+	}
+}
+
+func TestNextPeriodBudgetAppropriationAndLandlockedArchetypes(t *testing.T) {
+	// 1. Verify Landlocked vs Sea-going Duality
+	landlockedCodes := []string{"SWI", "AUT", "CZE", "BOL", "HUN", "PRY"}
+	for _, code := range landlockedCodes {
+		if !database.IsLandlockedRealm(code) {
+			t.Errorf("expected %s to be classified as landlocked realm", code)
+		}
+	}
+
+	maritimeCodes := []string{"ENG", "FRA", "NED", "ESP", "POR", "VEN", "DEN", "JPN"}
+	for _, code := range maritimeCodes {
+		if database.IsLandlockedRealm(code) {
+			t.Errorf("expected %s to be classified as maritime/coastal realm", code)
+		}
+	}
+
+	// 2. Verify Multi-Era Universal Archetype Profiles
+	swiProf := database.GetCountryFiscalProfile("SWI")
+	if swiProf.Archetype != "merchant_republic" || swiProf.IsSeaGoing {
+		t.Errorf("expected SWI to be landlocked merchant republic, got %+v", swiProf)
+	}
+
+	usaProf := database.GetCountryFiscalProfile("USA")
+	if usaProf.Archetype != "industrial_powerhouse" || !usaProf.IsSeaGoing {
+		t.Errorf("expected USA to be industrial powerhouse, got %+v", usaProf)
+	}
+
+	sauProf := database.GetCountryFiscalProfile("SAU")
+	if sauProf.Archetype != "commodity_rentier" {
+		t.Errorf("expected SAU to be commodity rentier, got %+v", sauProf)
+	}
+
+	// 3. Verify Next-Period Budget Decoupling
+	// Year Y active budget is 50% tax; player plans 30% for Year Y+1
+	activeTaxRate := int64(50)
+	plannedTaxRate := int64(30)
+
+	activeEcon := ComputeEconomyFull(4500000, 600, 0, activeTaxRate, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 0.50, 1.80)
+	plannedEcon := ComputeEconomyFull(4500000, 600, 0, plannedTaxRate, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1501.0, 0.50, 1.80)
+
+	if activeEcon.TaxRevenue == plannedEcon.TaxRevenue {
+		t.Errorf("expected active 50%% tax revenue (%d) to differ from planned 30%% tax revenue (%d)",
+			activeEcon.TaxRevenue, plannedEcon.TaxRevenue)
+	}
+
+	// In year Y, active extraction remains ~205-225 G
+	if activeEcon.TaxRevenue < 190 || activeEcon.TaxRevenue > 235 {
+		t.Errorf("expected Year Y active tax revenue to remain locked at 50%% (~205-225 G), got %d", activeEcon.TaxRevenue)
+	}
+
+	// In year Y+1 after ratification, planned rate generates 30/50 * active = ~123-140 G
+	if plannedEcon.TaxRevenue > activeEcon.TaxRevenue*35/50 {
+		t.Errorf("expected Year Y+1 planned tax revenue to reflect 30%% rate, got %d vs %d", plannedEcon.TaxRevenue, activeEcon.TaxRevenue)
 	}
 }
 

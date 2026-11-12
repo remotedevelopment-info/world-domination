@@ -1030,11 +1030,11 @@
                             </div>
 
                             <div class="bay-content">
-                                <!-- Rotary Dials: Tax Rate, Investment, Social Spending -->
+                                <!-- Rotary Dials: Tax Rate, Investment, Social Spending (Next Period Appropriations) -->
                                 <div class="dials-row">
                                     <!-- Tax Rate Dial -->
                                     <div class="dial-container">
-                                        <div class="control-label">ROYAL TITHE &amp; TARIFF</div>
+                                        <div class="control-label">ROYAL TITHE &amp; TARIFF (NEXT YEAR)</div>
                                         <div id="cc-economy-dial" class="rotary-dial brass-dial" data-dial-type="tax"
                                             tabindex="0" role="slider" aria-label="Tax Rate" aria-valuemin="0"
                                             aria-valuemax="100">
@@ -1065,7 +1065,7 @@
 
                                     <!-- Investment Allocation Dial -->
                                     <div class="dial-container">
-                                        <div class="control-label">COLONIAL EXPEDITIONS</div>
+                                        <div class="control-label">CAPEX &amp; EXPEDITIONS (NEXT YEAR)</div>
                                         <div id="cc-investment-dial" class="rotary-dial cyan-dial"
                                             data-dial-type="investment" tabindex="0" role="slider"
                                             aria-label="Capital Investment" aria-valuemin="0" aria-valuemax="100">
@@ -1095,7 +1095,7 @@
 
                                     <!-- Social Welfare Spending Dial -->
                                     <div class="dial-container">
-                                        <div class="control-label">GUILD &amp; CATHEDRAL FUNDS</div>
+                                        <div class="control-label">GUILD &amp; CIVIC FUNDS (NEXT YEAR)</div>
                                         <div id="cc-social-dial" class="rotary-dial purple-dial" data-dial-type="social"
                                             tabindex="0" role="slider" aria-label="Social Spending" aria-valuemin="0"
                                             aria-valuemax="100">
@@ -1123,6 +1123,12 @@
                                     </div>
                                 </div>
 
+                                <!-- Next-Period Appropriation Status Bar -->
+                                <div class="appropriation-status-bar" id="cc-appropriation-status-bar">
+                                    <span class="status-icon">⏳</span>
+                                    <span class="status-text"><strong>NEXT-YEAR FISCAL APPROPRIATIONS:</strong> Rotary dials appropriate budget targets for Anno Domini <strong id="cc-appropriation-target-year">1501</strong>. Ratified into Royal Law upon annual rollover.</span>
+                                </div>
+
                                 <!-- Colonial Gestation & Fleet Construction Bay -->
                                 <div class="gestation-dockyard-card" id="cc-gestation-dockyard-card">
                                     <div class="dockyard-header">
@@ -1148,15 +1154,15 @@
                                     </div>
                                 </div>
 
-                                <!-- Annual Exchequer Budget Ledger (Last Year vs. This Year) -->
+                                <!-- Dual-Period Financial Statement (Mini-Spreadsheet) -->
                                 <div class="annual-budget-ledger" id="cc-annual-budget-ledger">
                                     <div class="budget-ledger-header">
                                         <div class="budget-ledger-title-group">
-                                            <span class="budget-ledger-title">📜 ANNUAL EXCHEQUER BUDGET LEDGER</span>
+                                            <span class="budget-ledger-title">📜 ROYAL EXCHEQUER LEDGER &amp; DUAL-PERIOD APPROPRIATIONS</span>
                                             <span class="regime-badge" id="cc-fiscal-regime-badge">⚖️ BALANCED BUDGET (NO DEFICIT)</span>
                                         </div>
                                         <button type="button" class="budget-autobalance-btn" onclick="triggerAutoBalanceBudget()" title="Set optimal Laffer tax rate and balance discretionary allocations within revenue">
-                                            ⚖️ Auto-Balance This Year
+                                            ⚖️ Auto-Balance Next Year
                                         </button>
                                     </div>
                                     <div class="budget-era-roadmap">
@@ -1173,58 +1179,93 @@
                                         <thead>
                                             <tr>
                                                 <th>Exchequer Line Item</th>
-                                                <th id="cc-th-last-year">Last Year (Actual)</th>
-                                                <th id="cc-th-this-year">This Year (Projected / Capped)</th>
+                                                <th id="cc-th-current-enacted">Current (1500 Enacted)</th>
+                                                <th id="cc-th-next-projected">Next (1501 Projected)</th>
+                                                <th id="cc-th-variance">Variance (Δ)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr class="row-revenue">
-                                                <td>Crown Tithe &amp; Tax Revenue</td>
-                                                <td id="cc-ly-tax-rev">+0</td>
-                                                <td id="cc-ty-tax-rev">+0</td>
+                                                <td>🌾 Crown Land &amp; Agrarian Tax</td>
+                                                <td id="cc-cur-tax-rev">+0</td>
+                                                <td id="cc-next-tax-rev">+0</td>
+                                                <td id="cc-delta-tax-rev">0</td>
                                             </tr>
                                             <tr class="row-revenue">
-                                                <td>Port &amp; Market Trade Income</td>
-                                                <td id="cc-ly-mkt-rev">+0</td>
-                                                <td id="cc-ty-mkt-rev">+0</td>
+                                                <td>⚓ Port Customs &amp; Tariffs</td>
+                                                <td id="cc-cur-mkt-rev">+0</td>
+                                                <td id="cc-next-mkt-rev">+0</td>
+                                                <td id="cc-delta-mkt-rev">0</td>
                                             </tr>
                                             <tr class="row-total-rev">
                                                 <td><strong>Total Annual Revenue</strong></td>
-                                                <td id="cc-ly-total-rev"><strong>+0</strong></td>
-                                                <td id="cc-ty-total-rev"><strong>+0</strong></td>
+                                                <td id="cc-cur-total-rev"><strong>+0</strong></td>
+                                                <td id="cc-next-total-rev"><strong>+0</strong></td>
+                                                <td id="cc-delta-total-rev"><strong>0</strong></td>
                                             </tr>
                                             <tr class="row-expense">
-                                                <td>Standing Military Upkeep</td>
-                                                <td id="cc-ly-mil-exp">-0</td>
-                                                <td id="cc-ty-mil-exp">-0</td>
+                                                <td>⚔️ Standing Armadas &amp; Garrisons</td>
+                                                <td id="cc-cur-mil-exp">-0</td>
+                                                <td id="cc-next-mil-exp">-0</td>
+                                                <td id="cc-delta-mil-exp">0</td>
                                             </tr>
                                             <tr class="row-expense">
-                                                <td>Colonial &amp; Capital Investment</td>
-                                                <td id="cc-ly-inv-exp">-0</td>
-                                                <td id="cc-ty-inv-exp">-0</td>
+                                                <td>🚢 Colonial Shipyards &amp; Transport Capex</td>
+                                                <td id="cc-cur-inv-exp">-0</td>
+                                                <td id="cc-next-inv-exp">-0</td>
+                                                <td id="cc-delta-inv-exp">0</td>
                                             </tr>
                                             <tr class="row-expense">
-                                                <td>Guild &amp; Social Welfare</td>
-                                                <td id="cc-ly-soc-exp">-0</td>
-                                                <td id="cc-ty-soc-exp">-0</td>
+                                                <td>⛪ Cathedral &amp; Civic Welfare</td>
+                                                <td id="cc-cur-soc-exp">-0</td>
+                                                <td id="cc-next-soc-exp">-0</td>
+                                                <td id="cc-delta-soc-exp">0</td>
                                             </tr>
                                             <tr class="row-total-exp">
-                                                <td><strong>Total Annual Expenditure</strong></td>
-                                                <td id="cc-ly-total-exp"><strong>-0</strong></td>
-                                                <td id="cc-ty-total-exp"><strong>-0</strong></td>
+                                                <td><strong>Total Annual Expenditures</strong></td>
+                                                <td id="cc-cur-total-exp"><strong>-0</strong></td>
+                                                <td id="cc-next-total-exp"><strong>-0</strong></td>
+                                                <td id="cc-delta-total-exp"><strong>0</strong></td>
                                             </tr>
                                             <tr id="cc-balance-row" class="row-surplus">
-                                                <td id="cc-balance-label"><strong>Exchequer Surplus (No Deficit)</strong></td>
-                                                <td id="cc-ly-balance"><strong>+0</strong></td>
-                                                <td id="cc-ty-balance"><strong>+0</strong></td>
+                                                <td id="cc-balance-label"><strong>👑 Net Fiscal Balance</strong></td>
+                                                <td id="cc-cur-balance"><strong>+0</strong></td>
+                                                <td id="cc-next-balance"><strong>+0</strong></td>
+                                                <td id="cc-delta-balance"><strong>0</strong></td>
                                             </tr>
                                             <tr class="row-demographics">
-                                                <td>Tax Migration &amp; Pop Pressure (<span id="cc-pop-pressure-val">0%</span>)</td>
-                                                <td id="cc-ly-migration">0</td>
-                                                <td id="cc-ty-migration">0</td>
+                                                <td>👥 Demographic Migration (<span id="cc-pop-pressure-val">Stress 0%</span>)</td>
+                                                <td id="cc-cur-migration">0</td>
+                                                <td id="cc-next-migration">0</td>
+                                                <td id="cc-delta-migration">0</td>
                                             </tr>
                                         </tbody>
                                     </table>
+                                </div>
+
+                                <!-- Interactive Steampunk Sankey Flow Diagram -->
+                                <div class="budget-sankey-card" id="cc-budget-sankey-card">
+                                    <div class="sankey-header">
+                                        <div class="sankey-title-group">
+                                            <span class="sankey-crest">⚡</span>
+                                            <div>
+                                                <span class="sankey-title">ROYAL EXCHEQUER CASH FLOW PIPELINE (SANKEY)</span>
+                                                <div class="sankey-subtext">Fluid visual telemetry of sovereign inflows, exchequer hub, and budget allocations</div>
+                                            </div>
+                                        </div>
+                                        <div class="sankey-toggle-group">
+                                            <button type="button" id="cc-sankey-btn-current" class="sankey-mode-btn active" onclick="setSankeyMode('current')">
+                                                Enacted (Current)
+                                            </button>
+                                            <button type="button" id="cc-sankey-btn-next" class="sankey-mode-btn" onclick="setSankeyMode('next')">
+                                                Projected (Next Year)
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="sankey-canvas-wrap">
+                                        <canvas id="cc-budget-sankey" width="760" height="260"></canvas>
+                                        <div id="cc-sankey-tooltip" class="sankey-tooltip hidden"></div>
+                                    </div>
                                 </div>
 
                                 <!-- Economic Telemetry & Action Levers -->

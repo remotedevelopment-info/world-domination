@@ -420,15 +420,19 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   updateFortifyButtonLabel();
 
   if (!isUserAdjustingEconomy()) {
-    if (typeof detail?.economy_rate === "number") setTaxRate(detail.economy_rate, false);
-    if (typeof detail?.investment === "number") setInvestmentRate(detail.investment, false);
-    if (typeof detail?.social_costs === "number") setSocialRate(detail.social_costs, false);
+    const plannedTax = typeof detail?.planned_economy_rate === "number" ? detail.planned_economy_rate : (typeof detail?.economy_rate === "number" ? detail.economy_rate : (typeof kingdom.planned_economy_rate === "number" ? kingdom.planned_economy_rate : kingdom.economy_rate));
+    const plannedInv = typeof detail?.planned_investment === "number" ? detail.planned_investment : (typeof detail?.investment === "number" ? detail.investment : (typeof kingdom.planned_investment === "number" ? kingdom.planned_investment : kingdom.investment));
+    const plannedSoc = typeof detail?.planned_social_costs === "number" ? detail.planned_social_costs : (typeof detail?.social_costs === "number" ? detail.social_costs : (typeof kingdom.planned_social_costs === "number" ? kingdom.planned_social_costs : kingdom.social_costs));
+
+    if (typeof plannedTax === "number") setTaxRate(plannedTax, false);
+    if (typeof plannedInv === "number") setInvestmentRate(plannedInv, false);
+    if (typeof plannedSoc === "number") setSocialRate(plannedSoc, false);
   } else {
     // Keep local cache synced with user's active choice
     if (detail) {
-      detail.economy_rate = taxRate;
-      detail.investment = investmentRate;
-      detail.social_costs = socialCostsRate;
+      detail.planned_economy_rate = taxRate;
+      detail.planned_investment = investmentRate;
+      detail.planned_social_costs = socialCostsRate;
     }
   }
 
@@ -1438,28 +1442,57 @@ export function updateEconomyHintsLive() {
 
   // Update Dynamic Table Header with actual simulation years
   const curSimYear = Math.floor(getCurrentGameYear() || state.timeline?.sim_year || 1500);
-  const lastSimYear = curSimYear - 1;
-  const thLast = document.getElementById("cc-th-last-year");
-  if (thLast) {
-    thLast.textContent = `Last Year (${lastSimYear >= 1500 ? lastSimYear : 1500} Actual)`;
+  const nextSimYear = curSimYear + 1;
+  const thCur = document.getElementById("cc-th-current-enacted");
+  if (thCur) {
+    thCur.textContent = `Current (${curSimYear} Enacted)`;
   }
-  const thThis = document.getElementById("cc-th-this-year");
-  if (thThis) {
-    thThis.textContent = `This Year (${curSimYear} Projected / Capped)`;
+  const thNext = document.getElementById("cc-th-next-projected");
+  if (thNext) {
+    thNext.textContent = `Next (${nextSimYear} Projected)`;
+  }
+  const thVar = document.getElementById("cc-th-variance");
+  if (thVar) {
+    thVar.textContent = "Variance (Δ)";
+  }
+  const targetYearEl = document.getElementById("cc-appropriation-target-year");
+  if (targetYearEl) {
+    targetYearEl.textContent = nextSimYear;
   }
 
-  // Populate Last Year vs. This Year Annual Budget Comparison Table
-  const srvEcon = commandCenterDetail?.economy || kingdom.economy || {};
-  const hasRecordedActuals = srvEcon.last_tax_revenue != null && (srvEcon.last_tax_revenue > 0 || srvEcon.last_total_exp > 0 || srvEcon.last_market_income > 0);
-  const lyTax = hasRecordedActuals ? srvEcon.last_tax_revenue : (srvEcon.last_tax_revenue ?? taxRevenue);
-  const lyMkt = hasRecordedActuals ? srvEcon.last_market_income : (srvEcon.last_market_income ?? marketRevenue);
-  const lyTotalRev = lyTax + lyMkt;
-  const lyMil = hasRecordedActuals ? srvEcon.last_military_exp : (srvEcon.last_military_exp ?? cappedBudget.effMil);
-  const lyInv = hasRecordedActuals ? srvEcon.last_investment_exp : (srvEcon.last_investment_exp ?? cappedBudget.effInv);
-  const lySoc = hasRecordedActuals ? srvEcon.last_social_exp : (srvEcon.last_social_exp ?? cappedBudget.effSoc);
-  const lyTotalExp = hasRecordedActuals ? srvEcon.last_total_exp : (lyMil + lyInv + lySoc);
-  const lyBal = hasRecordedActuals ? srvEcon.last_budget_balance : (srvEcon.last_budget_balance ?? (lyTotalRev - lyTotalExp));
-  const lyMig = hasRecordedActuals ? srvEcon.last_migration : (srvEcon.last_migration ?? netMigration);
+  // Calculate Current Enacted Budget (Year Y active running rates)
+  const enactedTax = typeof commandCenterDetail?.economy_rate === "number" ? commandCenterDetail.economy_rate : (kingdom.economy_rate ?? 50);
+  const enactedInv = typeof commandCenterDetail?.investment === "number" ? commandCenterDetail.investment : (kingdom.investment ?? 0);
+  const enactedSoc = typeof commandCenterDetail?.social_costs === "number" ? commandCenterDetail.social_costs : (kingdom.social_costs ?? 0);
+
+  const curTaxRev = Math.round(gdp * (enactedTax / 100.0) * taxMod + 0.5);
+  const curMktRev = Math.round(marketBase * tradeFleetBonus * currentProductivityFactor * tradeMod);
+  const curTotalRev = curTaxRev + curMktRev;
+  const curMilExp = milUpkeep;
+  const curInvExp = Math.round(costPerPct * enactedInv);
+  const curSocExp = Math.round(enactedSoc * 2.0 + gdp * (enactedSoc / 100.0) * 0.30);
+  const curCapped = enforceClientBalancedBudget(res, curTotalRev, curMilExp, curSocExp, curInvExp);
+  const curTotalExp = curCapped.effTotal;
+  const curBal = curCapped.effBalance;
+  const curMig = netMigration;
+
+  // Calculate Next Projected Budget (Year Y+1 target rates set on dials)
+  const nextTax = taxRate;
+  const nextInv = investmentRate;
+  const nextSoc = socialCostsRate;
+  const nextProductivity = targetProductivityFactorJs(nextTax);
+  const nextGdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * tradeFleetBonus * nextProductivity;
+  const nextTaxRev = Math.round(nextGdp * (nextTax / 100.0) * taxMod + 0.5);
+  const nextMktRev = Math.round(marketBase * tradeFleetBonus * nextProductivity * tradeMod);
+  const nextTotalRev = nextTaxRev + nextMktRev;
+  const nextMilExp = milUpkeep;
+  const nextInvExp = Math.round(costPerPct * nextInv);
+  const nextSocExp = Math.round(nextSoc * 2.0 + nextGdp * (nextSoc / 100.0) * 0.30);
+  const nextCapped = enforceClientBalancedBudget(res, nextTotalRev, nextMilExp, nextSocExp, nextInvExp);
+  const nextTotalExp = nextCapped.effTotal;
+  const nextBal = nextCapped.effBalance;
+  const nextMigInfo = computeClientMigration(pop, nextTax, nextSoc, infraLevel || 0, nextGdp, res, marketsLevel || 0, nextProductivity * 100);
+  const nextMig = nextMigInfo.netMigration;
 
   const setCell = (id, html, className = "") => {
     const el = document.getElementById(id);
@@ -1470,54 +1503,81 @@ export function updateEconomyHintsLive() {
     }
   };
 
-  setCell("cc-ly-tax-rev", `+${lyTax.toLocaleString()}`, "val-pos");
-  setCell("cc-ty-tax-rev", `+${taxRevenue.toLocaleString()}`, "val-pos");
+  const formatDelta = (curVal, nextVal, isExpense = false) => {
+    const diff = nextVal - curVal;
+    if (diff === 0) {
+      return `<span class="val-delta-flat">0 G (Flat) —</span>`;
+    }
+    const pct = curVal !== 0 ? Math.round((Math.abs(diff) / Math.abs(curVal)) * 100) : 100;
+    const sign = diff > 0 ? "+" : "-";
+    const absDiff = Math.abs(diff).toLocaleString();
+    if (isExpense) {
+      const cls = diff > 0 ? "val-delta-neg" : "val-delta-pos";
+      const arrow = diff > 0 ? "▲" : "▼";
+      return `<span class="${cls}">${sign}${absDiff} G (${diff > 0 ? "+" : "-"}${pct}%) ${arrow}</span>`;
+    } else {
+      const cls = diff > 0 ? "val-delta-pos" : "val-delta-neg";
+      const arrow = diff > 0 ? "▲" : "▼";
+      return `<span class="${cls}">${sign}${absDiff} G (${diff > 0 ? "+" : "-"}${pct}%) ${arrow}</span>`;
+    }
+  };
 
-  setCell("cc-ly-mkt-rev", `+${lyMkt.toLocaleString()}`, "val-pos");
-  setCell("cc-ty-mkt-rev", `+${marketRevenue.toLocaleString()}`, "val-pos");
+  // Populate Dual-Period Financial Statement Table
+  setCell("cc-cur-tax-rev", `+${curTaxRev.toLocaleString()}`, "val-pos");
+  setCell("cc-next-tax-rev", `+${nextTaxRev.toLocaleString()}`, "val-pos");
+  setCell("cc-delta-tax-rev", formatDelta(curTaxRev, nextTaxRev, false));
 
-  setCell("cc-ly-total-rev", `<strong>+${lyTotalRev.toLocaleString()}</strong>`, "val-pos");
-  setCell("cc-ty-total-rev", `<strong>+${totalRevenue.toLocaleString()}</strong>`, "val-pos");
+  setCell("cc-cur-mkt-rev", `+${curMktRev.toLocaleString()}`, "val-pos");
+  setCell("cc-next-mkt-rev", `+${nextMktRev.toLocaleString()}`, "val-pos");
+  setCell("cc-delta-mkt-rev", formatDelta(curMktRev, nextMktRev, false));
 
-  const milCapBadge = cappedBudget.effMil < milUpkeep ? ` <span class="cap-tag" title="Planned ${milUpkeep}; unpaid troops demobilize">⚠️ RATIONED</span>` : "";
-  setCell("cc-ly-mil-exp", `-${lyMil.toLocaleString()}`, "val-neg");
-  setCell("cc-ty-mil-exp", `-${cappedBudget.effMil.toLocaleString()}${milCapBadge}`, "val-neg");
+  setCell("cc-cur-total-rev", `<strong>+${curTotalRev.toLocaleString()}</strong>`, "val-pos");
+  setCell("cc-next-total-rev", `<strong>+${nextTotalRev.toLocaleString()}</strong>`, "val-pos");
+  setCell("cc-delta-total-rev", `<strong>${formatDelta(curTotalRev, nextTotalRev, false)}</strong>`);
 
-  const invCapBadge = cappedBudget.effInv < invExp ? ` <span class="cap-tag" title="Planned ${invExp}; capped to prevent deficit">CAPPED</span>` : "";
-  setCell("cc-ly-inv-exp", `-${lyInv.toLocaleString()}`, "val-neg");
-  setCell("cc-ty-inv-exp", `-${cappedBudget.effInv.toLocaleString()}${invCapBadge}`, "val-neg");
+  const nextMilCapBadge = nextCapped.effMil < nextMilExp ? ` <span class="cap-tag" title="Planned ${nextMilExp}; unpaid troops demobilize">⚠️ RATIONED</span>` : "";
+  setCell("cc-cur-mil-exp", `-${curCapped.effMil.toLocaleString()}`, "val-neg");
+  setCell("cc-next-mil-exp", `-${nextCapped.effMil.toLocaleString()}${nextMilCapBadge}`, "val-neg");
+  setCell("cc-delta-mil-exp", formatDelta(curCapped.effMil, nextCapped.effMil, true));
 
-  const socCapBadge = cappedBudget.effSoc < socExp ? ` <span class="cap-tag" title="Planned ${socExp}; capped to prevent deficit">CAPPED</span>` : "";
-  setCell("cc-ly-soc-exp", `-${lySoc.toLocaleString()}`, "val-neg");
-  setCell("cc-ty-soc-exp", `-${cappedBudget.effSoc.toLocaleString()}${socCapBadge}`, "val-neg");
+  const nextInvCapBadge = nextCapped.effInv < nextInvExp ? ` <span class="cap-tag" title="Planned ${nextInvExp}; capped to prevent deficit">CAPPED</span>` : "";
+  setCell("cc-cur-inv-exp", `-${curCapped.effInv.toLocaleString()}`, "val-neg");
+  setCell("cc-next-inv-exp", `-${nextCapped.effInv.toLocaleString()}${nextInvCapBadge}`, "val-neg");
+  setCell("cc-delta-inv-exp", formatDelta(curCapped.effInv, nextCapped.effInv, true));
 
-  setCell("cc-ly-total-exp", `<strong>-${lyTotalExp.toLocaleString()}</strong>`, "val-neg");
-  setCell("cc-ty-total-exp", `<strong>-${cappedBudget.effTotal.toLocaleString()}</strong>`, "val-neg");
+  const nextSocCapBadge = nextCapped.effSoc < nextSocExp ? ` <span class="cap-tag" title="Planned ${nextSocExp}; capped to prevent deficit">CAPPED</span>` : "";
+  setCell("cc-cur-soc-exp", `-${curCapped.effSoc.toLocaleString()}`, "val-neg");
+  setCell("cc-next-soc-exp", `-${nextCapped.effSoc.toLocaleString()}${nextSocCapBadge}`, "val-neg");
+  setCell("cc-delta-soc-exp", formatDelta(curCapped.effSoc, nextCapped.effSoc, true));
 
-  const tyBal = cappedBudget.effBalance;
-  const lyBalSign = lyBal < 0 ? "-" : "+";
-  const tyBalSign = tyBal < 0 ? "-" : "+";
-  const lyBalClass = lyBal < 0 ? "val-neg" : "val-surplus";
-  const tyBalClass = tyBal < 0 ? "val-neg" : "val-surplus";
-  const tyBalSuffix = (tyBal < 0 && res > 0) ? " (Draining Reserves)" : "";
+  setCell("cc-cur-total-exp", `<strong>-${curTotalExp.toLocaleString()}</strong>`, "val-neg");
+  setCell("cc-next-total-exp", `<strong>-${nextTotalExp.toLocaleString()}</strong>`, "val-neg");
+  setCell("cc-delta-total-exp", `<strong>${formatDelta(curTotalExp, nextTotalExp, true)}</strong>`);
 
-  setCell("cc-ly-balance", `<strong>${lyBalSign}${Math.abs(lyBal).toLocaleString()}</strong>`, lyBalClass);
-  setCell("cc-ty-balance", `<strong>${tyBalSign}${Math.abs(tyBal).toLocaleString()}${tyBalSuffix}</strong>`, tyBalClass);
+  const curBalSign = curBal < 0 ? "-" : "+";
+  const nextBalSign = nextBal < 0 ? "-" : "+";
+  const curBalClass = curBal < 0 ? "val-neg" : "val-surplus";
+  const nextBalClass = nextBal < 0 ? "val-neg" : "val-surplus";
+  const nextBalSuffix = (nextBal < 0 && res > 0) ? " (Draining)" : "";
+
+  setCell("cc-cur-balance", `<strong>${curBalSign}${Math.abs(curBal).toLocaleString()}</strong>`, curBalClass);
+  setCell("cc-next-balance", `<strong>${nextBalSign}${Math.abs(nextBal).toLocaleString()}${nextBalSuffix}</strong>`, nextBalClass);
+  setCell("cc-delta-balance", `<strong>${formatDelta(curBal, nextBal, false)}</strong>`);
 
   // Update Gold Reserves Mileometer Rate & Rate / Trend Variometer
-  setGoldMileometerRate(tyBal);
-  const maxGoldRate = Math.max(500, Math.round(Math.max(totalRevenue, cappedBudget.effTotal) * 0.5));
-  setRateMeter("cc-meter-resources", tyBal, maxGoldRate, "#ffd700", "#ff6b6b");
+  setGoldMileometerRate(nextBal);
+  const maxGoldRate = Math.max(500, Math.round(Math.max(nextTotalRev, nextCapped.effTotal) * 0.5));
+  setRateMeter("cc-meter-resources", nextBal, maxGoldRate, "#ffd700", "#ff6b6b");
 
   const balRow = document.getElementById("cc-balance-row");
   const balLabel = document.getElementById("cc-balance-label");
   if (balRow) {
-    if (tyBal < 0) {
+    if (nextBal < 0) {
       balRow.className = "row-deficit";
-      if (balLabel) balLabel.innerHTML = `<strong>Exchequer Deficit (Draining Reserves)</strong>`;
+      if (balLabel) balLabel.innerHTML = `<strong>👑 Net Fiscal Balance (Projected Deficit)</strong>`;
     } else {
       balRow.className = "row-surplus";
-      if (balLabel) balLabel.innerHTML = `<strong>Exchequer Surplus (No Deficit)</strong>`;
+      if (balLabel) balLabel.innerHTML = `<strong>👑 Net Fiscal Balance (Projected Surplus)</strong>`;
     }
   }
 
@@ -1528,18 +1588,49 @@ export function updateEconomyHintsLive() {
   }
 
   setCell(
-    "cc-ly-migration",
-    `${lyMig > 0 ? "+" : ""}${lyMig.toLocaleString()}/yr`,
-    lyMig < 0 ? "val-neg" : lyMig > 0 ? "val-pos" : ""
+    "cc-cur-migration",
+    `${curMig > 0 ? "+" : ""}${curMig.toLocaleString()}/yr`,
+    curMig < 0 ? "val-neg" : curMig > 0 ? "val-pos" : ""
   );
-  const migBreakdownBadge = (migInfo.wealthyMigration !== 0)
-    ? ` <span class="cap-tag" title="👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy class (${migInfo.wealthyMigration >= 0 ? "+" : ""}${migInfo.wealthyMigration.toLocaleString()}/yr), 👥 Settlers: ${migInfo.generalMigration >= 0 ? "+" : ""}${migInfo.generalMigration.toLocaleString()}/yr">👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy</span>`
-    : ` <span class="cap-tag" title="👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy class">👑 ${(migInfo.wealthyRatio * 100).toFixed(1)}% Wealthy</span>`;
   setCell(
-    "cc-ty-migration",
-    `${netMigration > 0 ? "+" : ""}${netMigration.toLocaleString()}/yr${migBreakdownBadge}`,
-    netMigration < 0 ? "val-neg" : netMigration > 0 ? "val-pos" : ""
+    "cc-next-migration",
+    `${nextMig > 0 ? "+" : ""}${nextMig.toLocaleString()}/yr`,
+    nextMig < 0 ? "val-neg" : nextMig > 0 ? "val-pos" : ""
   );
+  setCell("cc-delta-migration", formatDelta(curMig, nextMig, false));
+
+  // Cache data and trigger interactive Steampunk Sankey Flow Diagram
+  cachedCurrentSankey = {
+    mode: "current",
+    year: curSimYear,
+    taxRev: curTaxRev,
+    mktRev: curMktRev,
+    totalRev: curTotalRev,
+    milExp: curCapped.effMil,
+    invExp: curCapped.effInv,
+    socExp: curCapped.effSoc,
+    totalExp: curTotalExp,
+    balance: curBal,
+    deficitDraw: Math.max(0, -curBal),
+    surplus: Math.max(0, curBal),
+  };
+
+  cachedNextSankey = {
+    mode: "next",
+    year: nextSimYear,
+    taxRev: nextTaxRev,
+    mktRev: nextMktRev,
+    totalRev: nextTotalRev,
+    milExp: nextCapped.effMil,
+    invExp: nextCapped.effInv,
+    socExp: nextCapped.effSoc,
+    totalExp: nextTotalExp,
+    balance: nextBal,
+    deficitDraw: Math.max(0, -nextBal),
+    surplus: Math.max(0, nextBal),
+  };
+
+  renderBudgetSankeyDiagram();
 
   // Alert banner for No-Deficit Rationing, Deficit Drain & Tax Migration
   const alertBanner = document.getElementById("cc-budget-alert-banner");
@@ -1575,6 +1666,329 @@ export function updateEconomyHintsLive() {
   }
 
   updateDerivedEconomyUI(Math.round(marketRevenue), value, inflation, cappedBudget.effBalance);
+}
+
+let currentSankeyMode = "current"; // 'current' | 'next'
+let cachedCurrentSankey = null;
+let cachedNextSankey = null;
+let sankeyMouseAttached = false;
+let sankeyHitRegions = [];
+
+export function setSankeyMode(mode) {
+  currentSankeyMode = mode;
+  const btnCur = document.getElementById("cc-sankey-btn-current");
+  const btnNext = document.getElementById("cc-sankey-btn-next");
+  if (btnCur && btnNext) {
+    if (mode === "current") {
+      btnCur.classList.add("active");
+      btnNext.classList.remove("active");
+    } else {
+      btnNext.classList.add("active");
+      btnCur.classList.remove("active");
+    }
+  }
+  renderBudgetSankeyDiagram();
+}
+window.setSankeyMode = setSankeyMode;
+
+export function renderBudgetSankeyDiagram() {
+  const canvas = document.getElementById("cc-budget-sankey");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const data = currentSankeyMode === "next" ? cachedNextSankey : cachedCurrentSankey;
+  if (!data) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const width = rect.width > 0 ? rect.width : 760;
+  const height = 260;
+
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, width, height);
+
+  sankeyHitRegions = [];
+
+  // Inflows
+  const inflows = [
+    { id: "tax", label: "🌾 Land Tax", amount: Math.max(0, data.taxRev), color: "#f59e0b" },
+    { id: "mkt", label: "⚓ Customs & Trade", amount: Math.max(0, data.mktRev), color: "#0ea5e9" },
+  ];
+  if (data.deficitDraw > 0) {
+    inflows.push({ id: "deficit", label: "💰 Reserve Draw", amount: data.deficitDraw, color: "#f87171" });
+  }
+
+  // Outflows
+  const outflows = [
+    { id: "mil", label: "⚔️ Armadas", amount: Math.max(0, data.milExp), color: "#ef4444" },
+    { id: "inv", label: "🚢 Capex", amount: Math.max(0, data.invExp), color: "#06b6d4" },
+    { id: "soc", label: "⛪ Welfare", amount: Math.max(0, data.socExp), color: "#a855f7" },
+  ];
+  if (data.surplus > 0) {
+    outflows.push({ id: "surplus", label: "🏦 Surplus", amount: data.surplus, color: "#10b981" });
+  }
+
+  const totalInflow = inflows.reduce((s, item) => s + item.amount, 0) || 1;
+  const totalOutflow = outflows.reduce((s, item) => s + item.amount, 0) || 1;
+  const totalFlow = Math.max(totalInflow, totalOutflow, 10);
+
+  // Layout parameters
+  const topPad = 32;
+  const botPad = 22;
+  const availH = height - topPad - botPad;
+  const nodeW = 145;
+  const hubW = 125;
+  const xInflow = 16;
+  const xHub = Math.round((width - hubW) / 2);
+  const xOutflow = width - nodeW - 16;
+
+  // Render Hub coordinates
+  const hubY = topPad + 12;
+  const hubH = availH - 24;
+
+  // Distribute Inflow Node heights
+  const inGap = 12;
+  const availInflowH = availH - (inflows.length - 1) * inGap;
+  let curInY = topPad;
+  const inflowPositions = [];
+
+  for (const item of inflows) {
+    const rawH = Math.round((item.amount / totalFlow) * availInflowH);
+    const h = Math.max(26, rawH);
+    inflowPositions.push({ ...item, x: xInflow, y: curInY, w: nodeW, h });
+    curInY += h + inGap;
+  }
+
+  // Distribute Outflow Node heights
+  const outGap = 10;
+  const availOutflowH = availH - (outflows.length - 1) * outGap;
+  let curOutY = topPad;
+  const outflowPositions = [];
+
+  for (const item of outflows) {
+    const rawH = Math.round((item.amount / totalFlow) * availOutflowH);
+    const h = Math.max(24, rawH);
+    outflowPositions.push({ ...item, x: xOutflow, y: curOutY, w: nodeW, h });
+    curOutY += h + outGap;
+  }
+
+  // Draw Inflow Ribbons -> Hub
+  let hubInAnchorY = hubY + 10;
+  const hubInAvailH = Math.max(20, hubH - 20);
+
+  for (const node of inflowPositions) {
+    const ribbonH = Math.max(4, Math.round((node.amount / totalFlow) * hubInAvailH));
+    const startX = node.x + node.w;
+    const startYTop = node.y + node.h * 0.2;
+    const startYBot = node.y + node.h * 0.8;
+    const endX = xHub;
+    const endYTop = hubInAnchorY;
+    const endYBot = hubInAnchorY + ribbonH;
+    hubInAnchorY += ribbonH + 4;
+
+    const grad = ctx.createLinearGradient(startX, 0, endX, 0);
+    grad.addColorStop(0, node.color + "99");
+    grad.addColorStop(1, "#d4af3766");
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(startX, startYTop);
+    const cp1x = startX + (endX - startX) * 0.5;
+    const cp2x = startX + (endX - startX) * 0.5;
+    ctx.bezierCurveTo(cp1x, startYTop, cp2x, endYTop, endX, endYTop);
+    ctx.lineTo(endX, endYBot);
+    ctx.bezierCurveTo(cp2x, endYBot, cp1x, startYBot, startX, startYBot);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = node.color + "bb";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(startX, startYTop);
+    ctx.bezierCurveTo(cp1x, startYTop, cp2x, endYTop, endX, endYTop);
+    ctx.stroke();
+  }
+
+  // Draw Hub -> Outflow Ribbons
+  let hubOutAnchorY = hubY + 10;
+  const hubOutAvailH = Math.max(20, hubH - 20);
+
+  for (const node of outflowPositions) {
+    const ribbonH = Math.max(4, Math.round((node.amount / totalFlow) * hubOutAvailH));
+    const startX = xHub + hubW;
+    const startYTop = hubOutAnchorY;
+    const startYBot = hubOutAnchorY + ribbonH;
+    hubOutAnchorY += ribbonH + 4;
+
+    const endX = node.x;
+    const endYTop = node.y + node.h * 0.2;
+    const endYBot = node.y + node.h * 0.8;
+
+    const grad = ctx.createLinearGradient(startX, 0, endX, 0);
+    grad.addColorStop(0, "#d4af3766");
+    grad.addColorStop(1, node.color + "99");
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(startX, startYTop);
+    const cp1x = startX + (endX - startX) * 0.5;
+    const cp2x = startX + (endX - startX) * 0.5;
+    ctx.bezierCurveTo(cp1x, startYTop, cp2x, endYTop, endX, endYTop);
+    ctx.lineTo(endX, endYBot);
+    ctx.bezierCurveTo(cp2x, endYBot, cp1x, startYBot, startX, startYBot);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = node.color + "bb";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(startX, startYTop);
+    ctx.bezierCurveTo(cp1x, startYTop, cp2x, endYTop, endX, endYTop);
+    ctx.stroke();
+  }
+
+  // Render Center Hub Node
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = "rgba(212, 175, 55, 0.35)";
+  ctx.shadowBlur = 10;
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(xHub, hubY, hubW, hubH, 6);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(xHub, hubY, hubW, hubH);
+    ctx.strokeRect(xHub, hubY, hubW, hubH);
+  }
+  ctx.restore();
+
+  // Hub text
+  ctx.fillStyle = "#ffd700";
+  ctx.font = "bold 11px Cinzel, Georgia, serif";
+  ctx.textAlign = "center";
+  ctx.fillText("👑 EXCHEQUER", xHub + hubW / 2, hubY + 22);
+
+  ctx.fillStyle = "#e2e8f0";
+  ctx.font = "bold 13px monospace";
+  ctx.fillText(`${totalFlow.toLocaleString()} G/yr`, xHub + hubW / 2, hubY + 44);
+
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "9px monospace";
+  ctx.fillText(data.mode === "next" ? `Projected ${data.year}` : `Enacted ${data.year}`, xHub + hubW / 2, hubY + 62);
+
+  sankeyHitRegions.push({
+    x: xHub,
+    y: hubY,
+    w: hubW,
+    h: hubH,
+    title: "👑 The Royal Exchequer",
+    detail: `Total Flow: ${totalFlow.toLocaleString()} Ducats/yr (${data.mode === "next" ? "Target Projected" : "Enacted Actual"})`,
+  });
+
+  // Render Inflow Nodes
+  for (const node of inflowPositions) {
+    renderSankeyNode(ctx, node, true);
+    sankeyHitRegions.push({
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h,
+      title: node.label,
+      detail: `${node.amount.toLocaleString()} G/yr (${((node.amount / totalFlow) * 100).toFixed(1)}% of Crown Flow)`,
+    });
+  }
+
+  // Render Outflow Nodes
+  for (const node of outflowPositions) {
+    renderSankeyNode(ctx, node, false);
+    sankeyHitRegions.push({
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h,
+      title: node.label,
+      detail: `${node.amount.toLocaleString()} G/yr (${((node.amount / totalFlow) * 100).toFixed(1)}% of Exchequer Outflow)`,
+    });
+  }
+
+  ctx.restore();
+
+  // Attach hover handler if not already done
+  if (!sankeyMouseAttached) {
+    sankeyMouseAttached = true;
+    const tooltip = document.getElementById("cc-sankey-tooltip");
+    canvas.addEventListener("mousemove", (e) => {
+      if (!tooltip) return;
+      const b = canvas.getBoundingClientRect();
+      const mx = e.clientX - b.left;
+      const my = e.clientY - b.top;
+      const hit = sankeyHitRegions.find(r => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+      if (hit) {
+        tooltip.innerHTML = `<strong>${hit.title}</strong><br>${hit.detail}`;
+        tooltip.style.left = `${mx}px`;
+        tooltip.style.top = `${my}px`;
+        tooltip.classList.remove("hidden");
+      } else {
+        tooltip.classList.add("hidden");
+      }
+    });
+    canvas.addEventListener("mouseleave", () => {
+      if (tooltip) tooltip.classList.add("hidden");
+    });
+  }
+}
+
+function renderSankeyNode(ctx, node, isInflow) {
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+  ctx.strokeStyle = node.color;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = node.color + "44";
+  ctx.shadowBlur = 6;
+
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(node.x, node.y, node.w, node.h, 4);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(node.x, node.y, node.w, node.h);
+    ctx.strokeRect(node.x, node.y, node.w, node.h);
+  }
+  ctx.restore();
+
+  // Node Color Indicator Strip
+  ctx.fillStyle = node.color;
+  const stripW = 4;
+  const stripX = isInflow ? node.x + node.w - stripW : node.x;
+  ctx.fillRect(stripX, node.y, stripW, node.h);
+
+  // Label text
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "bold 10px monospace";
+  ctx.textAlign = "left";
+  const textX = isInflow ? node.x + 8 : node.x + 8;
+  const textY = node.y + Math.min(14, Math.round(node.h / 2 + 3));
+  ctx.fillText(node.label, textX, textY);
+
+  // Value text
+  if (node.h >= 28) {
+    ctx.fillStyle = node.color;
+    ctx.font = "bold 11px monospace";
+    const sign = isInflow ? "+" : "-";
+    const valText = `${sign}${node.amount.toLocaleString()} G`;
+    ctx.fillText(valText, textX, node.y + node.h - 6);
+  }
 }
 
 export function updateDerivedEconomyUI(tradeFigure, currencyVal, inflationRate, balance) {
