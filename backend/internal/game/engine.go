@@ -59,6 +59,9 @@ type CountryState struct {
 	ColonialProgress     float64 `json:"colonial_progress"`
 	ColonialYield        float64 `json:"colonial_yield"`
 	ColonialFleets       int64   `json:"colonial_fleets"`
+	FiscalArchetype      string  `json:"fiscal_archetype"`
+	TaxMod               float64 `json:"tax_mod"`
+	TradeMod             float64 `json:"trade_mod"`
 	Economy        EconomyState `json:"economy"` // Derived dashboard, rebuilt every broadcast
 }
 
@@ -382,6 +385,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
 			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
+			c.TaxMod, c.TradeMod,
 		)
 
 		// 1. Markets: Income and Risk (compounded by completed colonial fleet trade yield)
@@ -612,7 +616,7 @@ func (g *GameEngine) TickEconomyStep(yearsPassed float64, yearRolledOver bool) b
 			if newProgress >= 100.0 {
 				newFleets++
 				newProgress = 0.0
-				yieldBonus := GetColonialYieldBonus(simYear) * (effInvestmentRate / 100.0)
+				yieldBonus := GetColonialYieldBonus(simYear)
 				newYield += yieldBonus
 				newYield = math.Round(newYield*1000) / 1000
 				yieldPct := int(math.Round(newYield * 100.0))
@@ -727,6 +731,7 @@ func (g *GameEngine) BuildState() GameState {
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
 			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
+			c.TaxMod, c.TradeMod,
 		)
 		PopulateLastYearLedger(
 			&econ,
@@ -762,6 +767,9 @@ func (g *GameEngine) BuildState() GameState {
 			ColonialProgress:     c.ColonialProgress,
 			ColonialYield:        c.ColonialYield,
 			ColonialFleets:       c.ColonialFleets,
+			FiscalArchetype:      c.FiscalArchetype,
+			TaxMod:               c.TaxMod,
+			TradeMod:             c.TradeMod,
 			Economy:              econ,
 		}
 		if c.OwnerID != nil {

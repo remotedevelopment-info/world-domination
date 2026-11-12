@@ -342,7 +342,14 @@ export function applyDetailedCommandCenterData(kingdom, detail) {
   if (kingdomNameEl) kingdomNameEl.textContent = (detail?.name || kingdom.name || "My Kingdom");
 
   const codeEl = document.getElementById("cc-kingdom-code");
-  if (codeEl) codeEl.textContent = (detail?.code || kingdom.code || "REALM");
+  if (codeEl) {
+    const code = detail?.code || kingdom.code || "REALM";
+    const archetype = detail?.fiscal_archetype || kingdom.fiscal_archetype || "balanced";
+    const taxMod = detail?.tax_mod ?? kingdom.tax_mod ?? 1.0;
+    const tradeMod = detail?.trade_mod ?? kingdom.trade_mod ?? 1.0;
+    const archLabel = archetype.toUpperCase().replace(/_/g, " ");
+    codeEl.textContent = `${code} · 🏛️ ${archLabel} (Land: ${Math.round(taxMod * 100)}% · Trade: ${Math.round(tradeMod * 100)}%)`;
+  }
 
   const rulerEl = document.getElementById("cc-ruler-name");
   if (rulerEl) {
@@ -1308,7 +1315,9 @@ export function updateEconomyHintsLive() {
   const res = commandCenterDetail?.resources ?? kingdom.resources ?? 500;
   const tr = commandCenterDetail?.central_troops ?? kingdom.troops ?? state.troops[kingdom.id]?.central ?? 0;
 
-  const baseProductivity = 0.02;
+  const taxMod = commandCenterDetail?.tax_mod ?? kingdom.tax_mod ?? 1.0;
+  const tradeMod = commandCenterDetail?.trade_mod ?? kingdom.trade_mod ?? 1.0;
+
   const infraBonus = 1.0 + (infraLevel || 0) * 0.03;
   const mktBonus = 1.0 + (marketsLevel || 0) * 0.05;
   const colYield = commandCenterDetail?.colonial_yield ?? kingdom.colonial_yield ?? state.myKingdom?.colonial_yield ?? 0.0;
@@ -1321,13 +1330,18 @@ export function updateEconomyHintsLive() {
 
   // Mobilized troops reduce productive civilian workforce, directly reducing GDP and tax revenue
   const civilianWorkforce = Math.max(0, pop - tr);
+  // Calibrated macro scale: workforce in millions scales at 0.0002 to match historical Crown revenues
+  const baseProductivity = civilianWorkforce <= 50000 ? 0.02 : 0.0002;
   // Current GDP reflects actual existing capital health (investor confidence with 1-2 year lag)
   const gdp = civilianWorkforce * baseProductivity * infraBonus * mktBonus * tradeFleetBonus * currentProductivityFactor;
-  const taxRevenue = Math.round(gdp * (taxRate / 100.0) + 0.5);
+  const taxRevenue = Math.round(gdp * (taxRate / 100.0) * taxMod + 0.5);
 
-  // Trade figures directly reflect capital investments (markets + colonial fleets) scaled by dynamic investor health:
-  const marketBase = (marketsLevel || 0) * 12 + (marketsLevel === 0 && colYield > 0 ? colYield * 250 : 0);
-  const marketRevenue = Math.round(marketBase * tradeFleetBonus * currentProductivityFactor);
+  // Trade figures directly reflect capital investments (markets + colonial fleets) scaled by dynamic investor health & tradeMod:
+  let marketBase = (marketsLevel || 0) * 12;
+  if (colYield > 0) {
+    marketBase += colYield * 1500;
+  }
+  const marketRevenue = Math.round(marketBase * tradeFleetBonus * currentProductivityFactor * tradeMod);
   const totalRevenue = taxRevenue + marketRevenue;
 
   const levy = commandCenterDetail?.troops_levy ?? 0;

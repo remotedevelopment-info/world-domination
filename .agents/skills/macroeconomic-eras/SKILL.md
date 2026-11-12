@@ -66,9 +66,42 @@ The fiscal model begins as a disciplined hard-specie ledger in the early eras an
 
 ---
 
-### Layer 1: Hard-Specie Balanced Budgets (1500–1859 — *Implemented*)
+### Layer 1: Hard-Specie Balanced Budgets & Historical Fiscal Archetypes (1500–1859 — *Implemented*)
 
-In the **Age of Discovery** and **Age of Revolt**, sovereign credit institutions do not yet exist. Kingdoms operate strictly on hard gold ducats and annual balanced budgets:
+In the **Age of Discovery** and **Age of Revolt**, sovereign credit institutions do not yet exist. Kingdoms operate strictly on hard gold ducats and annual balanced budgets.
+
+Crucially, **income tax did not exist** (first invented in Britain in 1799). Government revenue was derived from **customs tariffs (*Tonnage & Poundage*), the royal domain, monopolies/privateering, and feudal land taxes**. Furthermore, different kingdoms had vastly different fiscal architectures and constraints:
+
+#### Country-Specific Fiscal Archetypes & Variances Matrix
+
+| Realm Code | Realm Name | Fiscal Archetype | Agrarian Tax Mod (`tax_mod`) | Maritime Trade Mod (`trade_mod`) | Strategic Dilemma & Revenue Source |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`ENG`** | Kingdom of England | `maritime` | **0.50** | **1.80** | **Customs & Shipping:** Parliamentary limits on land taxes; relies heavily on port customs (*Tonnage & Poundage*), wool duties, and overseas caravel expeditions. |
+| **`ESP`** | Crown of Spain | `bullion_monopoly` | **0.85** | **1.40** | **Silver Monopoly & Overstretch:** *Alcabala* sales tax and *Quinto Real* (Royal Fifth); massive silver influx offset by heavy garrison maintenance abroad (*Tercios* in Flanders/Italy). |
+| **`POR`** | Kingdom of Portugal | `maritime` | **0.55** | **1.75** | **Spice Route Pioneer:** Small home population, reliant on Cape Route trade posts (*Feitorias*) and naval spice monopolies. |
+| **`FRA`** | Kingdom of France | `agrarian_bureaucracy` | **1.30** | **0.65** | **Agrarian Leviathan:** Massive peasant population subject to the direct *Taille* and salt *Gabelle*; high continental manpower but slow early oceanic shipping. |
+| **`VEN`** | Republic of Venice | `merchant_republic` | **0.15** | **2.50** | **Plutocratic Maritime Empire:** Negligible agrarian base; 90%+ income is spice/silk transit tariffs and salt monopolies (*Stato da Màr*). High per-capita wealth, vulnerable to Ottoman naval wars. |
+| **`GEN`** | Republic of Genoa | `merchant_republic` | **0.20** | **2.30** | **Merchant Bankers:** Maritime trade and sovereign banking hub; low land tax, high commercial tariff multiplier. |
+| **`NED`** | Dutch Republic | `maritime` | **0.45** | **2.00** | **Commercial Entrepot:** Advanced capital markets, flute shipping, and chartered VOC monopolies; supreme trade velocity. |
+| **`POL`** | Poland-Lithuania | `noble_commonwealth` | **0.40** | **1.10** | **Szlachta Immunity:** Rich Baltic grain exporter via Danzig, but noble tax exemptions under *Nihil Novi* starve the Royal Treasury of cash. |
+| **`OTT`** | Ottoman Empire | `imperial_fief` | **1.10** | **1.20** | **Imperial Crossroads & Fiefs:** Non-Muslim poll taxes (*Jizya/Cizye*) and *Kharaj* land tribute; military maintained via *Timar* land grants rather than cash payroll. |
+| **`RUS`** | Tsardom of Muscovy | `agrarian_bureaucracy` | **1.20** | **0.60** | **Autocratic Land Extraction:** High serf extraction and fur tribute (*Yassak*); landlocked with minimal maritime tariffs. |
+| **`HRE`** | Holy Roman Empire | `agrarian_bureaucracy` | **0.90** | **0.90** | **Fragmented Imperial Diet:** Fragmented estates and tolls; moderate balanced baseline. |
+| **`SCO`** | Kingdom of Scotland | `noble_commonwealth` | **0.50** | **1.00** | **Clan Autonomy:** Low central crown extraction; relies on modest port trade. |
+| **`DEN`** | Kingdom of Denmark | `maritime` | **0.60** | **1.50** | **Sound Toll Gatekeeper:** Controls Baltic entry tariffs (*Øresundstolden*). |
+| **`SWE`** | Kingdom of Sweden | `balanced` | **0.80** | **1.20** | **Baltic Copper & Iron:** Falu copper mine royalties and Baltic coastal trade. |
+
+#### Calibrated Macroeconomic Specie Scale (1500 Discovery Era)
+1. **Agrarian Land Extraction Baseline:**
+   - Calibrated at `baseProductivity = 0.0002` gold output per capita.
+   - For England (pop 4,500,000), a standard 50% extraction effort yields `4,500,000 * 0.0002 * 0.50 * 0.50 (tax_mod) = ~225 gold/cycle`.
+   - Peasant tithes in 1500 were mostly in kind (grain, livestock) and did not automatically convert into spendable gold specie in royal vaults.
+2. **Maritime Trade as the Crown's Essential Lifeblood:**
+   - To make building shipping an indispensable strategic imperative, maritime trade yields must be lucrative relative to ship construction capex.
+   - Each completed expedition fleet grants $+5\%$ compounded yield, generating:
+     $$\text{Trade Revenue} = (\text{colonialYield} \times 1500.0 + \text{markets} \times 12) \times \text{ProductivityFactor} \times (1.0 + \text{colonialYield}) \times \text{CommercialVelocity} \times \text{trade\_mod}$$
+   - For England (`trade_mod = 1.80`), a single completed caravel fleet earns **$\approx 135\text{ gold/year}$** in recurring customs and tariffs on a $360\text{ G/year}$ capex investment (a **19%–25% annual return on invested capital**).
+   - 3 active fleets generate **$400+\text{ gold/year}$**, exceeding the entire agrarian land tax take, mirroring Elizabethan reliance on maritime privateering, customs (*Tonnage & Poundage*), and chartered shipping!
 
 1. **Annual Budget Statement**:
    - Tracks **Last Year's Ledger** (`last_tax_revenue`, `last_market_income`, `last_military_exp`, `last_social_exp`, `last_investment_exp`, `last_total_exp`, `last_budget_balance`, `last_migration`).

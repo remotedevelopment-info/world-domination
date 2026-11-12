@@ -454,8 +454,8 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	}
 
 	// 5. Colonial trade yield bonus compounds GDP & market revenue in ComputeEconomyFull
-	zeroColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25)
-	boostedColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.15, 1500.25)
+	zeroColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25, 1.0, 1.0)
+	boostedColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.15, 1500.25, 1.0, 1.0)
 
 	if boostedColonialEcon.GDP <= zeroColonialEcon.GDP {
 		t.Errorf("expected +15%% colonial yield to increase GDP (%d vs %d)", boostedColonialEcon.GDP, zeroColonialEcon.GDP)
@@ -466,8 +466,8 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	}
 
 	// 6. Increasing investment dial alone while building ships DOES NOT immediately boost GDP or trade revenue
-	noInvestEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25)
-	highInvestBuildingEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 80, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25)
+	noInvestEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25, 1.0, 1.0)
+	highInvestBuildingEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 80, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25, 1.0, 1.0)
 
 	if highInvestBuildingEcon.GDP != noInvestEcon.GDP {
 		t.Errorf("expected GDP to remain unchanged while ships are under construction (delayed returns): got %d vs %d",
@@ -517,7 +517,7 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	}
 
 	// 9. Zero tax rate with 60% expedition investment strictly produces a -720 gold/year exchequer deficit (12 * 60)
-	zeroTaxExpEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0)
+	zeroTaxExpEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 1.0, 1.0)
 	if zeroTaxExpEcon.TaxRevenue != 0 {
 		t.Errorf("expected 0 tax revenue under 0%% tax rate, got %d", zeroTaxExpEcon.TaxRevenue)
 	}
@@ -530,8 +530,8 @@ func TestColonialGestationAndLexicon(t *testing.T) {
 	}
 
 	// 10. Completed voyage grants permanent trade yield proportional to investment dial
-	baseYieldEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0)
-	completed60Econ := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.03, 1500.0)
+	baseYieldEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 1.0, 1.0)
+	completed60Econ := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.03, 1500.0, 1.0, 1.0)
 	if completed60Econ.GDP <= baseYieldEcon.GDP {
 		t.Errorf("expected +3%% trade yield from completed 60%% fleet to raise GDP (%d vs %d)",
 			completed60Econ.GDP, baseYieldEcon.GDP)
@@ -598,6 +598,55 @@ func TestFairTaxThresholdAndHyperbolicLag(t *testing.T) {
 	ratio := float64(year1Econ.MarketRevenue) / float64(initialEcon.MarketRevenue)
 	if ratio < 0.65 || ratio > 0.80 {
 		t.Errorf("expected ~70%% capital retention after 1 yr of high tax, got ratio %f", ratio)
+	}
+}
+
+func TestCountryFiscalProfileAndMaritimeCashflow(t *testing.T) {
+	// 1. England (ENG): Maritime Archetype (tax_mod: 0.50, trade_mod: 1.80)
+	// Population 4,500,000 at 50% tax rate
+	engBase := ComputeEconomyFull(4500000, 600, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 0.50, 1.80)
+	// Base tax revenue in Spring 1500 Little Ice Age (~0.91 harvest factor): ~205-225 gold/yr
+	if engBase.TaxRevenue < 190 || engBase.TaxRevenue > 235 {
+		t.Errorf("expected England agrarian tax revenue of ~205-225 gold/yr at 50%% tax, got %d", engBase.TaxRevenue)
+	}
+	if engBase.MarketRevenue != 0 {
+		t.Errorf("expected England initial trade revenue to be 0 without fleets/markets, got %d", engBase.MarketRevenue)
+	}
+
+	// Commission 1 caravel fleet (+5% colonial yield = 0.05):
+	// Generates 0.05 * 1500 = 75 base * 1.05 * 1.80 tradeMod = ~142 gold/yr in customs & tariffs
+	engFleet1 := ComputeEconomyFull(4500000, 600, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.05, 1500.0, 0.50, 1.80)
+	if engFleet1.MarketRevenue < 130 || engFleet1.MarketRevenue > 155 {
+		t.Errorf("expected single caravel fleet to earn ~142 gold/yr for England, got %d", engFleet1.MarketRevenue)
+	}
+
+	// Commission 3 caravel fleets (+15% colonial yield = 0.15):
+	// Generates 0.15 * 1500 = 225 base * 1.15 * 1.80 tradeMod = ~466 gold/yr
+	engFleet3 := ComputeEconomyFull(4500000, 600, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.15, 1500.0, 0.50, 1.80)
+	if engFleet3.MarketRevenue <= engBase.TaxRevenue {
+		t.Errorf("expected 3 caravel fleets to surpass England's agrarian tax revenue (%d vs %d)",
+			engFleet3.MarketRevenue, engBase.TaxRevenue)
+	}
+
+	// 2. France (FRA): Agrarian Bureaucracy (tax_mod: 1.30, trade_mod: 0.65)
+	// Population 16,000,000 at 50% tax rate
+	fraBase := ComputeEconomyFull(16000000, 850, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 1.30, 0.65)
+	// 16,000,000 * 0.0002 = 3200 GDP * 50% tax * 1.30 taxMod * 0.91 harvest factor = ~1893 gold/yr
+	if fraBase.TaxRevenue < 1800 || fraBase.TaxRevenue > 2150 {
+		t.Errorf("expected France peasant taille revenue of ~1893-2080 gold/yr, got %d", fraBase.TaxRevenue)
+	}
+
+	// 3. Republic of Venice (VEN): Merchant Republic (tax_mod: 0.15, trade_mod: 2.50)
+	// Population 1,800,000 at 50% tax rate
+	venBase := ComputeEconomyFull(1800000, 700, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 0.15, 2.50)
+	// Agrarian land tax: 1,800,000 * 0.0002 = 360 GDP * 50% * 0.15 * 0.91 = ~25 gold/yr
+	if venBase.TaxRevenue < 20 || venBase.TaxRevenue > 30 {
+		t.Errorf("expected Venice land tax of only ~25-27 gold/yr, got %d", venBase.TaxRevenue)
+	}
+	// Venice with 1 trade fleet earns 0.05 * 1500 * 1.05 * 2.50 = ~197 gold/yr (7x its agrarian tax!)
+	venFleet1 := ComputeEconomyFull(1800000, 700, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.05, 1500.0, 0.15, 2.50)
+	if venFleet1.MarketRevenue < 180 {
+		t.Errorf("expected Venice to earn supreme maritime tariffs (~197 gold/yr), got %d", venFleet1.MarketRevenue)
 	}
 }
 

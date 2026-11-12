@@ -164,6 +164,9 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_progress DOUBLE PRECISION DEFAULT 0.0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_yield DOUBLE PRECISION DEFAULT 0.0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_fleets INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fiscal_archetype VARCHAR(50) DEFAULT 'balanced';
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS tax_mod DOUBLE PRECISION DEFAULT 1.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS trade_mod DOUBLE PRECISION DEFAULT 1.0;
 	UPDATE countries SET troops_regular = troops WHERE troops > 0 AND (COALESCE(troops_levy, 0) + COALESCE(troops_regular, 0) + COALESCE(troops_elite, 0)) = 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
@@ -306,6 +309,49 @@ func InitSchema() error {
 
 	log.Println("Database schema initialized successfully")
 	return nil
+}
+
+// CountryFiscalProfile defines historical tax and trade variances for a country.
+type CountryFiscalProfile struct {
+	Archetype string
+	TaxMod    float64 // Agrarian peasant extraction modifier (0.15 to 1.30)
+	TradeMod  float64 // Maritime trade & tariff multiplier (0.60 to 2.50)
+}
+
+// GetCountryFiscalProfile returns the historical fiscal archetype and tax/trade modifiers for a nation.
+func GetCountryFiscalProfile(code string) CountryFiscalProfile {
+	switch code {
+	case "ENG":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.50, TradeMod: 1.80}
+	case "ESP":
+		return CountryFiscalProfile{Archetype: "bullion_monopoly", TaxMod: 0.85, TradeMod: 1.40}
+	case "POR":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.55, TradeMod: 1.75}
+	case "FRA":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.30, TradeMod: 0.65}
+	case "VEN":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.15, TradeMod: 2.50}
+	case "GEN":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.20, TradeMod: 2.30}
+	case "NED":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.45, TradeMod: 2.00}
+	case "POL":
+		return CountryFiscalProfile{Archetype: "noble_commonwealth", TaxMod: 0.40, TradeMod: 1.10}
+	case "OTT":
+		return CountryFiscalProfile{Archetype: "imperial_fief", TaxMod: 1.10, TradeMod: 1.20}
+	case "RUS":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.20, TradeMod: 0.60}
+	case "HRE":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 0.90, TradeMod: 0.90}
+	case "SCO":
+		return CountryFiscalProfile{Archetype: "noble_commonwealth", TaxMod: 0.50, TradeMod: 1.00}
+	case "DEN":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.60, TradeMod: 1.50}
+	case "SWE":
+		return CountryFiscalProfile{Archetype: "balanced", TaxMod: 0.80, TradeMod: 1.20}
+	default:
+		return CountryFiscalProfile{Archetype: "balanced", TaxMod: 1.00, TradeMod: 1.00}
+	}
 }
 
 type InitialKingdom struct {
@@ -533,9 +579,10 @@ func SeedInitialData() error {
 	}
 
 	for _, k := range InitialKingdomList {
+		profile := GetCountryFiscalProfile(k.Code)
 		res, err := tx.Exec(
-			`UPDATE countries SET name = $1, color = $2, is_island = $3, borders = $4::jsonb WHERE code = $5 AND era = 'medieval'`,
-			k.Name, k.Color, k.IsIsland, k.BordersJSON, k.Code,
+			`UPDATE countries SET name = $1, color = $2, is_island = $3, borders = $4::jsonb, fiscal_archetype = $5, tax_mod = $6, trade_mod = $7 WHERE code = $8 AND era = 'medieval'`,
+			k.Name, k.Color, k.IsIsland, k.BordersJSON, profile.Archetype, profile.TaxMod, profile.TradeMod, k.Code,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -548,8 +595,8 @@ func SeedInitialData() error {
 		}
 		if rowsAffected == 0 {
 			if _, err := tx.Exec(
-				`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7::jsonb)`,
-				k.Name, k.Code, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON,
+				`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders, fiscal_archetype, tax_mod, trade_mod) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7::jsonb, $8, $9, $10)`,
+				k.Name, k.Code, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, profile.Archetype, profile.TaxMod, profile.TradeMod,
 			); err != nil {
 				tx.Rollback()
 				return err
@@ -658,6 +705,7 @@ func ResetGameToYear1500(clearClaims bool) error {
 
 	// 4. Restore exact baseline starting population, resources, and attributes
 	for _, k := range InitialKingdomList {
+		profile := GetCountryFiscalProfile(k.Code)
 		var updateQuery string
 		if clearClaims {
 			updateQuery = `
@@ -668,6 +716,9 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    resources = $4,
 				    is_island = $5,
 				    borders = $6::jsonb,
+				    fiscal_archetype = $7,
+				    tax_mod = $8,
+				    trade_mod = $9,
 				    owner_id = NULL,
 				    troops = 0,
 				    troops_levy = 0,
@@ -696,7 +747,7 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    last_budget_balance = 0,
 				    last_migration = 0,
 				    updated_at = CURRENT_TIMESTAMP
-				WHERE code = $7 AND era = 'medieval'
+				WHERE code = $10 AND era = 'medieval'
 			`
 		} else {
 			updateQuery = `
@@ -707,6 +758,9 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    resources = $4,
 				    is_island = $5,
 				    borders = $6::jsonb,
+				    fiscal_archetype = $7,
+				    tax_mod = $8,
+				    trade_mod = $9,
 				    troops = 0,
 				    troops_levy = 0,
 				    troops_regular = 0,
@@ -734,10 +788,10 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    last_budget_balance = 0,
 				    last_migration = 0,
 				    updated_at = CURRENT_TIMESTAMP
-				WHERE code = $7 AND era = 'medieval'
+				WHERE code = $10 AND era = 'medieval'
 			`
 		}
-		if _, err := tx.Exec(updateQuery, k.Name, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, k.Code); err != nil {
+		if _, err := tx.Exec(updateQuery, k.Name, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, profile.Archetype, profile.TaxMod, profile.TradeMod, k.Code); err != nil {
 			return fmt.Errorf("failed to restore country baseline for %s: %w", k.Code, err)
 		}
 	}
@@ -864,6 +918,7 @@ func GetCountries(era string) ([]models.Country, error) {
 		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
 		COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
+		COALESCE(c.fiscal_archetype, 'balanced'), COALESCE(c.tax_mod, 1.0), COALESCE(c.trade_mod, 1.0),
 		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
@@ -888,6 +943,7 @@ func GetCountries(era string) ([]models.Country, error) {
 			&c.LastBudgetBalance, &c.LastMigration,
 			&c.EntrepreneurialPride, &c.MilitaryDelayedCosts,
 			&c.ColonialProgress, &c.ColonialYield, &c.ColonialFleets,
+			&c.FiscalArchetype, &c.TaxMod, &c.TradeMod,
 			&c.TerritoryType, &c.Borders, &c.IsIsland,
 		); err != nil {
 			return nil, err
@@ -1366,6 +1422,9 @@ type KingdomDetailRow struct {
 	ColonialProgress     float64
 	ColonialYield        float64
 	ColonialFleets       int64
+	FiscalArchetype      string
+	TaxMod               float64
+	TradeMod             float64
 	OwnerID           *int64
 	OwnerName         *string
 	CentralTroops     int64
@@ -1391,6 +1450,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		       COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
 		       COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
+		       COALESCE(c.fiscal_archetype, 'balanced'), COALESCE(c.tax_mod, 1.0), COALESCE(c.trade_mod, 1.0),
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
@@ -1406,6 +1466,7 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		&r.LastBudgetBalance, &r.LastMigration,
 		&r.EntrepreneurialPride, &r.MilitaryDelayedCosts,
 		&r.ColonialProgress, &r.ColonialYield, &r.ColonialFleets,
+		&r.FiscalArchetype, &r.TaxMod, &r.TradeMod,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err

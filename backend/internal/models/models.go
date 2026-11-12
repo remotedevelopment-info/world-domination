@@ -54,6 +54,9 @@ type Country struct {
 	ColonialProgress     float64 `json:"colonial_progress"`     // In-flight capital gestation progress 0-100%
 	ColonialYield        float64 `json:"colonial_yield"`        // Permanent compounded trade productivity yield
 	ColonialFleets       int64   `json:"colonial_fleets"`       // Total commissioned / returned expedition fleets
+	FiscalArchetype      string  `json:"fiscal_archetype"`      // 'maritime', 'bullion_monopoly', 'merchant_republic', 'agrarian_bureaucracy', etc.
+	TaxMod               float64 `json:"tax_mod"`               // Agrarian extraction modifier (0.15 to 1.30)
+	TradeMod             float64 `json:"trade_mod"`             // Maritime trade & tariff yield modifier (0.60 to 2.50)
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`

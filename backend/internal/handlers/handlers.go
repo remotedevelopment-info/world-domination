@@ -329,6 +329,7 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts,
 		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
 		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, detail.ColonialYield, simYear,
+		detail.TaxMod, detail.TradeMod,
 	)
 	game.PopulateLastYearLedger(
 		&econ,
@@ -1135,6 +1136,7 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts,
 		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
 		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, detail.ColonialYield, simYear,
+		detail.TaxMod, detail.TradeMod,
 	)
 	game.PopulateLastYearLedger(
 		&econ,
@@ -1636,6 +1638,7 @@ func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
 			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
+			c.TaxMod, c.TradeMod,
 		)
 
 		// Fiscal stress index: debt/deficit severity, reserve exhaustion, tax drag

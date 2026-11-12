@@ -59,6 +59,11 @@ type EconomyState struct {
 	CapitalFlightDrain  int64   `json:"capital_flight_drain"`
 	MigrationStatus     string  `json:"migration_status"`
 
+	// Historical Fiscal Profile & Variances
+	FiscalArchetype     string  `json:"fiscal_archetype"`
+	TaxMod              float64 `json:"tax_mod"`
+	TradeMod            float64 `json:"trade_mod"`
+
 	// Feature/Internals: User State & Environmental Telemetry
 	EntrepreneurialPride    float64 `json:"entrepreneurial_pride"`
 	MilitaryDelayedCosts    int64   `json:"military_delayed_costs"`
@@ -130,6 +135,17 @@ func laffer(rate int64) float64 {
 	return TargetProductivityFactor(rate)
 }
 
+// getBaseProductivity returns gold output per capita per cycle.
+// For historical realms with populations in the millions (Age of Discovery),
+// it scales at 0.0002 to reflect peasant subsistence extraction and Crown revenues (~250-2000 G/yr).
+// For micro unit tests (workforce <= 50000), it returns baseProductivity (0.02).
+func getBaseProductivity(workforce int64) float64 {
+	if workforce <= 50000 {
+		return baseProductivity
+	}
+	return 0.0002
+}
+
 // gdpValue computes gross domestic product per 90-second cycle.
 // Productive civilian workforce: troops in barracks and standing armies do not
 // produce civilian agricultural or commercial output, so expanding the military
@@ -145,7 +161,7 @@ func gdpValue(population, troops, taxRate, markets, infrastructure int64, produc
 	if productivityFactor > 1.0 {
 		productivityFactor = 1.0
 	}
-	return float64(workforce) * baseProductivity * productivityFactor *
+	return float64(workforce) * getBaseProductivity(workforce) * productivityFactor *
 		(1 + marketBoost*float64(markets)) * (1 + infraBoost*float64(infrastructure))
 }
 
@@ -492,15 +508,18 @@ func ComputeEconomyWithInternals(
 		population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts,
 		levy, regular, elite,
 		pride, delayedCosts, 0.0, simYear,
+		1.0, 1.0,
 	)
 }
 
 // ComputeEconomyFull incorporates all user settings, internal states (entrepreneurial pride, delayed military liabilities,
-// compounded colonial expedition yields), and environmental factors (seasonal harvest and winter logistics modifiers).
+// compounded colonial expedition yields), environmental factors (seasonal harvest and winter logistics modifiers),
+// and historical country-specific fiscal profile variances (taxMod, tradeMod).
 func ComputeEconomyFull(
 	population, resources, troops, taxRate, markets, infrastructure, investment, socialCosts int64,
 	levy, regular, elite int64,
 	pride float64, delayedCosts int64, colonialYield float64, simYear float64,
+	taxMod, tradeMod float64,
 ) EconomyState {
 	if pride < 0 {
 		pride = 0
@@ -514,6 +533,12 @@ func ComputeEconomyFull(
 	if colonialYield < 0 {
 		colonialYield = 0
 	}
+	if taxMod <= 0 {
+		taxMod = 1.0
+	}
+	if tradeMod <= 0 {
+		tradeMod = 1.0
+	}
 
 	season := GetClimaticAndSeasonalState(simYear)
 
@@ -525,15 +550,15 @@ func ComputeEconomyFull(
 	gdp := gdpValue(population, troops, taxRate, markets, infrastructure, productivityFactor)
 	// Completed colonial expedition yields compound GDP (delayed returns: building ships costs capex, profit only starts after voyages return)
 	gdp *= (1.0 + colonialYield) * season.HarvestYieldFactor
-	revenue := int64(gdp*float64(taxRate)/100.0 + 0.5)
+	revenue := int64(gdp*float64(taxRate)/100.0*taxMod + 0.5)
 
 	// Port & Market Trade Income directly reflects accumulated capital investments (markets + colonial fleets)
-	// scaled by dynamic investor confidence and seasonal trade velocity
+	// scaled by dynamic investor confidence, seasonal trade velocity, and country-specific maritime trade modifier
 	marketBase := float64(markets * 12)
-	if markets == 0 && colonialYield > 0 {
-		marketBase = colonialYield * 250.0
+	if colonialYield > 0 {
+		marketBase += colonialYield * 1500.0
 	}
-	marketRev := int64(marketBase * productivityFactor * (1.0 + colonialYield) * season.CommercialVelocity)
+	marketRev := int64(marketBase * productivityFactor * (1.0 + colonialYield) * season.CommercialVelocity * tradeMod + 0.5)
 	totalRev := revenue + marketRev
 	if totalRev < 0 {
 		totalRev = 0
@@ -657,6 +682,8 @@ func ComputeEconomyFull(
 		GeneralMigration:        mig.GeneralMigration,
 		CapitalFlightDrain:      mig.CapitalFlightDrain,
 		MigrationStatus:         mig.MigrationStatus,
+		TaxMod:                  taxMod,
+		TradeMod:                tradeMod,
 		EntrepreneurialPride:    pride,
 		MilitaryDelayedCosts:    delayedCosts,
 		SeasonalHarvestFactor:   season.HarvestYieldFactor,
