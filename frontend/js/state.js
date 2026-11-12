@@ -55,6 +55,7 @@ export const state = {
   showMapLabels: true, // Control switch: show/hide name plate abbreviations on base map
   mapResolution:
     (typeof localStorage !== "undefined" && localStorage.getItem("mapResolution")) || "fast", // "fast" | "high_res" | "realistic"
+  expeditionPricing: [], // Dynamic era pricing table from server
 };
 
 // Initialize session from localStorage if available
@@ -113,6 +114,68 @@ export function setKingdoms(kingdoms) {
 
 export function setTroops(troops) {
   state.troops = troops;
+}
+
+export function resetAllUserVariablesToDiscovery() {
+  state.troops = {};
+  state.territoryDetails = {};
+  state.lastEconomy = null;
+
+  const resetVitals = (k) => {
+    if (!k) return;
+    // Military variables
+    k.troops = 0;
+    k.troops_levy = 0;
+    k.troops_regular = 0;
+    k.troops_elite = 0;
+    k.central_troops = 0;
+    k.border_troops = { N: 0, S: 0, E: 0, W: 0 };
+    k.fort_n = 0;
+    k.fort_s = 0;
+    k.fort_e = 0;
+    k.fort_w = 0;
+    k.military_delayed_costs = 0;
+    k.last_military_exp = 0;
+
+    // Trade & Economic variables
+    k.colonial_progress = 0.0;
+    k.colonial_yield = 0.0;
+    k.colonial_fleets = 0;
+    k.markets = 0;
+    k.infrastructure = 0;
+    k.investment = 0;
+    k.social_costs = 0;
+    k.economy_rate = 50;
+    k.entrepreneurial_pride = 100.0;
+    k.last_tax_revenue = 0;
+    k.last_market_income = 0;
+    k.last_social_exp = 0;
+    k.last_investment_exp = 0;
+    k.last_total_exp = 0;
+    k.last_budget_balance = 0;
+    k.last_migration = 0;
+    if (k.economy) {
+      k.economy.market_revenue = 0;
+      k.economy.last_market_income = 0;
+    }
+
+    // Baseline resources & population if available
+    if (k.base_resources) k.resources = k.base_resources;
+    if (k.base_population) k.population = k.base_population;
+  };
+
+  resetVitals(state.myKingdom);
+  if (Array.isArray(state.kingdoms)) {
+    state.kingdoms.forEach(resetVitals);
+  }
+  if (Array.isArray(state.allKingdoms)) {
+    state.allKingdoms.forEach(resetVitals);
+  }
+  // NOTE: state.expeditionPricing (the Capex matrix) is explicitly PRESERVED!
+}
+
+export function clearAllMilitaryVariables() {
+  resetAllUserVariablesToDiscovery();
 }
 
 export function setMapResolutionState(resolution) {
@@ -193,12 +256,21 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
         state.troops[raw.id] = { central: raw.troops, borders: { N: 0, S: 0, E: 0, W: 0 } };
       } else {
         state.troops[raw.id].central = raw.troops;
+        if (raw.troops === 0 || currentYear <= 1500.01) {
+          state.troops[raw.id].borders = { N: 0, S: 0, E: 0, W: 0 };
+        }
+      }
+      if (currentYear <= 1500.01) {
+        state.troops[raw.id].central = 0;
+        state.troops[raw.id].borders = { N: 0, S: 0, E: 0, W: 0 };
       }
     }
 
     byCode.set(raw.code, {
       ...meta,
       ...raw,
+      id: raw.id,
+      country_id: raw.country_id || raw.id,
       base_population: raw.base_population ?? raw.population ?? meta.population ?? 1000000,
       base_resources: raw.base_resources ?? raw.resources ?? meta.resources ?? 500,
       isIsland: Boolean(raw.isIsland || raw.is_island || meta.is_island),
@@ -256,12 +328,44 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
       if (typeof mk.population === "number") state.myKingdom.population = mk.population;
       if (typeof mk.resources === "number") state.myKingdom.resources = mk.resources;
       if (typeof mk.troops === "number") state.myKingdom.troops = mk.troops;
-      if (mk.economy) state.myKingdom.economy = mk.economy;
-      if (mk.economy_rate !== undefined) state.myKingdom.economy_rate = mk.economy_rate;
-      if (mk.investment !== undefined) state.myKingdom.investment = mk.investment;
-      if (mk.social_costs !== undefined) state.myKingdom.social_costs = mk.social_costs;
-      if (mk.markets !== undefined) state.myKingdom.markets = mk.markets;
-      if (mk.infrastructure !== undefined) state.myKingdom.infrastructure = mk.infrastructure;
+      if (typeof mk.troops_levy === "number") state.myKingdom.troops_levy = mk.troops_levy;
+      if (typeof mk.troops_regular === "number") state.myKingdom.troops_regular = mk.troops_regular;
+      if (typeof mk.troops_elite === "number") state.myKingdom.troops_elite = mk.troops_elite;
+      if (typeof mk.fort_n === "number") state.myKingdom.fort_n = mk.fort_n;
+      if (typeof mk.fort_s === "number") state.myKingdom.fort_s = mk.fort_s;
+      if (typeof mk.fort_e === "number") state.myKingdom.fort_e = mk.fort_e;
+      if (typeof mk.fort_w === "number") state.myKingdom.fort_w = mk.fort_w;
+      if (typeof mk.military_delayed_costs === "number") state.myKingdom.military_delayed_costs = mk.military_delayed_costs;
+      if (currentYear <= 1500.01) {
+        state.myKingdom.troops = 0;
+        state.myKingdom.troops_levy = 0;
+        state.myKingdom.troops_regular = 0;
+        state.myKingdom.troops_elite = 0;
+        state.myKingdom.fort_n = 0;
+        state.myKingdom.fort_s = 0;
+        state.myKingdom.fort_e = 0;
+        state.myKingdom.fort_w = 0;
+        state.myKingdom.military_delayed_costs = 0;
+        state.myKingdom.last_military_exp = 0;
+        state.myKingdom.colonial_progress = 0.0;
+        state.myKingdom.colonial_yield = 0.0;
+        state.myKingdom.colonial_fleets = 0;
+        state.myKingdom.markets = 0;
+        state.myKingdom.infrastructure = 0;
+        state.myKingdom.investment = 0;
+        state.myKingdom.social_costs = 0;
+        state.myKingdom.economy_rate = 50;
+      } else {
+        if (mk.economy) state.myKingdom.economy = mk.economy;
+        if (mk.economy_rate !== undefined) state.myKingdom.economy_rate = mk.economy_rate;
+        if (mk.investment !== undefined) state.myKingdom.investment = mk.investment;
+        if (mk.social_costs !== undefined) state.myKingdom.social_costs = mk.social_costs;
+        if (mk.markets !== undefined) state.myKingdom.markets = mk.markets;
+        if (mk.infrastructure !== undefined) state.myKingdom.infrastructure = mk.infrastructure;
+        if (typeof mk.colonial_progress === "number") state.myKingdom.colonial_progress = mk.colonial_progress;
+        if (typeof mk.colonial_yield === "number") state.myKingdom.colonial_yield = mk.colonial_yield;
+        if (typeof mk.colonial_fleets === "number") state.myKingdom.colonial_fleets = mk.colonial_fleets;
+      }
     }
   }
 
@@ -456,7 +560,8 @@ export function syncKingdomsForYear(rawKingdoms, currentYear) {
   if (state.myKingdom) {
     const updatedMy = active.find((k) => k.code === state.myKingdom.code);
     if (updatedMy) {
-      state.myKingdom = updatedMy;
+      const preservedCid = state.myKingdom.country_id || state.myKingdom.id || updatedMy.id;
+      state.myKingdom = { ...state.myKingdom, ...updatedMy, country_id: preservedCid };
     }
   }
 

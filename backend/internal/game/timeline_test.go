@@ -96,5 +96,17 @@ func TestTimelineMutations(t *testing.T) {
 	if resetState.IsPaused {
 		t.Fatalf("Expected IsPaused false after reset, got true")
 	}
+
+	for _, c := range resetState.Countries {
+		if c.Troops != 0 || c.TroopsLevy != 0 || c.TroopsRegular != 0 || c.TroopsElite != 0 {
+			t.Errorf("Expected 0 troops for %s, got total=%d levy=%d reg=%d elite=%d", c.Code, c.Troops, c.TroopsLevy, c.TroopsRegular, c.TroopsElite)
+		}
+		if c.FortN != 0 || c.FortS != 0 || c.FortE != 0 || c.FortW != 0 {
+			t.Errorf("Expected 0 forts for %s, got N=%d S=%d E=%d W=%d", c.Code, c.FortN, c.FortS, c.FortE, c.FortW)
+		}
+		if c.MilitaryDelayedCosts != 0 {
+			t.Errorf("Expected 0 military delayed costs for %s, got %d", c.Code, c.MilitaryDelayedCosts)
+		}
+	}
 }
 

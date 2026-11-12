@@ -1,6 +1,6 @@
 // main.js - Application bootstrap & orchestrator for Kingdom Conquest
 
-import { state, clearSession, syncKingdomsForYear } from "./state.js";
+import { state, clearSession, syncKingdomsForYear, clearAllMilitaryVariables, resetAllUserVariablesToDiscovery } from "./state.js";
 
 // Optional Polynesian / Pacific island nations (Advanced Play Meta Theme)
 const POLYNESIAN_ISLES = new Set(["WSM", "TON", "FJI", "VUT", "SLB", "FSM"]);
@@ -13,6 +13,8 @@ import {
   apiGetAdminGameMonitor,
   apiPostScenarioTune,
   apiAdminResetGame,
+  apiGetExpeditionPricing,
+  apiUpdateExpeditionPricing,
   readErrorMessage,
   onUnauthorized,
 } from "./api.js";
@@ -76,6 +78,7 @@ import {
   openKingdomCommandCenter,
   closeKingdomCommandCenter,
   refreshKingdomCommandCenter,
+  resetCommandCenterMilitaryState,
   switchConsoleBay,
   triggerCollectTaxes,
   triggerUpgradeMarket,
@@ -95,6 +98,9 @@ import {
   setSocialRate,
   adjustBudgetDial,
   triggerAutoBalanceBudget,
+  updateGazetteHeadline,
+  updateEconomyHintsLive,
+  resetCommandCenterStateToDiscovery,
 } from "./ui/console.js";
 import {
   initAdminCharts,
@@ -108,6 +114,7 @@ registerActionCallbacks({
   openKingdomCommandCenter,
   closeKingdomCommandCenter,
   refreshKingdomCommandCenter,
+  resetCommandCenterMilitaryState,
   renderKingdomList,
   refreshMyKingdomStats,
   checkMyKingdom,
@@ -124,8 +131,9 @@ onSocketStateChange((payload) => {
   if (isOverseerAnalyticsOpen) {
     refreshOverseerAnalytics();
   }
-  if (state.myKingdom && state.myKingdom.country_id) {
-    const mk = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (state.myKingdom && myCid) {
+    const mk = state.kingdoms.find((k) => k.id === myCid);
     if (!mk || !mk.owner_id || !isCountryOwnedByCurrentUser(mk)) {
       checkMyKingdom();
     } else {
@@ -142,16 +150,29 @@ onSocketStateChange((payload) => {
       if (resEl) resEl.textContent = (shown.resources !== undefined ? shown.resources : 0).toLocaleString();
     }
   }
+
+  // Update live Imperial Gazette news ticker from broadcasted actions
+  if (Array.isArray(payload?.actions) && payload.actions.length > 0) {
+    const newsAction = payload.actions.find((a) => a.action_type === "news");
+    if (newsAction && newsAction.description) {
+      updateGazetteHeadline(newsAction.description);
+    }
+  }
 });
 
 // React to Historical Era transitions (adding new unowned countries to the map in each Age)
 onEraChange((newEra, yearInt, prevEraId) => {
+  if (newEra.id === "discovery" || yearInt <= 1500) {
+    resetAllUserVariablesToDiscovery();
+    resetCommandCenterStateToDiscovery();
+  }
   syncKingdomsForYear(state.allKingdoms, yearInt);
   resizeCanvas();
   renderMap();
   renderKingdomList();
   refreshMyKingdomStats();
-  if (state.myKingdom && state.myKingdom.country_id) {
+  const eraCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (state.myKingdom && eraCid) {
     refreshKingdomCommandCenter();
   }
 
@@ -260,12 +281,13 @@ export async function loadKingdoms() {
 }
 
 export async function loadAllTroops() {
-  if (!state.myKingdom || !state.myKingdom.country_id) return;
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (!state.myKingdom || !myCid) return;
   try {
     const res = await apiGetTroops();
     if (!res.ok) return;
     const data = await res.json();
-    if (data && data.country_id === state.myKingdom.country_id) {
+    if (data && (data.country_id === myCid)) {
       state.troops[data.country_id] = {
         central: data.central || 0,
         borders: data.borders || { N: 0, S: 0, E: 0, W: 0 },
@@ -433,8 +455,9 @@ export async function claimKingdom() {
 }
 
 export function refreshMyKingdomStats() {
-  if (!state.myKingdom || !state.myKingdom.country_id) return;
-  const country = state.kingdoms.find((k) => k.id === state.myKingdom.country_id);
+  const myCid = state.myKingdom ? (state.myKingdom.country_id || state.myKingdom.id) : null;
+  if (!state.myKingdom || !myCid) return;
+  const country = state.kingdoms.find((k) => k.id === myCid);
   if (!country) return;
   const nameEl = document.getElementById("my-kingdom-name");
   const popEl = document.getElementById("my-kingdom-pop");
@@ -868,6 +891,9 @@ window.refreshOverseerAnalytics = refreshOverseerAnalytics;
 window.adminJumpEra = adminJumpEra;
 window.adminSetSpeed = adminSetSpeed;
 window.adminTogglePause = adminTogglePause;
+window.onAdminPricingInputChange = onAdminPricingInputChange;
+window.saveAdminExpeditionPricing = saveAdminExpeditionPricing;
+window.resetAdminExpeditionPricingDefaults = resetAdminExpeditionPricingDefaults;
 
 // -------------------------------------------------------------
 // IMPERIAL GAME MASTER & ADMIN CONSOLE CONTROLLER
@@ -1162,10 +1188,220 @@ function renderAdminDashboardData(data, tbody) {
       tbody.appendChild(tr);
     });
   }
+
+  // Populate Colonial Expedition Pricing Matrix
+  if (data.expedition_pricing) {
+    state.expeditionPricing = data.expedition_pricing;
+    renderAdminExpeditionPricing(data.expedition_pricing);
+  }
+}
+
+export function renderAdminExpeditionPricing(pricingList) {
+  const tbody = document.getElementById("admin-expedition-pricing-tbody");
+  if (!tbody) return;
+
+  const activeEl = document.activeElement;
+  if (activeEl && tbody.contains(activeEl)) {
+    // Admin is actively typing in an input cell; do not overwrite live inputs
+    return;
+  }
+
+  const list = Array.isArray(pricingList) && pricingList.length > 0
+    ? pricingList
+    : (Array.isArray(state.expeditionPricing) && state.expeditionPricing.length > 0 ? state.expeditionPricing : []);
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">No pricing records found.</td></tr>`;
+    return;
+  }
+
+  const existingRows = tbody.querySelectorAll("tr[data-era-id]");
+  if (existingRows.length === list.length) {
+    let allFound = true;
+    list.forEach((p) => {
+      const row = tbody.querySelector(`tr[data-era-id="${p.era_id}"]`);
+      if (!row) {
+        allFound = false;
+        return;
+      }
+      const costInput = row.querySelector(`input[data-field="cost_per_pct"]`);
+      const gestInput = row.querySelector(`input[data-field="gestation_years"]`);
+      const yieldInput = row.querySelector(`input[data-field="yield_bonus"]`);
+      const annualSpan = row.querySelector(`#pricing-annual-${p.era_id}`);
+      const totalSpan = row.querySelector(`#pricing-total-${p.era_id}`);
+
+      if (costInput && costInput !== activeEl) costInput.value = Number(p.cost_per_pct).toFixed(1);
+      if (gestInput && gestInput !== activeEl) gestInput.value = Number(p.gestation_years).toFixed(2);
+      if (yieldInput && yieldInput !== activeEl) yieldInput.value = Number(p.yield_bonus).toFixed(2);
+      if (annualSpan) annualSpan.textContent = `${Math.round(p.cost_per_pct * 100).toLocaleString()} G`;
+      if (totalSpan) totalSpan.textContent = `${Math.round(p.cost_per_pct * 100 * p.gestation_years).toLocaleString()} G`;
+    });
+    if (allFound) return;
+  }
+
+  tbody.innerHTML = "";
+  list.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-era-id", p.era_id);
+    const spanStr = `${p.start_year} - ${p.end_year >= 9999 ? "Present" : p.end_year}`;
+    const annualCost = Math.round(p.cost_per_pct * 100);
+    const totalCost = Math.round(annualCost * p.gestation_years);
+
+    tr.innerHTML = `
+      <td><span class="admin-user-pill" style="font-size:0.8rem;">${escapeHTML(p.era_id)}</span></td>
+      <td><strong>${escapeHTML(p.era_name)}</strong></td>
+      <td><span style="color:#94a3b8; font-size:0.82rem;">${escapeHTML(spanStr)}</span></td>
+      <td>
+        <input type="number" step="0.5" min="0.1" max="5000" class="admin-input-num" data-era="${escapeHTML(p.era_id)}" data-field="cost_per_pct" value="${Number(p.cost_per_pct).toFixed(1)}" style="width: 75px;" oninput="onAdminPricingInputChange('${escapeHTML(p.era_id)}')">
+      </td>
+      <td><span id="pricing-annual-${escapeHTML(p.era_id)}" style="color:#ffd700; font-weight:600;">${annualCost.toLocaleString()} G</span></td>
+      <td>
+        <input type="number" step="0.1" min="0.1" max="20" class="admin-input-num" data-era="${escapeHTML(p.era_id)}" data-field="gestation_years" value="${Number(p.gestation_years).toFixed(2)}" style="width: 65px;" oninput="onAdminPricingInputChange('${escapeHTML(p.era_id)}')">
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0.01" max="1.0" class="admin-input-num" data-era="${escapeHTML(p.era_id)}" data-field="yield_bonus" value="${Number(p.yield_bonus).toFixed(2)}" style="width: 60px;" oninput="onAdminPricingInputChange('${escapeHTML(p.era_id)}')">
+      </td>
+      <td><span id="pricing-total-${escapeHTML(p.era_id)}" style="color:#38bdf8; font-weight:600;">${totalCost.toLocaleString()} G</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+export function onAdminPricingInputChange(eraId) {
+  const tbody = document.getElementById("admin-expedition-pricing-tbody");
+  if (!tbody) return;
+  const row = tbody.querySelector(`tr[data-era-id="${eraId}"]`);
+  if (!row) return;
+
+  const costInput = row.querySelector(`input[data-field="cost_per_pct"]`);
+  const gestInput = row.querySelector(`input[data-field="gestation_years"]`);
+  const annualSpan = row.querySelector(`#pricing-annual-${eraId}`);
+  const totalSpan = row.querySelector(`#pricing-total-${eraId}`);
+
+  const cost = parseFloat(costInput?.value || "0");
+  const gest = parseFloat(gestInput?.value || "0");
+
+  const annual = Math.round(cost * 100);
+  const total = Math.round(annual * gest);
+
+  if (annualSpan) annualSpan.textContent = `${annual.toLocaleString()} G`;
+  if (totalSpan) totalSpan.textContent = `${total.toLocaleString()} G`;
+}
+
+export async function saveAdminExpeditionPricing() {
+  const tbody = document.getElementById("admin-expedition-pricing-tbody");
+  const msgEl = document.getElementById("admin-pricing-status-msg");
+  if (!tbody) return;
+
+  const rows = tbody.querySelectorAll("tr[data-era-id]");
+  const payload = [];
+
+  for (const row of rows) {
+    const eraId = row.getAttribute("data-era-id");
+    const costInput = row.querySelector(`input[data-field="cost_per_pct"]`);
+    const gestInput = row.querySelector(`input[data-field="gestation_years"]`);
+    const yieldInput = row.querySelector(`input[data-field="yield_bonus"]`);
+
+    const cost = parseFloat(costInput?.value);
+    const gest = parseFloat(gestInput?.value);
+    const yld = parseFloat(yieldInput?.value);
+
+    if (isNaN(cost) || cost <= 0) {
+      if (msgEl) {
+        msgEl.textContent = `Error: Invalid cost per % for ${eraId}`;
+        msgEl.style.color = "#f87171";
+      }
+      return;
+    }
+    if (isNaN(gest) || gest <= 0) {
+      if (msgEl) {
+        msgEl.textContent = `Error: Invalid gestation duration for ${eraId}`;
+        msgEl.style.color = "#f87171";
+      }
+      return;
+    }
+    if (isNaN(yld) || yld <= 0) {
+      if (msgEl) {
+        msgEl.textContent = `Error: Invalid yield bonus for ${eraId}`;
+        msgEl.style.color = "#f87171";
+      }
+      return;
+    }
+
+    payload.push({
+      era_id: eraId,
+      cost_per_pct: cost,
+      gestation_years: gest,
+      yield_bonus: yld,
+    });
+  }
+
+  if (msgEl) {
+    msgEl.textContent = "⏳ Saving pricing updates...";
+    msgEl.style.color = "#ffd700";
+  }
+
+  try {
+    const res = await apiUpdateExpeditionPricing(payload);
+    if (!res.ok) {
+      throw new Error(await readErrorMessage(res, "Failed to update expedition pricing"));
+    }
+    state.expeditionPricing = payload;
+    updateEconomyHintsLive();
+
+    const discRow = payload.find((p) => p.era_id === "discovery");
+    if (msgEl) {
+      msgEl.textContent = `✓ Pricing saved! (Discovery: ${discRow?.cost_per_pct} G/%)`;
+      msgEl.style.color = "#4ade80";
+      setTimeout(() => {
+        if (msgEl) msgEl.textContent = "";
+      }, 4000);
+    }
+    showToast("Colonial expedition pricing matrix updated successfully", "success");
+  } catch (err) {
+    console.error("Save pricing error:", err);
+    if (msgEl) {
+      msgEl.textContent = `Error: ${err.message}`;
+      msgEl.style.color = "#f87171";
+    }
+    showToast(`Failed to save pricing: ${err.message}`, "error");
+  }
+}
+
+export async function resetAdminExpeditionPricingDefaults() {
+  const defaults = [
+    { era_id: "discovery", cost_per_pct: 12.0, gestation_years: 2.0, yield_bonus: 0.05 },
+    { era_id: "revolt", cost_per_pct: 18.0, gestation_years: 1.5, yield_bonus: 0.05 },
+    { era_id: "independence", cost_per_pct: 30.0, gestation_years: 1.0, yield_bonus: 0.06 },
+    { era_id: "decolonisation", cost_per_pct: 60.0, gestation_years: 0.5, yield_bonus: 0.08 },
+    { era_id: "modern", cost_per_pct: 120.0, gestation_years: 0.35, yield_bonus: 0.10 },
+  ];
+
+  const tbody = document.getElementById("admin-expedition-pricing-tbody");
+  if (tbody) {
+    defaults.forEach((def) => {
+      const row = tbody.querySelector(`tr[data-era-id="${def.era_id}"]`);
+      if (row) {
+        const costInput = row.querySelector(`input[data-field="cost_per_pct"]`);
+        const gestInput = row.querySelector(`input[data-field="gestation_years"]`);
+        const yieldInput = row.querySelector(`input[data-field="yield_bonus"]`);
+        if (costInput) costInput.value = def.cost_per_pct.toFixed(1);
+        if (gestInput) gestInput.value = def.gestation_years.toFixed(2);
+        if (yieldInput) yieldInput.value = def.yield_bonus.toFixed(2);
+        onAdminPricingInputChange(def.era_id);
+      }
+    });
+  }
+
+  await saveAdminExpeditionPricing();
 }
 
 export function adminJumpEra(year) {
   jumpToYear(year);
+  if (parseFloat(year) <= 1500.01) {
+    resetAllUserVariablesToDiscovery();
+    resetCommandCenterStateToDiscovery();
+  }
   setTimeout(refreshAdminDashboard, 200);
 }
 
@@ -1279,11 +1515,14 @@ export async function adminResetStage3Execute() {
     const data = await res.json();
     showToast("🔥 " + (data.message || "World reset to Year 1500!"), "success");
     logMessage("CRITICAL: Master World Reset to Year 1500 executed by Imperial Admin.");
+    resetAllUserVariablesToDiscovery();
+    resetCommandCenterStateToDiscovery();
     adminResetSetStage(1);
     const input = document.getElementById("admin-reset-confirm-input");
     if (input) input.value = "";
     refreshAdminDashboard();
     checkMyKingdom();
+    renderMap();
   } catch (err) {
     console.error("Error executing world reset:", err);
     showToast(err.message || "Error executing world reset", "error");
@@ -1802,6 +2041,17 @@ async function initApp() {
   // 1. Authoritative Server Timeline is the Single Source of Truth: sync before starting clock
   await initServerTimelineSync();
   startClock();
+
+  // Pre-fetch expedition pricing matrix
+  apiGetExpeditionPricing()
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (Array.isArray(data) && data.length > 0) {
+        state.expeditionPricing = data;
+        updateEconomyHintsLive();
+      }
+    })
+    .catch((err) => console.warn("Could not pre-fetch expedition pricing:", err));
 
   if (state.token && state.currentUser) {
     // Validate session with server before entering game screen

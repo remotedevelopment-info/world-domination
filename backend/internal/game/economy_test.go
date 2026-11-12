@@ -1,6 +1,11 @@
 package game
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"kingdom-conquest/backend/internal/database"
+)
 
 func TestComputeEconomyDirections(t *testing.T) {
 
@@ -406,3 +411,300 @@ func TestWealthFactorAndSegmentedMigrationThresholds(t *testing.T) {
 		t.Errorf("expected negative net migration under 80%% tax, got %d", flightMig.NetMigration)
 	}
 }
+
+func TestColonialGestationAndLexicon(t *testing.T) {
+	// 1. Gestation period shrinks as eras advance
+	discGest := GetColonialGestationYears(1500.0)
+	revoltGest := GetColonialGestationYears(1760.0)
+	indGest := GetColonialGestationYears(1880.0)
+	decolGest := GetColonialGestationYears(1940.0)
+	modGest := GetColonialGestationYears(2005.0)
+
+	if discGest != 2.0 || revoltGest != 1.5 || indGest != 1.0 || decolGest != 0.5 || modGest != 0.35 {
+		t.Errorf("unexpected gestation periods: disc=%f, revolt=%f, ind=%f, decol=%f, mod=%f",
+			discGest, revoltGest, indGest, decolGest, modGest)
+	}
+
+	// 2. Era keys
+	if GetEraKey(1500) != "discovery" || GetEraKey(1760) != "revolt" || GetEraKey(1880) != "independence" ||
+		GetEraKey(1940) != "decolonisation" || GetEraKey(2000) != "modern" {
+		t.Errorf("unexpected era key mapping")
+	}
+
+	// 3. Port naming
+	if RealmPort("ENG", "England") != "Portsmouth" {
+		t.Errorf("expected Portsmouth for ENG, got %s", RealmPort("ENG", "England"))
+	}
+	if RealmPort("SPA", "Spain") != "Seville" {
+		t.Errorf("expected Seville for SPA, got %s", RealmPort("SPA", "Spain"))
+	}
+
+	// 4. Milestone, Return, and Abandonment News generators
+	m1 := GenerateColonialMilestoneDispatch("discovery", "England", "Portsmouth", 20.0, 4.0)
+	if m1 == "" || !strings.Contains(m1, "Portsmouth") {
+		t.Errorf("expected valid milestone dispatch, got: %s", m1)
+	}
+
+	ret := GenerateColonialVoyageReturnDispatch("discovery", "England", "Portsmouth", 10, 2)
+	if !strings.Contains(ret, "Fleet 2") || !strings.Contains(ret, "+10%") {
+		t.Errorf("expected valid return dispatch, got: %s", ret)
+	}
+
+	abandon := GenerateColonialAbandonmentDispatch("discovery", "England", "Portsmouth")
+	if !strings.Contains(abandon, "unpaid shipwrights") {
+		t.Errorf("expected valid abandonment dispatch, got: %s", abandon)
+	}
+
+	// 5. Colonial trade yield bonus compounds GDP & market revenue in ComputeEconomyFull
+	zeroColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25, 1.0, 1.0)
+	boostedColonialEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.15, 1500.25, 1.0, 1.0)
+
+	if boostedColonialEcon.GDP <= zeroColonialEcon.GDP {
+		t.Errorf("expected +15%% colonial yield to increase GDP (%d vs %d)", boostedColonialEcon.GDP, zeroColonialEcon.GDP)
+	}
+	if boostedColonialEcon.MarketRevenue <= zeroColonialEcon.MarketRevenue {
+		t.Errorf("expected +15%% colonial yield to boost market revenue (%d vs %d)",
+			boostedColonialEcon.MarketRevenue, zeroColonialEcon.MarketRevenue)
+	}
+
+	// 6. Increasing investment dial alone while building ships DOES NOT immediately boost GDP or trade revenue
+	noInvestEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 0, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25, 1.0, 1.0)
+	highInvestBuildingEcon := ComputeEconomyFull(1000000, 50000, 100, 30, 5, 2, 80, 0, 0, 100, 0, 100.0, 0, 0.0, 1500.25, 1.0, 1.0)
+
+	if highInvestBuildingEcon.GDP != noInvestEcon.GDP {
+		t.Errorf("expected GDP to remain unchanged while ships are under construction (delayed returns): got %d vs %d",
+			highInvestBuildingEcon.GDP, noInvestEcon.GDP)
+	}
+	if highInvestBuildingEcon.MarketRevenue != noInvestEcon.MarketRevenue {
+		t.Errorf("expected market revenue to remain unchanged while ships are under construction: got %d vs %d",
+			highInvestBuildingEcon.MarketRevenue, noInvestEcon.MarketRevenue)
+	}
+	if highInvestBuildingEcon.InvestmentExpenditure <= 0 {
+		t.Errorf("expected high investment expenditure during shipbuilding capex, got %d",
+			highInvestBuildingEcon.InvestmentExpenditure)
+	}
+
+	// 7. Era-specific annual expenditure and total multi-year project commitment costs (Default: 12 per %)
+	if GetEraExpeditionAnnualCost(1500) != 1200.0 || GetEraExpeditionTotalCost(1500) != 2400.0 {
+		t.Errorf("expected Discovery: 1200 gold/yr for 2 yrs (total 2400), got annual=%f, total=%f",
+			GetEraExpeditionAnnualCost(1500), GetEraExpeditionTotalCost(1500))
+	}
+	if GetEraExpeditionAnnualCost(1760) != 1800.0 || GetEraExpeditionTotalCost(1760) != 2700.0 {
+		t.Errorf("expected Revolt: 1800 gold/yr for 1.5 yrs (total 2700), got annual=%f, total=%f",
+			GetEraExpeditionAnnualCost(1760), GetEraExpeditionTotalCost(1760))
+	}
+	if GetEraExpeditionAnnualCost(1880) != 3000.0 || GetEraExpeditionTotalCost(1880) != 3000.0 {
+		t.Errorf("expected Independence: 3000 gold/yr for 1.0 yrs (total 3000), got annual=%f, total=%f",
+			GetEraExpeditionAnnualCost(1880), GetEraExpeditionTotalCost(1880))
+	}
+
+	// 8. Solvency check: pre-modern realms must have adequate reserves to support expedition spending
+	// In Discovery with 600 gold: 100% requires 2400 gold -> rejected, max affordable is 25% (600 gold)
+	allowed100, maxAff100, req100, _ := CheckExpeditionAffordability(600, 100, 1500)
+	if allowed100 || maxAff100 != 25 || req100 != 2400 {
+		t.Errorf("expected 100%% investment rejected with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
+			allowed100, maxAff100, req100)
+	}
+
+	allowed25, maxAff25, req25, _ := CheckExpeditionAffordability(600, 25, 1500)
+	if !allowed25 || maxAff25 != 25 || req25 != 600 {
+		t.Errorf("expected 25%% investment allowed with 600 gold in Discovery: allowed=%v, maxAff=%d, req=%d",
+			allowed25, maxAff25, req25)
+	}
+
+	// Modern Era (1989+): Deficits permitted, so investments are allowed even with 0 reserves
+	allowedModern, _, _, _ := CheckExpeditionAffordability(0, 100, 2000)
+	if !allowedModern {
+		t.Errorf("expected deficit allowed in Modern Age even with 0 reserves")
+	}
+
+	// 9. Zero tax rate with 60% expedition investment strictly produces a -720 gold/year exchequer deficit (12 * 60)
+	zeroTaxExpEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 1.0, 1.0)
+	if zeroTaxExpEcon.TaxRevenue != 0 {
+		t.Errorf("expected 0 tax revenue under 0%% tax rate, got %d", zeroTaxExpEcon.TaxRevenue)
+	}
+	if zeroTaxExpEcon.InvestmentExpenditure != 720 {
+		t.Errorf("expected 60%% investment in Discovery to cost 720 gold/yr (12 * 60), got %d", zeroTaxExpEcon.InvestmentExpenditure)
+	}
+	if zeroTaxExpEcon.BudgetBalance != -720 || zeroTaxExpEcon.EffectiveBalance != -720 {
+		t.Errorf("expected net budget balance of -720 gold/yr (reserves drain), got %d / %d",
+			zeroTaxExpEcon.BudgetBalance, zeroTaxExpEcon.EffectiveBalance)
+	}
+
+	// 10. Completed voyage grants permanent trade yield proportional to investment dial
+	baseYieldEcon := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 1.0, 1.0)
+	completed60Econ := ComputeEconomyFull(4000000, 5000, 0, 0, 0, 0, 60, 0, 0, 0, 0, 100.0, 0, 0.03, 1500.0, 1.0, 1.0)
+	if completed60Econ.GDP <= baseYieldEcon.GDP {
+		t.Errorf("expected +3%% trade yield from completed 60%% fleet to raise GDP (%d vs %d)",
+			completed60Econ.GDP, baseYieldEcon.GDP)
+	}
+
+	// 11. Custom admin pricing update adjusts annual cost and gestation
+	table := GetExpeditionPricingTable()
+	if len(table) < 5 {
+		t.Fatalf("expected at least 5 era pricing configs, got %d", len(table))
+	}
+	table[0].CostPerPct = 20.0
+	table[0].GestationYears = 1.0
+	SetExpeditionPricingTable(table)
+	if GetEraExpeditionCostPerPct(1500) != 20.0 || GetColonialGestationYears(1500) != 1.0 {
+		t.Errorf("expected updated admin pricing 20 G/%% and 1.0 yr gestation, got %f and %f",
+			GetEraExpeditionCostPerPct(1500), GetColonialGestationYears(1500))
+	}
+	// Restore default
+	table[0].CostPerPct = 12.0
+	table[0].GestationYears = 2.0
+	SetExpeditionPricingTable(table)
+}
+
+func TestFairTaxThresholdAndHyperbolicLag(t *testing.T) {
+	// 1. Fair Tax Threshold: Under 25%, zero effect on future productivity (target = 1.0)
+	for tax := int64(0); tax <= 25; tax += 5 {
+		if factor := TargetProductivityFactor(tax); factor != 1.0 {
+			t.Errorf("expected TargetProductivityFactor(%d) == 1.0 under fair tax, got %f", tax, factor)
+		}
+	}
+
+	// 2. Hyperbolic Curve Above 25%: Gradual drop-off becoming progressively steeper
+	f35 := TargetProductivityFactor(35)
+	f50 := TargetProductivityFactor(50)
+	f75 := TargetProductivityFactor(75)
+	f100 := TargetProductivityFactor(100)
+
+	if f35 < 0.94 || f35 > 0.98 {
+		t.Errorf("expected mild 2-6%% drag at 35%% tax, got %f", 1.0-f35)
+	}
+	if f50 >= f35 || f50 < 0.70 || f50 > 0.80 {
+		t.Errorf("expected moderate ~25%% drag at 50%% tax, got %f", 1.0-f50)
+	}
+	if f75 >= f50 || f75 < 0.40 || f75 > 0.50 {
+		t.Errorf("expected steep ~57%% drag at 75%% tax, got %f", 1.0-f75)
+	}
+	if f100 >= f75 || f100 != 0.25 {
+		t.Errorf("expected ~75%% drop at 100%% tax (floor 0.25), got %f", f100)
+	}
+
+	// 3. Capital Investments (Fleets + Markets) do not vanish overnight:
+	// Day 0 at 75% tax with high initial investor confidence (100.0 pride) retains full trade productivity
+	initialEcon := ComputeEconomyWithInternals(10000, 2000, 0, 75, 2, 0, 0, 0, 0, 0, 0, 100.0, 0, 1500.0)
+	// After 1 year at 75%, pride has only dropped partially towards 42.8%
+	tau := 2.0
+	targetPride := TargetProductivityFactor(75) * 100.0
+	prideYear1 := 100.0 + ((targetPride - 100.0) / tau) * 1.0 // ~71.4%
+	year1Econ := ComputeEconomyWithInternals(10000, 2000, 0, 75, 2, 0, 0, 0, 0, 0, 0, prideYear1, 0, 1501.0)
+
+	if year1Econ.MarketRevenue >= initialEcon.MarketRevenue {
+		t.Errorf("expected trade revenue after 1 yr to start dropping, got %d vs %d", year1Econ.MarketRevenue, initialEcon.MarketRevenue)
+	}
+	// Verify it only dropped ~25-30% rather than vanishing completely:
+	ratio := float64(year1Econ.MarketRevenue) / float64(initialEcon.MarketRevenue)
+	if ratio < 0.65 || ratio > 0.80 {
+		t.Errorf("expected ~70%% capital retention after 1 yr of high tax, got ratio %f", ratio)
+	}
+}
+
+func TestCountryFiscalProfileAndMaritimeCashflow(t *testing.T) {
+	// 1. England (ENG): Maritime Archetype (tax_mod: 0.50, trade_mod: 1.80)
+	// Population 4,500,000 at 50% tax rate
+	engBase := ComputeEconomyFull(4500000, 600, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 0.50, 1.80)
+	// Base tax revenue in Spring 1500 Little Ice Age (~0.91 harvest factor): ~205-225 gold/yr
+	if engBase.TaxRevenue < 190 || engBase.TaxRevenue > 235 {
+		t.Errorf("expected England agrarian tax revenue of ~205-225 gold/yr at 50%% tax, got %d", engBase.TaxRevenue)
+	}
+	if engBase.MarketRevenue != 0 {
+		t.Errorf("expected England initial trade revenue to be 0 without fleets/markets, got %d", engBase.MarketRevenue)
+	}
+
+	// Commission 1 caravel fleet (+5% colonial yield = 0.05):
+	// Generates 0.05 * 1500 = 75 base * 1.05 * 1.80 tradeMod = ~142 gold/yr in customs & tariffs
+	engFleet1 := ComputeEconomyFull(4500000, 600, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.05, 1500.0, 0.50, 1.80)
+	if engFleet1.MarketRevenue < 130 || engFleet1.MarketRevenue > 155 {
+		t.Errorf("expected single caravel fleet to earn ~142 gold/yr for England, got %d", engFleet1.MarketRevenue)
+	}
+
+	// Commission 3 caravel fleets (+15% colonial yield = 0.15):
+	// Generates 0.15 * 1500 = 225 base * 1.15 * 1.80 tradeMod = ~466 gold/yr
+	engFleet3 := ComputeEconomyFull(4500000, 600, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.15, 1500.0, 0.50, 1.80)
+	if engFleet3.MarketRevenue <= engBase.TaxRevenue {
+		t.Errorf("expected 3 caravel fleets to surpass England's agrarian tax revenue (%d vs %d)",
+			engFleet3.MarketRevenue, engBase.TaxRevenue)
+	}
+
+	// 2. France (FRA): Agrarian Bureaucracy (tax_mod: 1.30, trade_mod: 0.65)
+	// Population 16,000,000 at 50% tax rate
+	fraBase := ComputeEconomyFull(16000000, 850, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 1.30, 0.65)
+	// 16,000,000 * 0.0002 = 3200 GDP * 50% tax * 1.30 taxMod * 0.91 harvest factor = ~1893 gold/yr
+	if fraBase.TaxRevenue < 1800 || fraBase.TaxRevenue > 2150 {
+		t.Errorf("expected France peasant taille revenue of ~1893-2080 gold/yr, got %d", fraBase.TaxRevenue)
+	}
+
+	// 3. Republic of Venice (VEN): Merchant Republic (tax_mod: 0.15, trade_mod: 2.50)
+	// Population 1,800,000 at 50% tax rate
+	venBase := ComputeEconomyFull(1800000, 700, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 0.15, 2.50)
+	// Agrarian land tax: 1,800,000 * 0.0002 = 360 GDP * 50% * 0.15 * 0.91 = ~25 gold/yr
+	if venBase.TaxRevenue < 20 || venBase.TaxRevenue > 30 {
+		t.Errorf("expected Venice land tax of only ~25-27 gold/yr, got %d", venBase.TaxRevenue)
+	}
+	// Venice with 1 trade fleet earns 0.05 * 1500 * 1.05 * 2.50 = ~197 gold/yr (7x its agrarian tax!)
+	venFleet1 := ComputeEconomyFull(1800000, 700, 0, 50, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.05, 1500.0, 0.15, 2.50)
+	if venFleet1.MarketRevenue < 180 {
+		t.Errorf("expected Venice to earn supreme maritime tariffs (~197 gold/yr), got %d", venFleet1.MarketRevenue)
+	}
+}
+
+func TestNextPeriodBudgetAppropriationAndLandlockedArchetypes(t *testing.T) {
+	// 1. Verify Landlocked vs Sea-going Duality
+	landlockedCodes := []string{"SWI", "AUT", "CZE", "BOL", "HUN", "PRY"}
+	for _, code := range landlockedCodes {
+		if !database.IsLandlockedRealm(code) {
+			t.Errorf("expected %s to be classified as landlocked realm", code)
+		}
+	}
+
+	maritimeCodes := []string{"ENG", "FRA", "NED", "ESP", "POR", "VEN", "DEN", "JPN"}
+	for _, code := range maritimeCodes {
+		if database.IsLandlockedRealm(code) {
+			t.Errorf("expected %s to be classified as maritime/coastal realm", code)
+		}
+	}
+
+	// 2. Verify Multi-Era Universal Archetype Profiles
+	swiProf := database.GetCountryFiscalProfile("SWI")
+	if swiProf.Archetype != "merchant_republic" || swiProf.IsSeaGoing {
+		t.Errorf("expected SWI to be landlocked merchant republic, got %+v", swiProf)
+	}
+
+	usaProf := database.GetCountryFiscalProfile("USA")
+	if usaProf.Archetype != "industrial_powerhouse" || !usaProf.IsSeaGoing {
+		t.Errorf("expected USA to be industrial powerhouse, got %+v", usaProf)
+	}
+
+	sauProf := database.GetCountryFiscalProfile("SAU")
+	if sauProf.Archetype != "commodity_rentier" {
+		t.Errorf("expected SAU to be commodity rentier, got %+v", sauProf)
+	}
+
+	// 3. Verify Next-Period Budget Decoupling
+	// Year Y active budget is 50% tax; player plans 30% for Year Y+1
+	activeTaxRate := int64(50)
+	plannedTaxRate := int64(30)
+
+	activeEcon := ComputeEconomyFull(4500000, 600, 0, activeTaxRate, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1500.0, 0.50, 1.80)
+	plannedEcon := ComputeEconomyFull(4500000, 600, 0, plannedTaxRate, 0, 0, 0, 0, 0, 0, 0, 100.0, 0, 0.0, 1501.0, 0.50, 1.80)
+
+	if activeEcon.TaxRevenue == plannedEcon.TaxRevenue {
+		t.Errorf("expected active 50%% tax revenue (%d) to differ from planned 30%% tax revenue (%d)",
+			activeEcon.TaxRevenue, plannedEcon.TaxRevenue)
+	}
+
+	// In year Y, active extraction remains ~205-225 G
+	if activeEcon.TaxRevenue < 190 || activeEcon.TaxRevenue > 235 {
+		t.Errorf("expected Year Y active tax revenue to remain locked at 50%% (~205-225 G), got %d", activeEcon.TaxRevenue)
+	}
+
+	// In year Y+1 after ratification, planned rate generates 30/50 * active = ~123-140 G
+	if plannedEcon.TaxRevenue > activeEcon.TaxRevenue*35/50 {
+		t.Errorf("expected Year Y+1 planned tax revenue to reflect 30%% rate, got %d vs %d", plannedEcon.TaxRevenue, activeEcon.TaxRevenue)
+	}
+}
+

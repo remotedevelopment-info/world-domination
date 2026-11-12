@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -323,11 +324,12 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	simYear := game.GetEngine().GetSimYear()
-	econ := game.ComputeEconomyWithInternals(
+	econ := game.ComputeEconomyFull(
 		detail.Population, detail.Resources, detail.Troops,
 		detail.EconomyRate, detail.Markets, detail.Infrastructure, detail.Investment, detail.SocialCosts,
 		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
-		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, simYear,
+		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, detail.ColonialYield, simYear,
+		detail.TaxMod, detail.TradeMod,
 	)
 	game.PopulateLastYearLedger(
 		&econ,
@@ -367,6 +369,9 @@ func GetKingdomDetailHandler(w http.ResponseWriter, r *http.Request) {
 		"owner_name":            detail.OwnerName,
 		"entrepreneurial_pride": detail.EntrepreneurialPride,
 		"military_delayed_costs": detail.MilitaryDelayedCosts,
+		"colonial_progress":     detail.ColonialProgress,
+		"colonial_yield":        detail.ColonialYield,
+		"colonial_fleets":       detail.ColonialFleets,
 		"economy":               econ,
 	})
 }
@@ -1075,14 +1080,53 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		econRate = *req.TaxRate
 	}
 
-	err = database.SetEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
-	if err != nil {
-		http.Error(w, "Error setting economy settings", http.StatusInternalServerError)
+	oldSettings, errSettings := database.GetEconomySettings(pc.CountryID)
+	detail, err := database.GetKingdomDetail(pc.CountryID)
+	if err != nil || detail == nil {
+		http.Error(w, "Error fetching kingdom detail", http.StatusInternalServerError)
 		return
 	}
 
-	// Broadcast immediately so the computed inflation, currency value, and GDP
-	// reflect the new settings.
+	simYear := game.GetEngine().GetSimYear()
+
+	// Solvency validation: Check whether gold reserves are adequate to support the declared expedition spending
+	// In the Modern Age (1989+), deficit financing and sovereign debt are permitted.
+	// In pre-modern eras (1500-1988), gold reserves must support the multi-year production commitment.
+	allowed, maxAffordable, requiredGold, reason := game.CheckExpeditionAffordability(detail.Resources, req.Investment, simYear)
+	if !allowed {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":                     reason,
+			"required_gold":             requiredGold,
+			"current_resources":         detail.Resources,
+			"max_affordable_investment": maxAffordable,
+		})
+		return
+	}
+
+	// Announce commitment when raising planned investment dial
+	if errSettings == nil && req.Investment > oldSettings.PlannedInvestment {
+		annualCost := int64(math.Round(game.GetEraExpeditionCostPerPct(simYear) * float64(req.Investment)))
+		gestation := game.GetColonialGestationYears(simYear)
+		portName := game.RealmPort(detail.Code, detail.Name)
+		isLandlocked := database.IsLandlockedRealm(detail.Code)
+		var msg string
+		if isLandlocked {
+			msg = fmt.Sprintf("🚂 Royal Exchequer appropriates %d gold ducats per annum over %.1f years for overland transport corridors in %s.", annualCost, gestation, portName)
+		} else {
+			msg = fmt.Sprintf("⚓ Royal Exchequer appropriates %d gold ducats per annum over %.1f years to outfit overseas expeditions in %s.", annualCost, gestation, portName)
+		}
+		_ = database.LogAction(user.UserID, pc.CountryID, "news", msg, nil, "", "", "")
+	}
+
+	err = database.SetPlannedEconomySettings(pc.CountryID, econRate, req.Investment, req.SocialCosts)
+	if err != nil {
+		http.Error(w, "Error setting planned economy appropriations", http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast immediately so connected clients observe the updated planned settings
 	game.GetEngine().Advance()
 
 	// Return the updated settings and derived economy
@@ -1092,13 +1136,13 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	detail, err := database.GetKingdomDetail(pc.CountryID)
-	if err != nil {
-		http.Error(w, "Error fetching updated detail", http.StatusInternalServerError)
-		return
-	}
-
-	econ := game.ComputeEconomy(detail.Population, detail.Resources, detail.Troops, settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts)
+	econ := game.ComputeEconomyFull(
+		detail.Population, detail.Resources, detail.Troops,
+		settings.EconomyRate, detail.Markets, detail.Infrastructure, settings.Investment, settings.SocialCosts,
+		detail.TroopsLevy, detail.TroopsRegular, detail.TroopsElite,
+		detail.EntrepreneurialPride, detail.MilitaryDelayedCosts, detail.ColonialYield, simYear,
+		detail.TaxMod, detail.TradeMod,
+	)
 	game.PopulateLastYearLedger(
 		&econ,
 		detail.LastTaxRevenue, detail.LastMarketIncome, detail.LastMilitaryExp,
@@ -1111,18 +1155,25 @@ func SetEconomySettingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"country_id":        detail.CountryID,
-		"name":              detail.Name,
-		"code":              detail.Code,
-		"economy_rate":      settings.EconomyRate,
-		"investment":        settings.Investment,
-		"social_costs":      settings.SocialCosts,
-		"gdp":               detail.GDP,
-		"currency_value":    detail.CurrencyValue,
-		"inflation_rate":    detail.InflationRate,
-		"budget_balance":    econ.BudgetBalance,
-		"effective_balance": econ.EffectiveBalance,
-		"economy":           econ,
+		"country_id":           detail.CountryID,
+		"name":                 detail.Name,
+		"code":                 detail.Code,
+		"resources":            detail.Resources,
+		"economy_rate":         settings.EconomyRate,
+		"investment":           settings.Investment,
+		"social_costs":         settings.SocialCosts,
+		"planned_economy_rate": settings.PlannedEconomyRate,
+		"planned_investment":   settings.PlannedInvestment,
+		"planned_social_costs": settings.PlannedSocialCosts,
+		"colonial_progress":    detail.ColonialProgress,
+		"colonial_yield":       detail.ColonialYield,
+		"colonial_fleets":      detail.ColonialFleets,
+		"gdp":                  detail.GDP,
+		"currency_value":       detail.CurrencyValue,
+		"inflation_rate":       detail.InflationRate,
+		"budget_balance":       econ.BudgetBalance,
+		"effective_balance":    econ.EffectiveBalance,
+		"economy":              econ,
 	})
 }
 
@@ -1182,8 +1233,9 @@ func GetAdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			"is_paused":    isPaused,
 			"tick":         state.Tick,
 		},
-		"users":           users,
-		"total_countries": len(state.Countries),
+		"users":              users,
+		"total_countries":    len(state.Countries),
+		"expedition_pricing": game.GetExpeditionPricingTable(),
 	})
 }
 
@@ -1251,6 +1303,90 @@ func AdminResetGameHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetExpeditionPricingHandler returns the configured era expedition pricing matrix.
+func GetExpeditionPricingHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	pricing := game.GetExpeditionPricingTable()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pricing": pricing,
+	})
+}
+
+// UpdateExpeditionPricingRequest models the batch update payload for era expedition pricing.
+type UpdateExpeditionPricingRequest struct {
+	Pricing []game.EraPricingConfig `json:"pricing"`
+}
+
+// UpdateExpeditionPricingHandler updates the expedition pricing matrix and broadcasts new state.
+func UpdateExpeditionPricingHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	admin, err := checkTimelineAdmin(r)
+	if err != nil {
+		status := http.StatusForbidden
+		if strings.Contains(err.Error(), "authentication required") {
+			status = http.StatusUnauthorized
+		}
+		writeJSONError(w, status, err.Error())
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Failed to read request body")
+		return
+	}
+
+	var pricingList []game.EraPricingConfig
+	var wrapped UpdateExpeditionPricingRequest
+	if err := json.Unmarshal(bodyBytes, &wrapped); err == nil && len(wrapped.Pricing) > 0 {
+		pricingList = wrapped.Pricing
+	} else if err := json.Unmarshal(bodyBytes, &pricingList); err != nil || len(pricingList) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request payload: expected pricing array or object with 'pricing' field")
+		return
+	}
+
+	for i := range pricingList {
+		p := &pricingList[i]
+		if p.EraKey == "" && p.EraID != "" {
+			p.EraKey = p.EraID
+		}
+		if p.EraID == "" && p.EraKey != "" {
+			p.EraID = p.EraKey
+		}
+		if p.CostPerPct <= 0 {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Cost per %% for %s must be positive", p.EraKey))
+			return
+		}
+		if p.GestationYears <= 0 {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Gestation duration for %s must be positive", p.EraKey))
+			return
+		}
+		if err := database.UpdateExpeditionEraPricing(p.EraKey, p.CostPerPct, p.GestationYears, p.YieldBonus); err != nil {
+			log.Printf("Error persisting era expedition pricing for %s: %v", p.EraKey, err)
+		}
+	}
+
+	game.SetExpeditionPricingTable(pricingList)
+	game.GetEngine().Advance()
+
+	log.Printf("Admin %s (%s) updated expedition pricing table across %d eras", admin.Username, admin.Email, len(pricingList))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Expedition pricing table updated successfully across all historical eras.",
+		"pricing": game.GetExpeditionPricingTable(),
+	})
+}
+
 // GetTimelineHandler returns the current authoritative game timeline telemetry.
 func GetTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1315,9 +1451,10 @@ func JumpTimelineHandler(w http.ResponseWriter, r *http.Request) {
 
 	engine := game.GetEngine()
 	var state game.GameState
-	if targetYear == 1500.0 {
+	if targetYear <= 1500.01 {
 		// Jumping back to Year 1500 (Age of Discovery baseline) restores all realms
-		// to authentic baseline starting demographics and treasuries, while preserving player kingdom assignments.
+		// to authentic baseline starting demographics, military=0, and trade/vitals=0,
+		// while preserving player kingdom assignments and the capex pricing matrix.
 		var err error
 		state, err = engine.ResetToYear1500(false)
 		if err != nil {
@@ -1504,11 +1641,12 @@ func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
 		globalTreasury += c.Resources
 		globalTradeLiquidity += c.Markets * 24
 
-		econ := game.ComputeEconomyWithInternals(
+		econ := game.ComputeEconomyFull(
 			c.Population, c.Resources, c.Troops,
 			c.EconomyRate, c.Markets, c.Infrastructure, c.Investment, c.SocialCosts,
 			c.TroopsLevy, c.TroopsRegular, c.TroopsElite,
-			c.EntrepreneurialPride, c.MilitaryDelayedCosts, simYear,
+			c.EntrepreneurialPride, c.MilitaryDelayedCosts, c.ColonialYield, simYear,
+			c.TaxMod, c.TradeMod,
 		)
 
 		// Fiscal stress index: debt/deficit severity, reserve exhaustion, tax drag
@@ -1564,6 +1702,9 @@ func AdminGameMonitorHandler(w http.ResponseWriter, r *http.Request) {
 			"general_migration":      econ.GeneralMigration,
 			"capital_flight_drain":  econ.CapitalFlightDrain,
 			"migration_status":       econ.MigrationStatus,
+			"colonial_progress":     c.ColonialProgress,
+			"colonial_yield":        c.ColonialYield,
+			"colonial_fleets":       c.ColonialFleets,
 		}
 
 		seasonalImpact := map[string]interface{}{

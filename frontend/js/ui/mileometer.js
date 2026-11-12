@@ -102,48 +102,139 @@ export function renderMileometer(containerEl, value, animate = true) {
   });
 }
 
+// Track last synced server numbers so background polls don't reset anchor timestamps
+let lastSyncedServerPop = null;
+let lastSyncedServerGold = null;
+
 /**
  * Sets the authoritative server baseline population anchor.
+ * If force is false and serverPop has not changed, the current smooth
+ * sub-annual interpolation timestamp is preserved to prevent drum stutter.
  */
-export function syncPopulationMileometerAnchor(serverPop) {
-  anchorPopulation = Math.max(0, Math.round(Number(serverPop) || 0));
-  anchorTimestamp = Date.now();
-  currentDisplayedPop = anchorPopulation;
+export function syncPopulationMileometerAnchor(serverPop, force = false) {
+  const numericPop = Math.max(0, Math.round(Number(serverPop) || 0));
+  const now = Date.now();
+
   if (!activePopContainerEl) {
     activePopContainerEl = document.getElementById("cc-meter-pop-val");
   }
+
+  // Initial setup or explicit forced reset (e.g. modal open, realm switch)
+  if (force || lastSyncedServerPop === null || anchorTimestamp === 0) {
+    anchorPopulation = numericPop;
+    anchorTimestamp = now;
+    lastSyncedServerPop = numericPop;
+    currentDisplayedPop = numericPop;
+    if (activePopContainerEl) {
+      renderMileometer(activePopContainerEl, numericPop, true);
+    }
+    return;
+  }
+
+  // If server population has not changed, keep the smooth real-time interpolation running
+  if (numericPop === lastSyncedServerPop) {
+    return;
+  }
+
+  // Server population has updated (e.g. annual rollover or discrete migration wave)
+  lastSyncedServerPop = numericPop;
+  anchorPopulation = numericPop;
+  anchorTimestamp = now;
+  currentDisplayedPop = numericPop;
   if (activePopContainerEl) {
-    renderMileometer(activePopContainerEl, anchorPopulation, true);
+    renderMileometer(activePopContainerEl, numericPop, true);
   }
 }
 
 /**
  * Updates the projected annual net growth rate (natural growth + net migration).
+ * Crystallizes accumulated population under the previous rate up to this exact
+ * millisecond so changing dials never causes population to jump or reset.
  */
-export function setPopulationMileometerRate(rate) {
-  annualNetRate = Number(rate) || 0;
+export function setPopulationMileometerRate(newRate) {
+  const nextRate = Number(newRate) || 0;
+  if (nextRate === annualNetRate) return;
+
+  const now = Date.now();
+  const scaleSec = getCurrentScaleSeconds();
+
+  if (anchorTimestamp > 0 && scaleSec > 0 && annualNetRate !== 0) {
+    const elapsedSec = Math.max(0, (now - anchorTimestamp) / 1000);
+    const deltaYears = elapsedSec / scaleSec;
+    anchorPopulation = Math.max(0, Math.round(anchorPopulation + annualNetRate * deltaYears));
+    currentDisplayedPop = anchorPopulation;
+  } else if (currentDisplayedPop > 0) {
+    anchorPopulation = currentDisplayedPop;
+  }
+
+  anchorTimestamp = now;
+  annualNetRate = nextRate;
 }
 
 /**
  * Sets the authoritative server baseline gold reserves anchor.
+ * If force is false and serverGold has not changed, the current smooth
+ * sub-annual interpolation timestamp is preserved to prevent drum stutter.
  */
-export function syncGoldMileometerAnchor(serverGold) {
-  anchorGold = Math.max(0, Math.round(Number(serverGold) || 0));
-  anchorGoldTimestamp = Date.now();
-  currentDisplayedGold = anchorGold;
+export function syncGoldMileometerAnchor(serverGold, force = false) {
+  const numericGold = Math.max(0, Math.round(Number(serverGold) || 0));
+  const now = Date.now();
+
   if (!activeGoldContainerEl) {
     activeGoldContainerEl = document.getElementById("cc-meter-res-val");
   }
+
+  // Initial setup or explicit forced reset (e.g. modal open, realm switch, discrete action)
+  if (force || lastSyncedServerGold === null || anchorGoldTimestamp === 0) {
+    anchorGold = numericGold;
+    anchorGoldTimestamp = now;
+    lastSyncedServerGold = numericGold;
+    currentDisplayedGold = numericGold;
+    if (activeGoldContainerEl) {
+      renderMileometer(activeGoldContainerEl, numericGold, true);
+    }
+    return;
+  }
+
+  // If server gold has not changed, keep the smooth real-time interpolation running
+  if (numericGold === lastSyncedServerGold) {
+    return;
+  }
+
+  // Server gold has updated (e.g. annual rollover, tax collection, or military expense)
+  lastSyncedServerGold = numericGold;
+  anchorGold = numericGold;
+  anchorGoldTimestamp = now;
+  currentDisplayedGold = numericGold;
   if (activeGoldContainerEl) {
-    renderMileometer(activeGoldContainerEl, anchorGold, true);
+    renderMileometer(activeGoldContainerEl, numericGold, true);
   }
 }
 
 /**
  * Updates the projected annual net gold balance rate (surplus or deficit).
+ * Crystallizes accumulated treasury gold under the previous rate up to this exact
+ * millisecond so changing the Royal Tithe & Tariff dial never causes accumulated
+ * gold reserves to jump or reset, acting strictly as a flow rate per annum.
  */
-export function setGoldMileometerRate(rate) {
-  annualGoldRate = Number(rate) || 0;
+export function setGoldMileometerRate(newRate) {
+  const nextRate = Number(newRate) || 0;
+  if (nextRate === annualGoldRate) return;
+
+  const now = Date.now();
+  const scaleSec = getCurrentScaleSeconds();
+
+  if (anchorGoldTimestamp > 0 && scaleSec > 0 && annualGoldRate !== 0) {
+    const elapsedSec = Math.max(0, (now - anchorGoldTimestamp) / 1000);
+    const deltaYears = elapsedSec / scaleSec;
+    anchorGold = Math.max(0, Math.round(anchorGold + annualGoldRate * deltaYears));
+    currentDisplayedGold = anchorGold;
+  } else if (currentDisplayedGold > 0) {
+    anchorGold = currentDisplayedGold;
+  }
+
+  anchorGoldTimestamp = now;
+  annualGoldRate = nextRate;
 }
 
 /**
@@ -165,7 +256,7 @@ function ensureUnifiedMileometerTicker() {
     if (!activePopContainerEl) {
       activePopContainerEl = document.getElementById("cc-meter-pop-val");
     }
-    if (activePopContainerEl && annualNetRate !== 0) {
+    if (activePopContainerEl && annualNetRate !== 0 && anchorTimestamp > 0) {
       const elapsedPopSec = Math.max(0, (Date.now() - anchorTimestamp) / 1000);
       const deltaPopYears = elapsedPopSec / scaleSec;
       const projectedPop = Math.max(0, Math.round(anchorPopulation + annualNetRate * deltaPopYears));
@@ -179,7 +270,7 @@ function ensureUnifiedMileometerTicker() {
     if (!activeGoldContainerEl) {
       activeGoldContainerEl = document.getElementById("cc-meter-res-val");
     }
-    if (activeGoldContainerEl && annualGoldRate !== 0) {
+    if (activeGoldContainerEl && annualGoldRate !== 0 && anchorGoldTimestamp > 0) {
       const elapsedGoldSec = Math.max(0, (Date.now() - anchorGoldTimestamp) / 1000);
       const deltaGoldYears = elapsedGoldSec / scaleSec;
       // Reserves drain down to 0 minimum in Era 1
@@ -217,6 +308,8 @@ export function startGoldMileometerTicker(containerEl) {
  */
 export function stopPopulationMileometerTicker() {
   activePopContainerEl = null;
+  lastSyncedServerPop = null;
+  anchorTimestamp = 0;
   if (!activeGoldContainerEl && mileometerTimer) {
     clearInterval(mileometerTimer);
     mileometerTimer = null;
@@ -225,6 +318,8 @@ export function stopPopulationMileometerTicker() {
 
 export function stopGoldMileometerTicker() {
   activeGoldContainerEl = null;
+  lastSyncedServerGold = null;
+  anchorGoldTimestamp = 0;
   if (!activePopContainerEl && mileometerTimer) {
     clearInterval(mileometerTimer);
     mileometerTimer = null;
@@ -234,6 +329,10 @@ export function stopGoldMileometerTicker() {
 export function stopAllMileometerTickers() {
   activePopContainerEl = null;
   activeGoldContainerEl = null;
+  lastSyncedServerPop = null;
+  lastSyncedServerGold = null;
+  anchorTimestamp = 0;
+  anchorGoldTimestamp = 0;
   if (mileometerTimer) {
     clearInterval(mileometerTimer);
     mileometerTimer = null;

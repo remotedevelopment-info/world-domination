@@ -180,3 +180,14 @@ export async function apiAdminResetGame(confirmation, clearClaims = true) {
     }),
   });
 }
+
+export async function apiGetExpeditionPricing() {
+  return apiFetch("/expedition-pricing");
+}
+
+export async function apiUpdateExpeditionPricing(pricingTable) {
+  return apiFetch("/admin/expedition-pricing", {
+    method: "POST",
+    body: JSON.stringify(pricingTable),
+  });
+}

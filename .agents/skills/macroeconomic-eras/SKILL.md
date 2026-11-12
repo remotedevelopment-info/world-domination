@@ -66,9 +66,42 @@ The fiscal model begins as a disciplined hard-specie ledger in the early eras an
 
 ---
 
-### Layer 1: Hard-Specie Balanced Budgets (1500–1859 — *Implemented*)
+### Layer 1: Hard-Specie Balanced Budgets & Historical Fiscal Archetypes (1500–1859 — *Implemented*)
 
-In the **Age of Discovery** and **Age of Revolt**, sovereign credit institutions do not yet exist. Kingdoms operate strictly on hard gold ducats and annual balanced budgets:
+In the **Age of Discovery** and **Age of Revolt**, sovereign credit institutions do not yet exist. Kingdoms operate strictly on hard gold ducats and annual balanced budgets.
+
+Crucially, **income tax did not exist** (first invented in Britain in 1799). Government revenue was derived from **customs tariffs (*Tonnage & Poundage*), the royal domain, monopolies/privateering, and feudal land taxes**. Furthermore, different kingdoms had vastly different fiscal architectures and constraints:
+
+#### Country-Specific Fiscal Archetypes & Variances Matrix
+
+| Realm Code | Realm Name | Fiscal Archetype | Agrarian Tax Mod (`tax_mod`) | Maritime Trade Mod (`trade_mod`) | Strategic Dilemma & Revenue Source |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`ENG`** | Kingdom of England | `maritime` | **0.50** | **1.80** | **Customs & Shipping:** Parliamentary limits on land taxes; relies heavily on port customs (*Tonnage & Poundage*), wool duties, and overseas caravel expeditions. |
+| **`ESP`** | Crown of Spain | `bullion_monopoly` | **0.85** | **1.40** | **Silver Monopoly & Overstretch:** *Alcabala* sales tax and *Quinto Real* (Royal Fifth); massive silver influx offset by heavy garrison maintenance abroad (*Tercios* in Flanders/Italy). |
+| **`POR`** | Kingdom of Portugal | `maritime` | **0.55** | **1.75** | **Spice Route Pioneer:** Small home population, reliant on Cape Route trade posts (*Feitorias*) and naval spice monopolies. |
+| **`FRA`** | Kingdom of France | `agrarian_bureaucracy` | **1.30** | **0.65** | **Agrarian Leviathan:** Massive peasant population subject to the direct *Taille* and salt *Gabelle*; high continental manpower but slow early oceanic shipping. |
+| **`VEN`** | Republic of Venice | `merchant_republic` | **0.15** | **2.50** | **Plutocratic Maritime Empire:** Negligible agrarian base; 90%+ income is spice/silk transit tariffs and salt monopolies (*Stato da Màr*). High per-capita wealth, vulnerable to Ottoman naval wars. |
+| **`GEN`** | Republic of Genoa | `merchant_republic` | **0.20** | **2.30** | **Merchant Bankers:** Maritime trade and sovereign banking hub; low land tax, high commercial tariff multiplier. |
+| **`NED`** | Dutch Republic | `maritime` | **0.45** | **2.00** | **Commercial Entrepot:** Advanced capital markets, flute shipping, and chartered VOC monopolies; supreme trade velocity. |
+| **`POL`** | Poland-Lithuania | `noble_commonwealth` | **0.40** | **1.10** | **Szlachta Immunity:** Rich Baltic grain exporter via Danzig, but noble tax exemptions under *Nihil Novi* starve the Royal Treasury of cash. |
+| **`OTT`** | Ottoman Empire | `imperial_fief` | **1.10** | **1.20** | **Imperial Crossroads & Fiefs:** Non-Muslim poll taxes (*Jizya/Cizye*) and *Kharaj* land tribute; military maintained via *Timar* land grants rather than cash payroll. |
+| **`RUS`** | Tsardom of Muscovy | `agrarian_bureaucracy` | **1.20** | **0.60** | **Autocratic Land Extraction:** High serf extraction and fur tribute (*Yassak*); landlocked with minimal maritime tariffs. |
+| **`HRE`** | Holy Roman Empire | `agrarian_bureaucracy` | **0.90** | **0.90** | **Fragmented Imperial Diet:** Fragmented estates and tolls; moderate balanced baseline. |
+| **`SCO`** | Kingdom of Scotland | `noble_commonwealth` | **0.50** | **1.00** | **Clan Autonomy:** Low central crown extraction; relies on modest port trade. |
+| **`DEN`** | Kingdom of Denmark | `maritime` | **0.60** | **1.50** | **Sound Toll Gatekeeper:** Controls Baltic entry tariffs (*Øresundstolden*). |
+| **`SWE`** | Kingdom of Sweden | `balanced` | **0.80** | **1.20** | **Baltic Copper & Iron:** Falu copper mine royalties and Baltic coastal trade. |
+
+#### Calibrated Macroeconomic Specie Scale (1500 Discovery Era)
+1. **Agrarian Land Extraction Baseline:**
+   - Calibrated at `baseProductivity = 0.0002` gold output per capita.
+   - For England (pop 4,500,000), a standard 50% extraction effort yields `4,500,000 * 0.0002 * 0.50 * 0.50 (tax_mod) = ~225 gold/cycle`.
+   - Peasant tithes in 1500 were mostly in kind (grain, livestock) and did not automatically convert into spendable gold specie in royal vaults.
+2. **Maritime Trade as the Crown's Essential Lifeblood:**
+   - To make building shipping an indispensable strategic imperative, maritime trade yields must be lucrative relative to ship construction capex.
+   - Each completed expedition fleet grants $+5\%$ compounded yield, generating:
+     $$\text{Trade Revenue} = (\text{colonialYield} \times 1500.0 + \text{markets} \times 12) \times \text{ProductivityFactor} \times (1.0 + \text{colonialYield}) \times \text{CommercialVelocity} \times \text{trade\_mod}$$
+   - For England (`trade_mod = 1.80`), a single completed caravel fleet earns **$\approx 135\text{ gold/year}$** in recurring customs and tariffs on a $360\text{ G/year}$ capex investment (a **19%–25% annual return on invested capital**).
+   - 3 active fleets generate **$400+\text{ gold/year}$**, exceeding the entire agrarian land tax take, mirroring Elizabethan reliance on maritime privateering, customs (*Tonnage & Poundage*), and chartered shipping!
 
 1. **Annual Budget Statement**:
    - Tracks **Last Year's Ledger** (`last_tax_revenue`, `last_market_income`, `last_military_exp`, `last_social_exp`, `last_investment_exp`, `last_total_exp`, `last_budget_balance`, `last_migration`).
@@ -213,5 +246,366 @@ flowchart LR
 #### E. Population Pressure: Manpower vs. Welfare Duality
 - **Manpower Recruitment Advantage**: Kingdoms with massive populations (e.g. France, Ottoman Empire) benefit from plentiful recruits; recruitment gold costs scale down by up to $50\%$.
 - **Welfare Squalor Burden**: Larger populations require proportionally higher baseline Cathedral and Social Welfare spending. If underfunded, urban squalor accelerates epidemic vulnerability and dampens economic productivity.
+
+#### F. Colonial & Capital Investment Gestation Pipeline
+- **Concept**: In the Age of Discovery, laying down caravels, outfitting expeditions, and establishing overseas trade outposts cannot yield instantaneous GDP dividends. Capital projects require continuous funding over a **Gestation Period** before returning merchant yields.
+- **The Capital Pipeline ($0\% \to 100\%$ Gestation)**:
+  - Annual investment allocations accumulate progress toward completing active flotillas and trading posts.
+  - Completion requires sustained capital outlays over an **Era-Dependent Gestation Period** ($T_{\text{gestation}}$).
+- **The Sunk-Cost & Abandonment Decay Penalty**:
+  - If a player abruptly slashes or zeroes the investment dial mid-project, unfinished ships rot in drydocks, dockworkers disperse, and supply chains spoil.
+  - **Decay Rate**: If funding drops to zero, uncompleted gestation progress degrades at $-25\%$ per simulation year. If not re-funded within 1–2 years, all invested capital is forfeited with zero trade return.
+- **Era Production & Capital Expenditure Cost Matrix**:
+  As shipbuilding, propulsion, navigation, and telecommunications advance, the required gestation delay shrinks, while annual capital expenditure increases (greater spending concentrated over a shorter production time):
+  - **Age of Discovery (1500–1749)**: $T_{\text{gestation}} = 5.0\text{ years}$ · $150\text{ gold/year}$ at $100\%$ ($750\text{ gold}$ total). Wooden caravels, hand-hewn oak, wind circumnavigation.
+  - **Age of Revolt (1750–1859)**: $T_{\text{gestation}} = 2.5\text{ years}$ · $360\text{ gold/year}$ at $100\%$ ($900\text{ gold}$ total). Armed Indiamen, copper sheathing, cannon foundries.
+  - **Age of Independence (1860–1919)**: $T_{\text{gestation}} = 1.25\text{ years}$ · $800\text{ gold/year}$ at $100\%$ ($1,000\text{ gold}$ total). Steam clippers, boiler plates, telegraph cables.
+  - **Age of Decolonisation (1920–1988)**: $T_{\text{gestation}} = 0.5\text{ years}$ · $2,400\text{ gold/year}$ at $100\%$ ($1,200\text{ gold}$ total). Diesel bulk freighters, specialized tankers.
+  - **The Modern Age (1989+)**: $T_{\text{gestation}} = 0.35\text{ years}$ · $4,500\text{ gold/year}$ at $100\%$ ($1,575\text{ gold}$ total). Automated modular container vessels, satellite navigation.
+- **Treasury Reserve Adequacy Check & Solvency Enforcement**:
+  - In pre-modern eras (1500–1988), deficit financing is strictly disallowed under the hard-specie and sovereign balanced budget rules.
+  - When declaring an investment rate $I\%$, the kingdom's treasury reserves must be adequate to support the full multi-year production commitment:
+    $$\text{RequiredGold}(I) = \text{BaseAnnualCost} \times T_{\text{gestation}} \times \left(\frac{I}{100.0}\right)$$
+  - If $\text{resources} < \text{RequiredGold}(I)$, the exchequer cannot support the expedition spending and the game **does not allow it**, capping the maximum affordable investment rate to $I_{\max} = \lfloor (\text{resources} / \text{TotalCost}_{100}) \times 100 \rfloor$.
+  - In **The Modern Age (1989+)**, sovereign deficit financing is unlocked: nations may run budget deficits and fund projects through debt even with depleted reserves.
+- **Conquest & Territory Re-allocation**:
+  - Conquering coastal provinces grants access to captured shipyards and overseas colonial trade lanes, accelerating the investor's cumulative trade productivity ceiling.
+
+---
+
+## 5. Era-Specific Strategic Commodity Matrix
+
+As historical ages roll over, the physical resources that power imperial expansion and economic supremacy evolve. Territories possess latent resource deposits that unlock and reshape national strength in their respective eras:
+
+```mermaid
+flowchart LR
+    E1["1500 Discovery\n💰 Gold, Silver & Spices"]
+    E2["1750 Revolt\n🪵 Timber, Sugar & Tobacco"]
+    E3["1860 Independence\n⛏️ Coal & Iron Ore"]
+    E4["1920 Decolonisation\n🛢️ Crude Oil & Bauxite"]
+    E5["1989 Modern\n🔬 Semiconductors & Rare Earths"]
+
+    E1 --> E2 --> E3 --> E4 --> E5
+```
+
+| Era | Primary Strategic Commodities | Economic Driver & Gameplay Impact | Historical Context |
+| :--- | :--- | :--- | :--- |
+| **Discovery** (1500–1749) | **Gold, Silver Bullion, Spices, Silk** | **Treasury Specie Backing**: High gold reserves directly strengthen currency value and allow funding expeditions and mercenary tercios without debasement. | Spanish Silver Fleets (Potosí), Portuguese Spice Monopoly (Malacca/Goa). |
+| **Revolt** (1750–1859) | **Naval Timber, Sugar, Tobacco, Cotton** | **Mercantile Windfalls & Naval Capacity**: Access to ship timber determines max armada size; plantation cash crops multiply market export liquidity. | Caribbean sugar trade, American cotton/tobacco, Baltic naval stores. |
+| **Independence** (1860–1919) | **Coal, Iron Ore, Steel** | **Industrial Multiplier**: Coal deposits fuel rail logistics, accelerate factory productivity, and power steam-driven naval ironclads. Territories lacking coal suffer severe industrial penalties and must import at exorbitant prices. | Industrial Revolution, Ruhr Valley, British Welsh Coalfields, Pittsburgh steel. |
+| **Decolonisation** (1920–1988) | **Crude Oil, Bauxite (Aluminum), Rubber, Uranium** | **Mechanized Warfare & Energy**: Oil fields dictate mechanized army and air force mobility; lack of domestic oil reserves triggers military paralysis during prolonged wars unless secured by conquest or diplomacy. | Middle Eastern concessions, Baku oil, WWII resource blockades. |
+| **Modern** (1989+) | **Semiconductors, Rare Earths, Natural Gas** | **High-Tech Capital Multiplier**: Microchip foundries and rare earth monopolies multiply financial sector productivity, telecommunications velocity, and smart defense systems. | Taiwan/East Asian foundries, global rare earth supply chains, LNG pipelines. |
+
+---
+
+## 6. Multi-Era Country Fiscal Archetypes & Asymmetric Variances (All 5 Eras, 200+ Realms)
+
+To make gameplay strategically differentiated across all 200+ countries and across all historical transitions, kingdoms are not treated as generic homogeneous landmasses. Each country is governed by a **Fiscal Archetype** defining how its society generates wealth, how its state extracts revenue, and its inherent economic advantages and vulnerabilities.
+
+### A. The 10 Universal Macroeconomic Archetypes
+
+```mermaid
+flowchart TD
+    subgraph Early Eras 1500–1859
+        ME["⚓ 1. Maritime Empire\n(Customs, Shipping, Fleets)"]
+        AB["🌾 2. Agrarian Bureaucracy\n(Peasant Taille, Land Dues)"]
+        BM["👑 3. Bullion Monopoly\n(Treasure Fleets, Heavy Army Upkeep)"]
+        MR["🏛️ 4. Merchant Republic / Hub\n(Ultra Trade Velocity, Zero Land Depth)"]
+        NC["📜 5. Noble Commonwealth\n(Noble Tax Immunity, Grain Export)"]
+        IF["🕌 6. Imperial Fief\n(Timar Fiefs, Jizya Poll Tax)"]
+    end
+
+    subgraph Industrial & Modern Eras 1860–1989+
+        IP["🏭 7. Industrial Powerhouse\n(Factory Output, Rail Infrastructure)"]
+        CR["🛢️ 8. Commodity Rentier\n(Oil/Mineral Concessions, Risk Swings)"]
+        PD["🏗️ 9. Post-Colonial Developmental\n(Foreign Exchange Drag, Debt Exposure)"]
+        BS["⚖️ 10. Balanced Sovereign\n(Standard Mixed Economy)"]
+    end
+```
+
+| Archetype Key | Archetype Title | Agrarian Tax Mod (`tax_mod`) | Maritime Trade Mod (`trade_mod`) | Industry / Capex Mod | Strategic Dilemma & Playstyle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `maritime_empire` | **Maritime Empire** | **0.45 – 0.60** | **1.70 – 2.10** | **1.25** | **Customs & High Seas**: Weak peasant extraction; exchequer lives on port tariffs (*Tonnage & Poundage*), shipping capex returns, and naval dominion. (e.g. England, Netherlands, Portugal, Denmark). |
+| `agrarian_bureaucracy` | **Agrarian Bureaucracy** | **1.20 – 1.35** | **0.60 – 0.75** | **0.85** | **Peasant Leviathan**: Heavy direct land taxation (*Taille*, serf extraction) and salt monopolies; massive standing army manpower, but slow early ocean commerce. (e.g. France, Muscovy/Russia, Qing China, Austria, Prussia). |
+| `bullion_monopoly` | **Bullion Monopoly** | **0.80 – 0.90** | **1.35 – 1.50** | **1.10** | **Silver Monopoly & Overstretch**: Treasure fleet windfalls (*Quinto Real*) and sales taxes (*Alcabala*); highly vulnerable to privateering and burdened by $+35\%$ foreign army upkeep (*Tercios*). (e.g. Spain). |
+| `merchant_republic_hub` | **Merchant Republic / Financial Hub** | **0.10 – 0.25** | **2.20 – 2.80** | **1.50** | **Plutocratic Trade Hub**: Negligible agrarian territory; $90\%+$ revenue from spice/silk transit tariffs, banking, and sovereign credit. Extreme per-capita wealth, but zero territorial depth and vulnerable to naval blockades. (e.g. Venice, Genoa, Ragusa; later Singapore, Switzerland, Luxembourg). |
+| `noble_commonwealth` | **Noble Commonwealth** | **0.35 – 0.50** | **0.90 – 1.15** | **0.90** | **Magnate Anarchy**: Rich grain exports, but noble estates enjoy constitutional tax immunity (*Nihil Novi*, Golden Liberty); Crown treasury is chronically starved of cash unless the King grants concessions. (e.g. Poland-Lithuania, early Scotland, Hungary). |
+| `imperial_fief` | **Imperial Fief** | **1.05 – 1.20** | **1.10 – 1.30** | **1.00** | **Crossroads Fiefdom**: Religious poll taxes (*Jizya/Cizye*) and agricultural tribute (*Kharaj*); military maintained via land grants (*Timar*) rather than cash treasury payroll. (e.g. Ottoman Empire, Mughal Empire, Safavid Persia). |
+| `industrial_powerhouse` | **Industrial Powerhouse** | **0.70 – 0.85** | **1.40 – 1.70** | **1.80 – 2.20** | **Smokestack Hegemon**: Emerges in Revolt/Independence eras. Massive factory output and rail infrastructure multipliers; tax base shifts to corporate profits and urban wage labor. (e.g. 19th-c. Britain, Germany, USA, Meiji Japan). |
+| `commodity_rentier` | **Commodity Rentier** | **0.30 – 0.50** | **1.80 – 2.40** | **1.10** | **Resource Petrostates & Mining**: Emerges in Independence/Modern eras. State revenue dominated by oil, copper, or nitrate concessions; subject to massive cyclical risk swings when global prices slump. (e.g. Venezuela, Saudi Arabia, Gulf States, Chile, Nigeria). |
+| `post_colonial_developmental` | **Post-Colonial Developmental** | **0.80 – 1.00** | **0.85 – 1.10** | **1.00** | **Nation-Building Frontier**: Emerges in Decolonisation era. Intense capital infrastructure and welfare needs, high vulnerability to foreign exchange reserves drain and debt default. (e.g. India, Indonesia, Ghana, Egypt, Kenya). |
+| `balanced_sovereign` | **Balanced Sovereign** | **1.00** | **1.00** | **1.00** | **Mixed Sovereign Baseline**: Standard balanced profile for independent regional powers and transitional states. |
+
+### B. Global Era Progression & Dynamic Country Mapping
+
+1. **Era Unlock Re-Classification**:
+   - When a nation unlocks or advances into a new historical era (e.g. Great Britain from `discovery` maritime to `revolt` industrial powerhouse; United States unlocking in 1776 as revolutionary industrial state), its `fiscal_archetype`, `tax_mod`, and `trade_mod` dynamically update to reflect its evolving economy.
+2. **Comprehensive 200+ Country Rule**:
+   - Every country row in `countries` carries explicit database columns:
+     - `fiscal_archetype VARCHAR(50)`
+     - `tax_mod DOUBLE PRECISION DEFAULT 1.0`
+     - `trade_mod DOUBLE PRECISION DEFAULT 1.0`
+   - When new nations emerge (Latin American republics in 1860, post-WWI states in 1918, African/Asian nations in 1960), the authoritative engine seeds their historical profile automatically.
+
+---
+
+## 7. Next-Period Budget Appropriation Model (Strategic Annual Budget Cycle)
+
+### A. The Core Principle: Appropriations Set Next Year's Budget
+
+In historical exchequers, monarchs, chancellors, and parliaments do not tweak running taxes from second to second. Budgets are debated, appropriated, and enacted as **Annual Finance Acts** for the **upcoming fiscal year**.
+
+To give players strategic depth and prevent twitchy slider exploitation:
+
+$$\text{Current Running Year } Y: \text{Governed by Locked Appropriations } (\tau_Y, I_Y, S_Y)$$
+$$\text{Imperial Dials in UI}: \text{Appropriate Next Year's Budget } (\tau_{Y+1}^*, I_{Y+1}^*, S_{Y+1}^*)$$
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as Sovereign Ruler (UI)
+    participant Engine as Authoritative Game Clock
+    participant DB as Postgres Ledger
+    participant Gazette as Imperial Gazette (News)
+
+    Note over Player, Engine: During Simulation Year Y (e.g. 1500.00 – 1500.99)
+    Engine->>Engine: Economy runs on Locked Budget (Tax: 25%, Inv: 30%, Soc: 10%)
+    Player->>Player: Turns Dials to adjust Next Year's Budget (e.g. Tax: 35%, Inv: 50%)
+    Player->>DB: Stores Planned Appropriations (planned_tax_rate, planned_investment, planned_social)
+    Player->>Player: UI shows Real-Time "Next Year Projected Budget" Forecast
+
+    Note over Engine, DB: Sim Year Rolls Over (1500.99 -> 1501.00)
+    Engine->>DB: Annual Fiscal Ratification Event
+    DB->>Engine: Enact planned values into active economy_rate, investment, social_costs
+    Engine->>Gazette: Broadcast "The Budget of 1501 has been ratified into Royal Law!"
+    Engine->>Engine: New locked appropriations take effect for Year 1501
+```
+
+### B. State Variables & Data Schema
+- **Current Running Values (Locked during year $Y$)**:
+  - `economy_rate int64`: Active tax extraction rate currently running through the economy.
+  - `investment int64`: Active capex / shipyard allocation funding current projects.
+  - `social_costs int64`: Active cathedral / welfare spending.
+- **Planned Appropriations (Target for year $Y+1$)**:
+  - `planned_economy_rate int64 DEFAULT 50`: Planned tax rate set on the dial.
+  - `planned_investment int64 DEFAULT 0`: Planned expedition / capex rate set on the dial.
+  - `planned_social_costs int64 DEFAULT 0`: Planned social welfare rate set on the dial.
+
+### C. Annual Ratification Lifecycle & Engine Rollover
+1. **Intra-Year Policy Deliberation**:
+   - As the chronometer ticks through year $Y$, the player can freely adjust planned dials.
+   - The UI displays **Next Year Projected Budget** side-by-side with **Current Enacted Actuals**.
+   - If the player sets an unsustainable planned investment, the UI warns: *"⚠️ Planned 60% investment exceeds reserves; will be capped at rollover."*
+2. **The Annual Rollover Event (`TickEconomyStep` when `yearRolledOver == true`)**:
+   - The authoritative engine ratifies the budget:
+     ```go
+     c.EconomyRate = c.PlannedEconomyRate
+     c.Investment = c.PlannedInvestment
+     c.SocialCosts = c.PlannedSocialCosts
+     ```
+   - Dispatches a historical chronicle entry:
+     *"📜 ROYAL EXCHEQUER: The Budget of [Year] has been enacted into law (Tax: %d%% · Expeditions: %d%% · Social: %d%%)."*
+   - Dynamic investor pride begins relaxing toward the new tax rate's target curve over the upcoming $1\text{–}2$ years.
+
+---
+
+## 8. Budget Flows Telemetry: Mini-Spreadsheet & Sankey Diagram Architecture
+
+To make fiscal management intuitive, the Imperial Command Center integrates two complementary financial tools inside the **Exchequer & Trade Bay (Bay 1)**:
+
+### A. The Dual-Period Financial Statement (Mini-Spreadsheet)
+
+A structured accounting ledger comparing **Current Period Enacted** vs **Next Period Projected** with variance ($\Delta$):
+
+```
++------------------------------------------------------------------------------------------------+
+|  ROYAL EXCHEQUER LEDGER & BUDGET APPROPRIATIONS (Anno Domini 1502)                             |
++------------------------------------+---------------------+--------------------+----------------+
+|  LINE ITEM                         |  CURRENT YEAR (1502)|  NEXT YEAR (1503)  |  VARIANCE (Δ)  |
++------------------------------------+---------------------+--------------------+----------------+
+|  REVENUE INFLOWS:                  |                     |                    |                |
+|    🌾 Crown Land & Agrarian Tax    |  +205 G             |  +287 G            |  +82 G (+40%)  |
+|    ⚓ Port Customs & Tariffs       |  +297 G             |  +297 G            |    0 G (Flat)  |
+|    🏛️ Domestic Chartered Markets   |   +48 G             |   +48 G            |    0 G (Flat)  |
+|    💰 Domain Rents & Specie Return |   +25 G             |   +25 G            |    0 G (Flat)  |
+|  --------------------------------- | ------------------- | ------------------ | -------------- |
+|  TOTAL REVENUE (A)                 |  +575 G             |  +657 G            |  +82 G (+14%)  |
++------------------------------------+---------------------+--------------------+----------------+
+|  APPROPRIATED OUTFLOWS:            |                     |                    |                |
+|    ⚔️ Standing Armadas & Garrisons  |  -180 G             |  -180 G            |    0 G (Flat)  |
+|    🚢 Colonial Shipyard Capex      |  -360 G (30%)       |  -480 G (40%)      | -120 G (+33%)  |
+|    🛠️ Harbor & Guild Infrastructure|    -0 G             |    -0 G            |    0 G         |
+|    ⛪ Cathedral & Civic Welfare    |   -20 G             |   -20 G            |    0 G         |
+|  --------------------------------- | ------------------- | ------------------ | -------------- |
+|  TOTAL EXPENDITURES (B)            |  -560 G             |  -680 G            | -120 G (+21%)  |
++------------------------------------+---------------------+--------------------+----------------+
+|  NET FISCAL SOLVENCY (A - B):      |                     |                    |                |
+|    👑 Net Annual Balance           |  +15 G (SURPLUS)    |  -23 G (DEFICIT)   |  -38 G         |
+|    🏦 Treasury Specie Reserves     |   615 G             |   592 G            |  -23 G Drain   |
+|    ⚖️ Fiscal Regime Status         |  BALANCED HARD SPEC |  ⚠️ HARD RATIONING |  Policy Alert  |
++------------------------------------+---------------------+--------------------+----------------+
+```
+
+### B. Interactive Steampunk Sankey Flow Diagram
+
+Below the ledger, an illuminated fluid Sankey diagram visually maps the movement of ducats through the empire:
+
+```mermaid
+flowchart LR
+    subgraph Sources ["1. Revenue Sources (Inflows)"]
+        T["🌾 Land Tax (+205)"]
+        C["⚓ Maritime Customs (+297)"]
+        M["🏛️ Markets (+48)"]
+        R["💰 Reserve Draw (Deficit)"]
+    end
+
+    subgraph Hub ["2. Royal Exchequer Hub"]
+        E["👑 THE ROYAL EXCHEQUER\nTotal Flow: 575 G/yr"]
+    end
+
+    subgraph Destinations ["3. Budget Allocations (Outflows)"]
+        A["⚔️ Armadas & Garrisons (-180)"]
+        X["🚢 Shipyard Capex (-360)"]
+        I["🛠️ Harbor Works (-0)"]
+        W["⛪ Civic Welfare (-20)"]
+        S["🏦 Treasury Surplus (+15)"]
+    end
+
+    T ==>|"Amber Ribbon"| E
+    C ==>|"Gold Ribbon"| E
+    M ==>|"Teal Ribbon"| E
+    R -.->|"Red Dashed"| E
+
+    E ==>|"Crimson Ribbon"| A
+    E ==>|"Marine Ribbon"| X
+    E ==>|"Bronze Ribbon"| I
+    E ==>|"Purple Ribbon"| W
+    E ==>|"Emerald Ribbon"| S
+```
+
+#### Canvas Architecture & Rendering Standards
+1. **HTML5 `<canvas id="cc-budget-sankey">`**:
+   - Rendered with high-DPI scaling directly inside Bay 1.
+   - Steampunk aesthetic: dark parchment/slate background (`#0f172a`), brass framing rivets, and illuminated fluid ribbons.
+2. **Ribbon Geometry & Proportions**:
+   - Uses cubic Bezier curves (`ctx.bezierCurveTo`) connecting rectangular node anchors.
+   - Ribbon thickness is proportional to ducat volume:
+     $$W_{\text{ribbon}} = \max\left(3, \frac{\text{Amount}}{\text{TotalInflow}} \times H_{\text{usable}}\right)$$
+3. **Color Palette**:
+   - **Inflows**: Amber Gold (`#f59e0b`), Deep Gold (`#d97706`), Warm Yellow (`#fde047`).
+   - **Military Outflows**: Imperial Crimson / Ruby (`#ef4444`, `#dc2626`).
+   - **Expedition Capex**: Ocean Cyan / Deep Marine (`#06b6d4`, `#0284c7`).
+   - **Infrastructure**: Burnished Bronze (`#b45309`).
+   - **Social / Religious Welfare**: Byzantine Purple / Amethyst (`#a855f7`).
+   - **Net Surplus / Savings**: Vibrant Emerald (`#10b981`).
+   - **Deficit Draw**: Glowing Neon Red / Flame (`#f87171`).
+4. **Interactivity**:
+   - **Hover Inspection**: Hovering over any ribbon or node displays an illuminated tooltip:
+     - e.g. *"⚓ Port Customs & Maritime Tariffs: +297 Ducats/yr (51.6% of Crown Revenue)"*
+     - e.g. *"🚢 Colonial Expeditions: -360 Ducats/yr (64.3% of Exchequer Spending)"*
+   - **Period Toggle Switch**: A brass toggle switch on the canvas:
+     - `[ 🔘 Current Year Enacted (1502) | Next Year Projected (1503) ]`
+     - Allows instant visual comparison of how next year's planned dial changes will reshape the flow ribbons before the budget is ratified.
+
+---
+
+## 9. Capital Asset Lifecycles, Depreciation & Era Obsolescence (Creative Destruction)
+
+A foundational macroeconomic reality is that **physical and technological assets possess a finite competitive lifecycle**. What creates a superpower in one century becomes an obsolete liability in the next if the state fails to continually re-invest:
+
+```mermaid
+flowchart LR
+    A1["1500 Discovery\n⛵ Wooden Caravels\n(Hand-Hewn Oak)"]
+    A2["1750 Revolt\n🚢 Armed Indiamen\n(Copper Sheathed)"]
+    A3["1860 Independence\n🚂 Iron Steamships & Rail\n(Boiler Plates & Tracks)"]
+    A4["1920 Decolonisation\n⚓ Diesel Freighters\n(Bulk Oil & Steel)"]
+    A5["1989 Modern\n🌐 Modular Container Ships\n(Global Supply Chains)"]
+
+    A1 -->|"Technological Depreciation"| A2
+    A2 -->|"Obsolescence Penalty"| A3
+    A3 -->|"Industrial Shift"| A4
+    A4 -->|"Logistical Revolution"| A5
+```
+
+### A. The Principle of Era Obsolescence
+1. **Asset Half-Life ($t_{1/2}$)**:
+   - Capital assets built in early eras (e.g. wooden caravel fleets, early merchant markets) do not produce permanent yields indefinitely into modern times.
+   - When the global timeline crosses an **Era Transition Boundary** (e.g. Discovery $\to$ Revolt in 1750, or Revolt $\to$ Independence in 1860):
+     - Legacy assets suffer an **Era Obsolescence Depreciation**:
+       $$\text{Effective Yield Bonus}_{E+1} = \text{Effective Yield Bonus}_E \times \delta_{\text{era}}$$
+       where $\delta_{\text{era}} \approx 0.60\text{–}0.75$.
+2. **Creative Destruction & Renewal Capex**:
+   - To sustain high commercial velocity and market yields in a new era, empires cannot rest on their ancestral laurels.
+   - They must re-invest capital through the era's updated investment matrix (e.g., converting wooden shipyards into ironclad drydocks, laying steam locomotive tracks, modernizing port container cranes).
+   - This prevents early-game runaway snowballs: an empire that led in 1500 but stopped investing in 1860 will be overtaken by rising industrial powers.
+
+---
+
+## 10. Transport Infrastructure Duality: Maritime Fleets vs. Continental Rail Networks (Landlocked vs Sea-Going Dynamics)
+
+As the game world expands across continents, geography dictates economic strategy. Landlocked realms cannot build sea-going caravels, but their economies are not crippled; their capital expenditures channel into **Overland Transport Corridors**:
+
+```mermaid
+flowchart TD
+    subgraph Maritime Realms ["🌊 Coastal & Island Sovereigns (ENG, NED, POR, VEN)"]
+        M1["⚓ Deepwater Shipyards & Drydocks"]
+        M2["🚢 Caravel, Clipper & Container Fleets"]
+        M3["🌐 Overseas Colonial Trade Lanes & Customs"]
+    end
+
+    subgraph Landlocked Realms ["🏔️ Continental & Landlocked Sovereigns (SWI, BAV, CZE, BOL, PAR)"]
+        L1["🛤️ River Barge Canals & Turnpikes (1500–1750)"]
+        L2["🚂 Continental Steam Railway Corridors (1860+)"]
+        L3["📦 Inland Dry Ports & Cross-Border Customs Freight"]
+    end
+
+    M1 --> M2 --> M3
+    L1 --> L2 --> L3
+```
+
+### A. Weightings & Strategic Allocation
+1. **Sea-Going Sovereigns (`is_island == true` or Coastline Ratio $> 0.40$)**:
+   - Capex Dial ($I\%$) primarily funds **Naval Shipyards, Drydocks, and Merchant Fleets**.
+   - Tariffs and trade income scale with oceanic trade velocity and colonial line completions.
+   - Vulnerability: Naval blockades, privateering raids, maritime attrition.
+2. **Landlocked Sovereigns (`is_island == false` and Coastline Ratio $== 0$)**:
+   - Capex Dial ($I\%$) is automatically channeled by the exchequer into **Overland Transport Networks**:
+     - *Discovery & Revolt (1500–1859)*: Canal networks, paved turnpikes, river toll stations (Rhine, Danube, Vistula).
+     - *Independence & Decolonisation (1860–1988)*: **Transcontinental Rail Trunk Lines** (e.g. Austro-Hungarian rail, Trans-Siberian, Swiss alpine tunnels).
+     - *Modern (1989+)*: Highway freight corridors, oil/gas transit pipelines, fiber-optic transit hubs.
+   - Trade returns manifest as **Transit Tolls & Inland Market Velocity** rather than maritime fleet dispatches.
+   - Strategic Advantage: Immune to naval blockades; central continental crossroads for international freight.
+
+---
+
+## 11. Evolution of Global Reserve Currencies: Gold Specie $\to$ British Pound (£) $\to$ US Dollar ($)
+
+In early eras, all sovereigns barter and balance budgets in gold ducats. However, as the global macroeconomic system evolves, the **International Monetary Standard** shifts under hegemonic global anchors:
+
+```mermaid
+flowchart LR
+    R1["1500–1859 Discovery & Revolt\n🪙 Hard Gold & Silver Specie\n(Ducats, Pieces of Eight)"]
+    R2["1860–1944 Independence & Decolonisation\n💷 British Pound Sterling (£)\n(Classical Gold Standard, Bank of England)"]
+    R3["1945–1989+ Modern Era\n💵 The United States Dollar ($)\n(Bretton Woods, Petro-Dollar Hegemon)"]
+
+    R1 -->|"Pax Britannica & City of London"| R2
+    R2 -->|"Post-WWII Bretton Woods Hegemony"| R3
+```
+
+### A. The Three Monetary Eras (Roadmap for Advanced Macro Engine)
+1. **The Hard-Specie Regime (1500–1859)**:
+   - Anchor: Physical Gold & Silver Bullion.
+   - All currencies are direct representations of metal weight.
+   - Zero sovereign deficits; currency value is strictly `Treasury Specie / GDP`.
+2. **The Pax Britannica & Sterling Standard (1860–1944)**:
+   - Anchor: **The British Pound Sterling (£)** backed by the Bank of England's gold reserves.
+   - London acts as the world's clearinghouse; global commodities (coal, cotton, shipping freight) are priced in Sterling.
+   - Great Britain enjoys **Imperial Seigniorage**: lower borrowing rates on sovereign debt and global demand for sterling treasury bills.
+3. **The Dollar Hegemony & Fiat Financialization (1945–1989+)**:
+   - Anchor: **The United States Dollar ($)**.
+   - All international trade (crude oil, semiconductors, international air transit) is settled in USD.
+   - The global reserve hegemon enjoys the **"Exorbitant Privilege"**: can run persistent structural budget and trade deficits without immediate currency collapse, exporting inflation to the rest of the world.
+   - Other nations must maintain **Foreign Exchange Reserves (FX)** in USD to protect their domestic currencies against speculative runs and balance-of-payments crises.
+
 
 

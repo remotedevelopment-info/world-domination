@@ -64,8 +64,8 @@ func InitDB() error {
 		return fmt.Errorf("error opening database: %v", err)
 	}
 
-	DB.SetMaxOpenConns(25)
-	DB.SetMaxIdleConns(10)
+	DB.SetMaxOpenConns(50)
+	DB.SetMaxIdleConns(25)
 	DB.SetConnMaxLifetime(5 * time.Minute)
 	DB.SetConnMaxIdleTime(1 * time.Minute)
 
@@ -161,6 +161,18 @@ func InitSchema() error {
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fort_w INTEGER DEFAULT 0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS entrepreneurial_pride DOUBLE PRECISION DEFAULT 100.0;
 	ALTER TABLE countries ADD COLUMN IF NOT EXISTS military_delayed_costs BIGINT DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_progress DOUBLE PRECISION DEFAULT 0.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_yield DOUBLE PRECISION DEFAULT 0.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS colonial_fleets INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS fiscal_archetype VARCHAR(50) DEFAULT 'balanced';
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS tax_mod DOUBLE PRECISION DEFAULT 1.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS trade_mod DOUBLE PRECISION DEFAULT 1.0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS planned_economy_rate INTEGER DEFAULT 50;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS planned_investment INTEGER DEFAULT 0;
+	ALTER TABLE countries ADD COLUMN IF NOT EXISTS planned_social_costs INTEGER DEFAULT 0;
+	UPDATE countries SET planned_economy_rate = economy_rate WHERE planned_economy_rate IS NULL;
+	UPDATE countries SET planned_investment = investment WHERE planned_investment IS NULL;
+	UPDATE countries SET planned_social_costs = social_costs WHERE planned_social_costs IS NULL;
 	UPDATE countries SET troops_regular = troops WHERE troops > 0 AND (COALESCE(troops_levy, 0) + COALESCE(troops_regular, 0) + COALESCE(troops_elite, 0)) = 0;
 
 	CREATE TABLE IF NOT EXISTS troop_movements (
@@ -249,6 +261,26 @@ func InitSchema() error {
 	INSERT INTO eras (name, description, is_active) 
 	VALUES ('medieval', 'Medieval Europe - Kingdoms and Fiefdoms', true)
 	ON CONFLICT (name) DO NOTHING;
+
+	CREATE TABLE IF NOT EXISTS expedition_era_pricing (
+		era_key VARCHAR(32) PRIMARY KEY,
+		era_name VARCHAR(64) NOT NULL,
+		start_year DOUBLE PRECISION NOT NULL,
+		end_year DOUBLE PRECISION NOT NULL,
+		cost_per_pct DOUBLE PRECISION NOT NULL DEFAULT 12.0,
+		gestation_years DOUBLE PRECISION NOT NULL DEFAULT 2.0,
+		yield_bonus DOUBLE PRECISION NOT NULL DEFAULT 0.05,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+
+	INSERT INTO expedition_era_pricing (era_key, era_name, start_year, end_year, cost_per_pct, gestation_years, yield_bonus)
+	VALUES
+		('discovery', 'The Age of Discovery (1500–1749)', 1500, 1750, 12.0, 2.0, 0.05),
+		('revolt', 'The Age of Revolt (1750–1859)', 1750, 1860, 18.0, 1.5, 0.05),
+		('independence', 'The Age of Independence (1860–1919)', 1860, 1920, 30.0, 1.0, 0.06),
+		('decolonisation', 'The Age of Decolonisation (1920–1988)', 1920, 1989, 60.0, 0.5, 0.08),
+		('modern', 'The Modern Age (1989+)', 1989, 9999, 120.0, 0.35, 0.10)
+	ON CONFLICT (era_key) DO NOTHING;
 	`
 
 	_, err := DB.Exec(schema)
@@ -283,6 +315,123 @@ func InitSchema() error {
 
 	log.Println("Database schema initialized successfully")
 	return nil
+}
+
+// CountryFiscalProfile defines historical tax and trade variances for a country.
+type CountryFiscalProfile struct {
+	Archetype  string
+	TaxMod     float64 // Agrarian peasant extraction modifier (0.15 to 1.35)
+	TradeMod   float64 // Maritime trade & tariff multiplier (0.60 to 2.80)
+	CapexMod   float64 // Capex investment effectiveness multiplier
+	IsSeaGoing bool    // False if landlocked continental realm
+}
+
+// IsLandlockedRealm returns true if the sovereign nation lacks direct ocean coastline.
+func IsLandlockedRealm(code string) bool {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "SWI", "CHE", "AUT", "HAB", "CZE", "BOH", "HUN", "SRB", "BLR", "SVK", "MDA", "MKD",
+		"BOL", "PRY", "ETH", "UGA", "RWA", "BDI", "ZWE", "ZMB", "MWI", "BFA", "NER", "TCD",
+		"CAF", "MLI", "AFG", "NPL", "BTN", "MNG", "KAZ", "UZB", "TKM", "KGZ", "TJK", "ARM",
+		"AZE", "LUX", "LIE", "AND", "SMR", "VAT":
+		return true
+	default:
+		return false
+	}
+}
+
+// GetCountryFiscalProfile returns the historical fiscal archetype and tax/trade modifiers for a nation across all eras.
+func GetCountryFiscalProfile(code string) CountryFiscalProfile {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	isLandlocked := IsLandlockedRealm(code)
+	isSeaGoing := !isLandlocked
+
+	switch code {
+	// 1. Maritime Empires (Customs, Shipping, Naval Capex)
+	case "ENG", "GBR":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.50, TradeMod: 1.80, CapexMod: 1.25, IsSeaGoing: true}
+	case "NED", "NLD":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.45, TradeMod: 2.00, CapexMod: 1.30, IsSeaGoing: true}
+	case "POR":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.55, TradeMod: 1.75, CapexMod: 1.25, IsSeaGoing: true}
+	case "DEN", "DNK":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.60, TradeMod: 1.50, CapexMod: 1.15, IsSeaGoing: true}
+	case "NOR":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.60, TradeMod: 1.50, CapexMod: 1.15, IsSeaGoing: true}
+	case "KAL":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.65, TradeMod: 1.45, CapexMod: 1.10, IsSeaGoing: true}
+	case "JPN":
+		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.70, TradeMod: 1.60, CapexMod: 1.25, IsSeaGoing: true}
+
+	// 2. Bullion Monopolies
+	case "ESP", "CAS", "SPA":
+		return CountryFiscalProfile{Archetype: "bullion_monopoly", TaxMod: 0.85, TradeMod: 1.40, CapexMod: 1.10, IsSeaGoing: true}
+
+	// 3. Agrarian Bureaucracies (Peasant Leviathans)
+	case "FRA":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.30, TradeMod: 0.65, CapexMod: 0.85, IsSeaGoing: true}
+	case "RUS", "SOV", "USSR":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.20, TradeMod: 0.60, CapexMod: 0.85, IsSeaGoing: true}
+	case "HRE":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 0.90, TradeMod: 0.90, CapexMod: 0.95, IsSeaGoing: true}
+	case "PRU":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.15, TradeMod: 0.75, CapexMod: 1.00, IsSeaGoing: true}
+	case "AUT", "HAB":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.10, TradeMod: 0.75, CapexMod: 0.90, IsSeaGoing: false}
+	case "CHN", "QNG":
+		return CountryFiscalProfile{Archetype: "agrarian_bureaucracy", TaxMod: 1.25, TradeMod: 0.70, CapexMod: 0.90, IsSeaGoing: true}
+
+	// 4. Merchant Republics & Financial Hubs
+	case "VEN":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.15, TradeMod: 2.50, CapexMod: 1.50, IsSeaGoing: true}
+	case "GEN":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.20, TradeMod: 2.30, CapexMod: 1.45, IsSeaGoing: true}
+	case "SWI", "CHE":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.25, TradeMod: 2.20, CapexMod: 1.40, IsSeaGoing: false}
+	case "LUX":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.20, TradeMod: 2.30, CapexMod: 1.40, IsSeaGoing: false}
+	case "SGP":
+		return CountryFiscalProfile{Archetype: "merchant_republic", TaxMod: 0.15, TradeMod: 2.60, CapexMod: 1.60, IsSeaGoing: true}
+
+	// 5. Noble Commonwealths
+	case "POL":
+		return CountryFiscalProfile{Archetype: "noble_commonwealth", TaxMod: 0.40, TradeMod: 1.10, CapexMod: 0.90, IsSeaGoing: true}
+	case "SCO":
+		return CountryFiscalProfile{Archetype: "noble_commonwealth", TaxMod: 0.50, TradeMod: 1.00, CapexMod: 0.95, IsSeaGoing: true}
+	case "HUN":
+		return CountryFiscalProfile{Archetype: "noble_commonwealth", TaxMod: 0.45, TradeMod: 1.00, CapexMod: 0.90, IsSeaGoing: false}
+
+	// 6. Imperial Fiefs
+	case "OTT", "TUR":
+		return CountryFiscalProfile{Archetype: "imperial_fief", TaxMod: 1.10, TradeMod: 1.20, CapexMod: 1.00, IsSeaGoing: true}
+	case "PER", "IRN", "SAF":
+		return CountryFiscalProfile{Archetype: "imperial_fief", TaxMod: 1.10, TradeMod: 1.15, CapexMod: 1.00, IsSeaGoing: true}
+	case "MUG":
+		return CountryFiscalProfile{Archetype: "imperial_fief", TaxMod: 1.15, TradeMod: 1.10, CapexMod: 0.95, IsSeaGoing: true}
+	case "MOR", "MAR":
+		return CountryFiscalProfile{Archetype: "imperial_fief", TaxMod: 1.05, TradeMod: 1.15, CapexMod: 1.00, IsSeaGoing: true}
+
+	// 7. Industrial Powerhouses
+	case "USA":
+		return CountryFiscalProfile{Archetype: "industrial_powerhouse", TaxMod: 0.75, TradeMod: 1.60, CapexMod: 1.90, IsSeaGoing: true}
+	case "GER", "DEU":
+		return CountryFiscalProfile{Archetype: "industrial_powerhouse", TaxMod: 0.80, TradeMod: 1.55, CapexMod: 1.85, IsSeaGoing: true}
+	case "BEL":
+		return CountryFiscalProfile{Archetype: "industrial_powerhouse", TaxMod: 0.75, TradeMod: 1.65, CapexMod: 1.70, IsSeaGoing: true}
+
+	// 8. Commodity Rentiers
+	case "SAU", "KWT", "ARE", "QAT", "IRQ", "LBY", "NGA":
+		return CountryFiscalProfile{Archetype: "commodity_rentier", TaxMod: 0.40, TradeMod: 2.10, CapexMod: 1.10, IsSeaGoing: isSeaGoing}
+
+	// 9. Post-Colonial Developmental
+	case "IND", "IDN", "EGY", "GHA", "KEN", "DZA", "PAK", "BRA", "MEX", "ARG", "COL":
+		return CountryFiscalProfile{Archetype: "post_colonial_developmental", TaxMod: 0.90, TradeMod: 0.95, CapexMod: 1.00, IsSeaGoing: isSeaGoing}
+
+	case "SWE":
+		return CountryFiscalProfile{Archetype: "balanced", TaxMod: 0.80, TradeMod: 1.20, CapexMod: 1.10, IsSeaGoing: true}
+
+	default:
+		return CountryFiscalProfile{Archetype: "balanced", TaxMod: 1.00, TradeMod: 1.00, CapexMod: 1.00, IsSeaGoing: isSeaGoing}
+	}
 }
 
 type InitialKingdom struct {
@@ -510,9 +659,10 @@ func SeedInitialData() error {
 	}
 
 	for _, k := range InitialKingdomList {
+		profile := GetCountryFiscalProfile(k.Code)
 		res, err := tx.Exec(
-			`UPDATE countries SET name = $1, color = $2, is_island = $3, borders = $4::jsonb WHERE code = $5 AND era = 'medieval'`,
-			k.Name, k.Color, k.IsIsland, k.BordersJSON, k.Code,
+			`UPDATE countries SET name = $1, color = $2, is_island = $3, borders = $4::jsonb, fiscal_archetype = $5, tax_mod = $6, trade_mod = $7 WHERE code = $8 AND era = 'medieval'`,
+			k.Name, k.Color, k.IsIsland, k.BordersJSON, profile.Archetype, profile.TaxMod, profile.TradeMod, k.Code,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -525,8 +675,8 @@ func SeedInitialData() error {
 		}
 		if rowsAffected == 0 {
 			if _, err := tx.Exec(
-				`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7::jsonb)`,
-				k.Name, k.Code, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON,
+				`INSERT INTO countries (name, code, color, population, resources, territory_type, era, is_island, borders, fiscal_archetype, tax_mod, trade_mod) VALUES ($1, $2, $3, $4, $5, 'kingdom', 'medieval', $6, $7::jsonb, $8, $9, $10)`,
+				k.Name, k.Code, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, profile.Archetype, profile.TaxMod, profile.TradeMod,
 			); err != nil {
 				tx.Rollback()
 				return err
@@ -588,6 +738,14 @@ func ResetGameToYear1500(clearClaims bool) error {
 		if _, err := tx.Exec("UPDATE countries SET owner_id = NULL"); err != nil {
 			return fmt.Errorf("failed to reset country owners: %w", err)
 		}
+	} else {
+		// Even if retaining medieval claims, purge claims on future non-medieval realms
+		if _, err := tx.Exec("DELETE FROM player_countries WHERE country_id IN (SELECT id FROM countries WHERE era != 'medieval')"); err != nil {
+			return fmt.Errorf("failed to purge future era player claims: %w", err)
+		}
+		if _, err := tx.Exec("UPDATE countries SET owner_id = NULL WHERE era != 'medieval'"); err != nil {
+			return fmt.Errorf("failed to reset future era country owners: %w", err)
+		}
 	}
 
 	// 3. Blanket reset of all countries' tactical, military, and economic parameters
@@ -602,10 +760,13 @@ func ResetGameToYear1500(clearClaims bool) error {
 		    fort_e = 0,
 		    fort_w = 0,
 		    economy_rate = 50,
+		    planned_economy_rate = 50,
 		    markets = 0,
 		    infrastructure = 0,
 		    investment = 0,
+		    planned_investment = 0,
 		    social_costs = 0,
+		    planned_social_costs = 0,
 		    last_tax_revenue = 0,
 		    last_market_income = 0,
 		    last_military_exp = 0,
@@ -616,6 +777,9 @@ func ResetGameToYear1500(clearClaims bool) error {
 		    last_migration = 0,
 		    entrepreneurial_pride = 100.0,
 		    military_delayed_costs = 0,
+		    colonial_progress = 0.0,
+		    colonial_yield = 0.0,
+		    colonial_fleets = 0,
 		    updated_at = CURRENT_TIMESTAMP
 	`
 	if _, err := tx.Exec(blanketReset); err != nil {
@@ -624,6 +788,7 @@ func ResetGameToYear1500(clearClaims bool) error {
 
 	// 4. Restore exact baseline starting population, resources, and attributes
 	for _, k := range InitialKingdomList {
+		profile := GetCountryFiscalProfile(k.Code)
 		var updateQuery string
 		if clearClaims {
 			updateQuery = `
@@ -634,23 +799,41 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    resources = $4,
 				    is_island = $5,
 				    borders = $6::jsonb,
+				    fiscal_archetype = $7,
+				    tax_mod = $8,
+				    trade_mod = $9,
 				    owner_id = NULL,
 				    troops = 0,
+				    troops_levy = 0,
+				    troops_regular = 0,
+				    troops_elite = 0,
+				    fort_n = 0,
+				    fort_s = 0,
+				    fort_e = 0,
+				    fort_w = 0,
+				    military_delayed_costs = 0,
+				    last_military_exp = 0,
+				    entrepreneurial_pride = 100.0,
+				    colonial_progress = 0.0,
+				    colonial_yield = 0.0,
+				    colonial_fleets = 0,
 				    economy_rate = 50,
+				    planned_economy_rate = 50,
 				    markets = 0,
 				    infrastructure = 0,
 				    investment = 0,
+				    planned_investment = 0,
 				    social_costs = 0,
+				    planned_social_costs = 0,
 				    last_tax_revenue = 0,
 				    last_market_income = 0,
-				    last_military_exp = 0,
 				    last_social_exp = 0,
 				    last_investment_exp = 0,
 				    last_total_exp = 0,
 				    last_budget_balance = 0,
 				    last_migration = 0,
 				    updated_at = CURRENT_TIMESTAMP
-				WHERE code = $7 AND era = 'medieval'
+				WHERE code = $10 AND era = 'medieval'
 			`
 		} else {
 			updateQuery = `
@@ -661,25 +844,43 @@ func ResetGameToYear1500(clearClaims bool) error {
 				    resources = $4,
 				    is_island = $5,
 				    borders = $6::jsonb,
+				    fiscal_archetype = $7,
+				    tax_mod = $8,
+				    trade_mod = $9,
 				    troops = 0,
+				    troops_levy = 0,
+				    troops_regular = 0,
+				    troops_elite = 0,
+				    fort_n = 0,
+				    fort_s = 0,
+				    fort_e = 0,
+				    fort_w = 0,
+				    military_delayed_costs = 0,
+				    last_military_exp = 0,
+				    entrepreneurial_pride = 100.0,
+				    colonial_progress = 0.0,
+				    colonial_yield = 0.0,
+				    colonial_fleets = 0,
 				    economy_rate = 50,
+				    planned_economy_rate = 50,
 				    markets = 0,
 				    infrastructure = 0,
 				    investment = 0,
+				    planned_investment = 0,
 				    social_costs = 0,
+				    planned_social_costs = 0,
 				    last_tax_revenue = 0,
 				    last_market_income = 0,
-				    last_military_exp = 0,
 				    last_social_exp = 0,
 				    last_investment_exp = 0,
 				    last_total_exp = 0,
 				    last_budget_balance = 0,
 				    last_migration = 0,
 				    updated_at = CURRENT_TIMESTAMP
-				WHERE code = $7 AND era = 'medieval'
+				WHERE code = $10 AND era = 'medieval'
 			`
 		}
-		if _, err := tx.Exec(updateQuery, k.Name, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, k.Code); err != nil {
+		if _, err := tx.Exec(updateQuery, k.Name, k.Color, k.Population, k.Resources, k.IsIsland, k.BordersJSON, profile.Archetype, profile.TaxMod, profile.TradeMod, k.Code); err != nil {
 			return fmt.Errorf("failed to restore country baseline for %s: %w", k.Code, err)
 		}
 	}
@@ -801,10 +1002,13 @@ func GetCountries(era string) ([]models.Country, error) {
 		COALESCE(c.troops_levy, 0), COALESCE(c.troops_regular, 0), COALESCE(c.troops_elite, 0),
 		COALESCE(c.fort_n, 0), COALESCE(c.fort_s, 0), COALESCE(c.fort_e, 0), COALESCE(c.fort_w, 0),
 		c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
+		COALESCE(c.planned_economy_rate, c.economy_rate), COALESCE(c.planned_investment, c.investment), COALESCE(c.planned_social_costs, c.social_costs),
 		COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
 		COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
+		COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
+		COALESCE(c.fiscal_archetype, 'balanced'), COALESCE(c.tax_mod, 1.0), COALESCE(c.trade_mod, 1.0),
 		c.territory_type, c.borders, c.is_island
 		FROM countries c
 		WHERE c.era = $1
@@ -824,10 +1028,13 @@ func GetCountries(era string) ([]models.Country, error) {
 			&c.TroopsLevy, &c.TroopsRegular, &c.TroopsElite,
 			&c.FortN, &c.FortS, &c.FortE, &c.FortW,
 			&c.EconomyRate, &c.Markets, &c.Infrastructure, &c.Investment, &c.SocialCosts,
+			&c.PlannedEconomyRate, &c.PlannedInvestment, &c.PlannedSocialCosts,
 			&c.LastTaxRevenue, &c.LastMarketIncome, &c.LastMilitaryExp,
 			&c.LastSocialExp, &c.LastInvestmentExp, &c.LastTotalExp,
 			&c.LastBudgetBalance, &c.LastMigration,
 			&c.EntrepreneurialPride, &c.MilitaryDelayedCosts,
+			&c.ColonialProgress, &c.ColonialYield, &c.ColonialFleets,
+			&c.FiscalArchetype, &c.TaxMod, &c.TradeMod,
 			&c.TerritoryType, &c.Borders, &c.IsIsland,
 		); err != nil {
 			return nil, err
@@ -959,11 +1166,12 @@ func MarkPlayerCountryInactive(userID, countryID int64) error {
 // LogAction records an action in the audit table.
 func LogAction(userID, countryID int64, actionType, description string,
 	targetCountryID *int64, direction, speed, movementType string) error {
-	return DB.QueryRow(
+	_, err := DB.Exec(
 		`INSERT INTO game_actions (user_id, country_id, action_type, description,
 		             target_country_id, direction, speed, movement_type, game_date)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
-		userID, countryID, actionType, description, targetCountryID, direction, speed, movementType).Err()
+		userID, countryID, actionType, description, targetCountryID, direction, speed, movementType)
+	return err
 }
 
 // UpdateCountryResources sets the resource total for a kingdom.
@@ -1085,6 +1293,7 @@ func UpdateCountryVitalsAndTroopLayers(
 	countryID int64,
 	population, resources, troops, levy, regular, elite int64,
 	pride float64, delayedCosts int64,
+	colonialProgress, colonialYield float64, colonialFleets int64,
 ) error {
 	if DB == nil {
 		return nil
@@ -1110,16 +1319,27 @@ func UpdateCountryVitalsAndTroopLayers(
 	if delayedCosts < 0 {
 		delayedCosts = 0
 	}
+	if colonialProgress < 0 {
+		colonialProgress = 0
+	}
+	if colonialYield < 0 {
+		colonialYield = 0
+	}
+	if colonialFleets < 0 {
+		colonialFleets = 0
+	}
 	_, err := DB.Exec(`
 		UPDATE countries
 		SET population = $1, resources = $2, troops = $3,
 		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
 		    entrepreneurial_pride = $7, military_delayed_costs = $8,
+		    colonial_progress = $9, colonial_yield = $10, colonial_fleets = $11,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $9`,
+		WHERE id = $12`,
 		population, resources, troops,
 		levy, regular, elite,
 		pride, delayedCosts,
+		colonialProgress, colonialYield, colonialFleets,
 		countryID)
 	return err
 }
@@ -1130,6 +1350,7 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 	population, resources, troops, levy, regular, elite int64,
 	lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration int64,
 	pride float64, delayedCosts int64,
+	colonialProgress, colonialYield float64, colonialFleets int64,
 ) error {
 	if DB == nil {
 		return nil
@@ -1155,20 +1376,34 @@ func UpdateCountryVitalsBudgetAndTroopLayers(
 	if delayedCosts < 0 {
 		delayedCosts = 0
 	}
+	if colonialProgress < 0 {
+		colonialProgress = 0
+	}
+	if colonialYield < 0 {
+		colonialYield = 0
+	}
+	if colonialFleets < 0 {
+		colonialFleets = 0
+	}
 	_, err := DB.Exec(`
 		UPDATE countries
 		SET population = $1, resources = $2, troops = $3,
 		    troops_levy = $4, troops_regular = $5, troops_elite = $6,
+		    economy_rate = COALESCE(planned_economy_rate, economy_rate),
+		    investment = COALESCE(planned_investment, investment),
+		    social_costs = COALESCE(planned_social_costs, social_costs),
 		    last_tax_revenue = $7, last_market_income = $8, last_military_exp = $9,
 		    last_social_exp = $10, last_investment_exp = $11, last_total_exp = $12,
 		    last_budget_balance = $13, last_migration = $14,
 		    entrepreneurial_pride = $15, military_delayed_costs = $16,
+		    colonial_progress = $17, colonial_yield = $18, colonial_fleets = $19,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $17`,
+		WHERE id = $20`,
 		population, resources, troops,
 		levy, regular, elite,
 		lastTaxRev, lastMarketInc, lastMilExp, lastSocExp, lastInvExp, lastTotalExp, lastBalance, lastMigration,
 		pride, delayedCosts,
+		colonialProgress, colonialYield, colonialFleets,
 		countryID)
 	return err
 }
@@ -1268,6 +1503,9 @@ type KingdomDetailRow struct {
 	Infrastructure    int64
 	Investment        int64
 	SocialCosts       int64
+	PlannedEconomyRate int64
+	PlannedInvestment  int64
+	PlannedSocialCosts int64
 	LastTaxRevenue    int64
 	LastMarketIncome  int64
 	LastMilitaryExp   int64
@@ -1278,6 +1516,12 @@ type KingdomDetailRow struct {
 	LastMigration     int64
 	EntrepreneurialPride float64
 	MilitaryDelayedCosts int64
+	ColonialProgress     float64
+	ColonialYield        float64
+	ColonialFleets       int64
+	FiscalArchetype      string
+	TaxMod               float64
+	TradeMod             float64
 	OwnerID           *int64
 	OwnerName         *string
 	CentralTroops     int64
@@ -1298,10 +1542,13 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		       COALESCE(c.troops_levy, 0), COALESCE(c.troops_regular, 0), COALESCE(c.troops_elite, 0),
 		       COALESCE(c.fort_n, 0), COALESCE(c.fort_s, 0), COALESCE(c.fort_e, 0), COALESCE(c.fort_w, 0),
 		       c.economy_rate, c.markets, c.infrastructure, c.investment, c.social_costs,
+		       COALESCE(c.planned_economy_rate, c.economy_rate), COALESCE(c.planned_investment, c.investment), COALESCE(c.planned_social_costs, c.social_costs),
 		       COALESCE(c.last_tax_revenue, 0), COALESCE(c.last_market_income, 0), COALESCE(c.last_military_exp, 0),
 		       COALESCE(c.last_social_exp, 0), COALESCE(c.last_investment_exp, 0), COALESCE(c.last_total_exp, 0),
 		       COALESCE(c.last_budget_balance, 0), COALESCE(c.last_migration, 0),
 		       COALESCE(c.entrepreneurial_pride, 100.0), COALESCE(c.military_delayed_costs, 0),
+		       COALESCE(c.colonial_progress, 0.0), COALESCE(c.colonial_yield, 0.0), COALESCE(c.colonial_fleets, 0),
+		       COALESCE(c.fiscal_archetype, 'balanced'), COALESCE(c.tax_mod, 1.0), COALESCE(c.trade_mod, 1.0),
 		       c.owner_id, u.username
 		 FROM countries c
 		 LEFT JOIN player_countries pc ON pc.country_id = c.id AND pc.is_active = true
@@ -1312,10 +1559,13 @@ func GetKingdomDetail(countryID int64) (*KingdomDetailRow, error) {
 		&r.TroopsLevy, &r.TroopsRegular, &r.TroopsElite,
 		&r.FortN, &r.FortS, &r.FortE, &r.FortW,
 		&r.EconomyRate, &r.Markets, &r.Infrastructure, &r.Investment, &r.SocialCosts,
+		&r.PlannedEconomyRate, &r.PlannedInvestment, &r.PlannedSocialCosts,
 		&r.LastTaxRevenue, &r.LastMarketIncome, &r.LastMilitaryExp,
 		&r.LastSocialExp, &r.LastInvestmentExp, &r.LastTotalExp,
 		&r.LastBudgetBalance, &r.LastMigration,
 		&r.EntrepreneurialPride, &r.MilitaryDelayedCosts,
+		&r.ColonialProgress, &r.ColonialYield, &r.ColonialFleets,
+		&r.FiscalArchetype, &r.TaxMod, &r.TradeMod,
 		&r.OwnerID, &r.OwnerName)
 	if err != nil {
 		return nil, err
@@ -1417,10 +1667,13 @@ type EconomyRateRow struct {
 
 // EconomySettingsRow describes the economic settings for a country.
 type EconomySettingsRow struct {
-	CountryID   int64 `json:"country_id"`
-	EconomyRate int64 `json:"economy_rate"`
-	Investment  int64 `json:"investment"`
-	SocialCosts int64 `json:"social_costs"`
+	CountryID          int64 `json:"country_id"`
+	EconomyRate        int64 `json:"economy_rate"`
+	Investment         int64 `json:"investment"`
+	SocialCosts        int64 `json:"social_costs"`
+	PlannedEconomyRate int64 `json:"planned_economy_rate"`
+	PlannedInvestment  int64 `json:"planned_investment"`
+	PlannedSocialCosts int64 `json:"planned_social_costs"`
 }
 
 // GetEconomyRate returns the current economy_rate for a country.
@@ -1433,16 +1686,22 @@ func GetEconomyRate(countryID int64) (int64, error) {
 // GetEconomySettings returns the economic settings for a country.
 func GetEconomySettings(countryID int64) (EconomySettingsRow, error) {
 	var r EconomySettingsRow
-	err := DB.QueryRow(`SELECT economy_rate, investment, social_costs FROM countries WHERE id = $1`, countryID).Scan(&r.EconomyRate, &r.Investment, &r.SocialCosts)
+	err := DB.QueryRow(`SELECT economy_rate, investment, social_costs, COALESCE(planned_economy_rate, economy_rate), COALESCE(planned_investment, investment), COALESCE(planned_social_costs, social_costs) FROM countries WHERE id = $1`, countryID).Scan(&r.EconomyRate, &r.Investment, &r.SocialCosts, &r.PlannedEconomyRate, &r.PlannedInvestment, &r.PlannedSocialCosts)
 	if err == sql.ErrNoRows {
 		return r, nil
 	}
 	return r, err
 }
 
-// SetEconomySettings updates the economic settings for a country.
+// SetEconomySettings updates both active and planned economic settings for a country (used for admin/testing).
 func SetEconomySettings(countryID int64, rate, investment, socialCosts int64) error {
-	_, err := DB.Exec(`UPDATE countries SET economy_rate = $1, investment = $2, social_costs = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`, rate, investment, socialCosts, countryID)
+	_, err := DB.Exec(`UPDATE countries SET economy_rate = $1, investment = $2, social_costs = $3, planned_economy_rate = $1, planned_investment = $2, planned_social_costs = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`, rate, investment, socialCosts, countryID)
+	return err
+}
+
+// SetPlannedEconomySettings updates the planned (next-period) appropriations without altering the active year budget.
+func SetPlannedEconomySettings(countryID int64, rate, investment, socialCosts int64) error {
+	_, err := DB.Exec(`UPDATE countries SET planned_economy_rate = $1, planned_investment = $2, planned_social_costs = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`, rate, investment, socialCosts, countryID)
 	return err
 }
 
@@ -1676,3 +1935,67 @@ func GetAdminDashboardUsers() ([]AdminUserOverview, error) {
 	}
 	return result, rows.Err()
 }
+
+// ExpeditionPricingRow encapsulates era-specific expedition cost per percentage and gestation duration.
+type ExpeditionPricingRow struct {
+	EraKey         string    `json:"era_key"`
+	EraName        string    `json:"era_name"`
+	StartYear      float64   `json:"start_year"`
+	EndYear        float64   `json:"end_year"`
+	CostPerPct     float64   `json:"cost_per_pct"`
+	GestationYears float64   `json:"gestation_years"`
+	YieldBonus     float64   `json:"yield_bonus"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// GetExpeditionEraPricing loads the configured expedition pricing matrix across eras.
+func GetExpeditionEraPricing() ([]ExpeditionPricingRow, error) {
+	if DB == nil {
+		return nil, nil
+	}
+	rows, err := DB.Query(`
+		SELECT era_key, era_name, start_year, end_year, cost_per_pct, gestation_years, yield_bonus, updated_at
+		FROM expedition_era_pricing
+		ORDER BY start_year ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ExpeditionPricingRow
+	for rows.Next() {
+		var r ExpeditionPricingRow
+		if err := rows.Scan(
+			&r.EraKey, &r.EraName, &r.StartYear, &r.EndYear,
+			&r.CostPerPct, &r.GestationYears, &r.YieldBonus, &r.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// UpdateExpeditionEraPricing updates the pricing parameters for a specified era.
+func UpdateExpeditionEraPricing(eraKey string, costPerPct, gestationYears, yieldBonus float64) error {
+	if DB == nil {
+		return nil
+	}
+	if costPerPct <= 0 {
+		costPerPct = 1.0
+	}
+	if gestationYears <= 0 {
+		gestationYears = 0.1
+	}
+	if yieldBonus <= 0 {
+		yieldBonus = 0.01
+	}
+	_, err := DB.Exec(`
+		UPDATE expedition_era_pricing
+		SET cost_per_pct = $1, gestation_years = $2, yield_bonus = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE era_key = $4
+	`, costPerPct, gestationYears, yieldBonus, eraKey)
+	return err
+}
+

@@ -79,6 +79,10 @@ export function connectWebSocket() {
       syncTimelineFromServer(payload);
     }
 
+    if (Array.isArray(payload.expedition_pricing) && payload.expedition_pricing.length > 0) {
+      state.expeditionPricing = payload.expedition_pricing;
+    }
+
     state.lastStateAt = Date.now();
     state.currentTick = payload.tick || 0;
     syncKingdomsForYear(payload.countries, state.currentSimYear);
@@ -94,7 +98,11 @@ export function connectWebSocket() {
       const actionKey = JSON.stringify(latest);
       if (actionKey !== lastLoggedActionKey) {
         lastLoggedActionKey = actionKey;
-        logMessage(`${latest.action_type}: ${latest.description}`);
+        if (latest.action_type === "news") {
+          logMessage(`📰 ${latest.description}`);
+        } else {
+          logMessage(`${latest.action_type}: ${latest.description}`);
+        }
       }
     }
 

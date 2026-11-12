@@ -39,6 +39,9 @@ type Country struct {
 	EconomyRate   int64     `json:"economy_rate"`  // Tax rate 0-100 set by the owning player
 	Investment    int64     `json:"investment"`    // Future GDP multiplier (0-100 slider)
 	SocialCosts   int64     `json:"social_costs"`  // Growth/wealth vs currency strength (0-100 slider)
+	PlannedEconomyRate int64 `json:"planned_economy_rate"` // Next-year target tax rate
+	PlannedInvestment  int64 `json:"planned_investment"`  // Next-year target capex slider
+	PlannedSocialCosts int64 `json:"planned_social_costs"` // Next-year target social slider
 	Markets       int64     `json:"markets"`       // Build level: boosts trade output
 	Infrastructure int64    `json:"infrastructure"` // Build level: boosts productivity & growth
 	LastTaxRevenue    int64 `json:"last_tax_revenue"`
@@ -51,6 +54,12 @@ type Country struct {
 	LastMigration     int64 `json:"last_migration"`
 	EntrepreneurialPride float64 `json:"entrepreneurial_pride"` // Intangible commercial confidence 0-100%
 	MilitaryDelayedCosts int64   `json:"military_delayed_costs"` // Lingering military commitments/pensions
+	ColonialProgress     float64 `json:"colonial_progress"`     // In-flight capital gestation progress 0-100%
+	ColonialYield        float64 `json:"colonial_yield"`        // Permanent compounded trade productivity yield
+	ColonialFleets       int64   `json:"colonial_fleets"`       // Total commissioned / returned expedition fleets
+	FiscalArchetype      string  `json:"fiscal_archetype"`      // 'maritime', 'bullion_monopoly', 'merchant_republic', 'agrarian_bureaucracy', etc.
+	TaxMod               float64 `json:"tax_mod"`               // Agrarian extraction modifier (0.15 to 1.30)
+	TradeMod             float64 `json:"trade_mod"`             // Maritime trade & tariff yield modifier (0.60 to 2.50)
 	TerritoryType string    `json:"territory_type"` // kingdom, state, region, etc.
 	Era           string    `json:"era"`            // medieval, modern, ancient, etc.
 	CreatedAt     time.Time `json:"created_at"`
