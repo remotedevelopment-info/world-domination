@@ -348,7 +348,7 @@ func GetCountryFiscalProfile(code string) CountryFiscalProfile {
 
 	switch code {
 	// 1. Maritime Empires (Customs, Shipping, Naval Capex)
-	case "ENG", "GBR":
+	case "ENG", "GBR", "WAL":
 		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.50, TradeMod: 1.80, CapexMod: 1.25, IsSeaGoing: true}
 	case "NED", "NLD":
 		return CountryFiscalProfile{Archetype: "maritime", TaxMod: 0.45, TradeMod: 2.00, CapexMod: 1.30, IsSeaGoing: true}
@@ -449,7 +449,7 @@ var InitialKingdomList = []InitialKingdom{
 	{"Crown of Spain", "ESP", "#D35400", 8500000, 750, false, "{\"borders\": [\"POR\", \"FRA\", \"MAR\", \"ALG\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 	{"Kingdom of Portugal", "POR", "#16A085", 2200000, 450, false, "{\"borders\": [\"ESP\", \"MAR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 	{"Kingdom of France", "FRA", "#2980B9", 16000000, 850, false, "{\"borders\": [\"ESP\", \"HRE\", \"ENG\", \"NED\", \"ITA\", \"ALG\", \"BEL\", \"SWI\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
-	{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, true, "{\"borders\": [\"FRA\", \"SCO\", \"IRL\", \"NED\", \"NOR\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kingdom of England", "ENG", "#C0392B", 4500000, 600, true, "{\"borders\": [\"FRA\", \"SCO\", \"IRL\", \"NED\", \"NOR\", \"WAL\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 	{"Holy Roman Empire", "HRE", "#D4AC0D", 14000000, 900, false, "{\"borders\": [\"FRA\", \"VEN\", \"POL\", \"KAL\", \"NED\", \"PRU\", \"ITA\", \"AUT\", \"CZE\", \"SWI\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 	{"Ottoman Empire", "OTT", "#1B4F72", 12000000, 1000, false, "{\"borders\": [\"VEN\", \"POL\", \"GRE\", \"ROM\", \"SRB\", \"EGY\", \"TUR\", \"SYR\", \"IRQ\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 	{"Republic of Venice", "VEN", "#00A8FF", 1800000, 700, false, "{\"borders\": [\"HRE\", \"OTT\", \"PAP\", \"ITA\", \"AUT\", \"SRB\", \"CRO\", \"GRE\"], \"birth_year\": 1500, \"death_year\": 1797, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
@@ -508,7 +508,7 @@ var InitialKingdomList = []InitialKingdom{
 	{"Commonwealth of Australia", "AUS", "#117864", 5400000, 850, true, "{\"borders\": [\"NZL\", \"PNG\", \"IDN\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
 	{"Dominion of New Zealand", "NZL", "#1ABC9C", 1250000, 580, true, "{\"borders\": [\"AUS\", \"FJI\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"ENG\"}"},
 	{"Territory of Papua", "PNG", "#7D6608", 1100000, 420, true, "{\"borders\": [\"IDN\", \"AUS\", \"SLB\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"AUS\"}"},
-	{"Kingdom of Ireland", "IRL", "#2ECC71", 3000000, 480, true, "{\"borders\": [\"ENG\", \"SCO\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
+	{"Kingdom of Ireland", "IRL", "#2ECC71", 3000000, 480, true, "{\"borders\": [\"ENG\", \"SCO\", \"WAL\"], \"birth_year\": 1500, \"unlock_era\": \"discovery\", \"parent\": \"\"}"},
 	{"Republic of Finland", "FIN", "#5DADE2", 3150000, 520, false, "{\"borders\": [\"SWE\", \"NOR\", \"RUS\", \"BLT\", \"EST\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
 	{"Republic of Hungary", "HUN", "#1E8449", 7900000, 560, false, "{\"borders\": [\"AUT\", \"ROM\", \"SRB\", \"CRO\", \"CZE\", \"UKR\", \"SVK\"], \"birth_year\": 1918, \"unlock_era\": \"decolonisation\", \"parent\": \"AUH\"}"},
 	{"Republic of Poland", "POL_REP", "#8E44AD", 27000000, 780, false, "{\"borders\": [\"PRU\", \"CZE\", \"ROM\", \"RUS\", \"BLR\", \"UKR\", \"LTU\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"RUS\"}"},
@@ -649,6 +649,7 @@ var InitialKingdomList = []InitialKingdom{
 	{"Belize", "BLZ", "#16A085", 185000, 420, false, "{\"borders\": [\"MEX\", \"GUA\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
 	{"Republic of Iceland", "ISL", "#2980B9", 255000, 560, true, "{\"borders\": [\"NOR\", \"ENG\", \"CAN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"DEN\"}"},
 	{"Republic of Malta", "MLT", "#C0392B", 355000, 510, true, "{\"borders\": [\"ITA\", \"TUN\", \"LBY\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Principality of Wales", "WAL", "#008751", 2900000, 520, false, "{\"borders\": [\"ENG\", \"IRL\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
 }
 
 // SeedInitialData populates the database with initial kingdoms and ensures

@@ -232,3 +232,17 @@ CREATE TABLE IF NOT EXISTS country_geometries (
     - **Era 1860 (Age of Independence)**: Following Sweden's loss of Finland to the Russian Empire (Treaty of Fredrikshamn 1809) and the personal union with Norway (1814), Sweden spans its Scandinavian mainland while Norway (`NOR`, `#BA4A00`) emerges on its sovereign fjord territory.
     - **Era 1920 (Age of Decolonisation)**: Finland (`FIN`, `#5DADE2`) emerges as an independent Nordic republic, cleanly bounded by Sweden along the Torne River, Norway across Finnmark, and Soviet Russia.
     - **Era 1989 (Modern Age)**: Modern borders with Sweden, Norway, and Finland all watertight, non-overlapping, and centered on their authentic capitals.
+
+### Iteration 1.2 (2026-11-12) — British Isles Cartography: Wales Restoration & Multi-Era Devolution
+- **Root Cause of Missing Wales**:
+  - `ENG`'s baseline polygon previously traced the internal Anglo-Welsh border (`[0.4926, 0.2132] ➔ [0.4915, 0.2027]` via Offa's Dyke and the Wye/Dee valleys), completely omitting the Welsh landmass (Anglesey, Gwynedd, Llŷn, Cardigan Bay, Pembrokeshire, Gower, Cardiff).
+  - This left a gaping ocean bite between the English Midlands and the Irish Sea, omitting Wales entirely from the world map across all eras.
+- **Cartographic & Historical Alignment in [polygons.js](file:///Users/nicholasalexander/Code/AI/World%20Domination/frontend/js/map/polygons.js) & [database.go](file:///Users/nicholasalexander/Code/AI/World%20Domination/backend/internal/database/database.go)**:
+  - **Age of Discovery (1500) through Decolonisation (1988)**: Under the Tudors (Henry VII) and the Laws in Wales Acts 1535/1542, Wales was integrated with the English Crown. England (`ENG`, `#C0392B`) physically attaches the complete Welsh landmass (`engUnified`, 38 points) on the map:
+    - Traces the Bristol Channel from Severn `[0.4926, 0.2132]` around Cardiff, Gower, Carmarthen Bay, St David's Head `[0.4851, 0.2118]`, Cardigan Bay `[0.4886, 0.2088]`, Llŷn Peninsula, Anglesey `[0.4871, 0.2030]`, Great Orme `[0.4891, 0.2034]`, to Chester `[0.4915, 0.2027]`.
+  - **The Modern Age (1989+)**: Wales (`WAL`, `#008751`, *Principality of Wales / Cymru*) emerges as a distinct Celtic realm and client state under the British Crown (`parent: "ENG"`), reflecting modern devolution (Senedd / Welsh Parliament):
+    - `kingdomPolygons["WAL"]`: Dedicated 22-point watertight polygon sharing the exact frontier arc with England from Chester to the Severn Estuary in reverse order (zero seams, zero overlaps, difference = 0.00000000).
+    - `ERA_HISTORICAL_POLYGONS["1989"]["ENG"]`: Overrides `ENG` to England-proper (29 points) upon devolution, freeing the Welsh territory for `WAL`.
+    - `kingdomLabelPositions["WAL"]`: Cartographic label anchor plaque at `[0.4893, 0.2088]` in central Wales (Cambrian range).
+    - Fiscal archetype: Maritime realm (`TaxMod: 0.50`, `TradeMod: 1.80`), population 2,900,000, resources 520.
+
