@@ -246,3 +246,28 @@ CREATE TABLE IF NOT EXISTS country_geometries (
     - `kingdomLabelPositions["WAL"]`: Cartographic label anchor plaque at `[0.4893, 0.2088]` in central Wales (Cambrian range).
     - Fiscal archetype: Maritime realm (`TaxMod: 0.50`, `TradeMod: 1.80`), population 2,900,000, resources 520.
 
+### Iteration 1.3 (2026-11-13) — Modern Era (1989) Watertight Boundary & Overlap Elimination
+- **Diagnostic Sweep Across All 186 Active 1989 Nations**:
+  - Eliminated all 8 non-enclave overlaps / segment crossings and closed major land-border gaps in [polygons.js](file:///Users/nicholasalexander/Code/AI/World%20Domination/frontend/js/map/polygons.js) (only the intentional `LSO` enclave inside `ZAF` remains nested with zero crossings):
+  1. **Iran (`PER_EM`) vs. Azerbaijan (`AZE`)**: Added `ERA_HISTORICAL_POLYGONS["1989"]["PER_EM"]` (61 vertices) trimming the Safavid-era northern loop around Azerbaijan and snapping cleanly along `AZE`'s southern frontier (`[0.6291, 0.2839] ➔ [0.6357, 0.2865]`).
+  2. **Turkey (`TUR`) East Thrace**: Restored European Turkey (`[0.5743, 0.2756] ➔ [0.5723, 0.2737] ➔ [0.5731, 0.2682] ➔ [0.5778, 0.2668]`) in `kingdomPolygons["TUR"]` and `ERA_HISTORICAL_POLYGONS["1920"]["TUR"]`, closing the Thracian ocean gap and sharing 4 exact frontier vertices each with `GRE` and `BUL`.
+  3. **Horn of Africa (`SOM` / `ETH` / `DJI`)**: Restored western Somaliland (Zeila–Hargeisa) in `SOM`, snapping cleanly to `ETH` (`[0.6333, 0.4556] ➔ [0.6192, 0.4389]`) and `DJI` (`[0.6192, 0.4389] ➔ [0.6201, 0.4361]`), eliminating the `0.01586` Horn gap.
+  4. **Guianas (`GUF` / `BRA` / `SUR`)**: Aligned French Guiana (`GUF`) with `SUR`'s exact eastern frontier (`6` shared vertices) and inserted `GUF`'s southern river vertices (`[0.3496, 0.4882]`, `[0.3536, 0.4869]`) into `BRA` (`5` shared vertices), eliminating all crossings.
+  5. **Morocco / Western Sahara (`MAR`) & Mauritania (`MRT`) & Algeria (`ALG`)**: Snapped `MAR`'s southern/eastern border to the `ALG`/`MRT` tripoint (`[0.4759, 0.3484]`) and `MRT`'s exact staircase (`7` shared vertices, `0` crossings).
+  6. **Senegal (`SEN`) & The Gambia (`GMB`)**: Removed the self-intersecting river-estuary fold in `GMB`, leaving `7` exact shared vertices with `SEN` and `0` crossings.
+  7. **Kazakhstan (`KAZ`) & Turkmenistan (`TKM`)**: Adjusted `TKM[40]` (`[0.6471, 0.2675]`) south of the `KAZ` frontier line (`0` crossings).
+  8. **Argentina (`ARG`) & Chile (`CHL`)**: Adjusted `CHL[48]` (`[0.3077, 0.791]`) south of the Strait of Magellan line (`0` crossings).
+  9. **Micronesia (`FSM`) & Papua New Guinea (`PNG`)**: Relocated `FSM` from the Southern Hemisphere (`y = 0.52..0.54`, overlapping `PNG`) to its true Northern Hemisphere Micronesian coordinates (`5°N–10°N`, `y = 0.4472..0.4706`, `0` self-intersections).
+
+### Iteration 1.4 (2026-11-14) — Symmetric Canonical Edge Subdivision & Chad (`TCD`) Decolonisation/Modern Fix
+- **Root Cause of Shared Territory / Border Overlaps in `high_res` & `realistic` Modes**:
+  - `refinePolygon(code, basePoly, resolution, eraStart)` in [polygons.js](file:///Users/nicholasalexander/Code/AI/World%20Domination/frontend/js/map/polygons.js#L50970) previously seeded its PRNG with `_hash("${ek}:${code}")` (including the country `code`) and subdivided edges in each country's local traversal order (`a ➔ b` vs. `b ➔ a`), causing adjacent nations (including **Chad (`TCD`)** in `1920` Decolonisation and `1989` Modern against `CMR`, `NGA`, `NER`, `SDN`, and `CAF`) to generate conflicting border curves—creating shared-territory overlaps and gaps.
+  - Additionally, `refinePolygon` used `coastRough` / `coastCap` (`0.0050`) instead of `landRough` / `landCap` (`0.0015` / `0.0020`), allowing meanders to swing across narrow panhandles (such as Cameroon's Far North border with Chad).
+- **Fix**:
+  - Seeded `refinePolygon` strictly with the canonical undirected edge key `_hash(ek)` (independent of country `code`).
+  - Canonicalized segment endpoints in `lexMinMax(a, b)` order (`u ➔ v`), subdividing once and reversing intermediate points when traversed in reverse (`!isForward`).
+  - Applied `landRough` and `landCap` so narrow frontiers never cross neighbor panhandles.
+  - Verified **0 crossings** for `TCD` against all 6 neighbors (`LBY`, `SDN`, `CAF`, `CMR`, `NGA`, `NER`) across both `1920` and `1989` in `fast`, `high_res`, and `realistic` tiers.
+
+
+

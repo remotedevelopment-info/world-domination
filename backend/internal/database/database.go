@@ -650,6 +650,7 @@ var InitialKingdomList = []InitialKingdom{
 	{"Republic of Iceland", "ISL", "#2980B9", 255000, 560, true, "{\"borders\": [\"NOR\", \"ENG\", \"CAN\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"DEN\"}"},
 	{"Republic of Malta", "MLT", "#C0392B", 355000, 510, true, "{\"borders\": [\"ITA\", \"TUN\", \"LBY\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
 	{"Principality of Wales", "WAL", "#008751", 2900000, 520, false, "{\"borders\": [\"ENG\", \"IRL\"], \"birth_year\": 1989, \"unlock_era\": \"modern\", \"parent\": \"ENG\"}"},
+	{"Central African Republic", "CAF", "#E67E22", 2900000, 430, false, "{\"borders\": [\"TCD\", \"SDN\", \"SSD\", \"COD\", \"COG\", \"CMR\"], \"birth_year\": 1920, \"unlock_era\": \"decolonisation\", \"parent\": \"FRA\"}"},
 }
 
 // SeedInitialData populates the database with initial kingdoms and ensures
